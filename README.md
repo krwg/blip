@@ -33,6 +33,7 @@
 | Project layout | [Project layout](#en-layout) | [Структура](#ru-layout) |
 | Design tokens | [Design](#en-design) | [Дизайн](#ru-design) |
 | License | [License](#en-license) | [Лицензия](#ru-license) |
+| Community | [Community](#en-community) | [Сообщество](#ru-community) |
 
 ---
 
@@ -124,7 +125,7 @@ flowchart LR
 
 | | |
 |---|---|
-| Node.js | **18+** |
+| Node.js | **20+** (see `.nvmrc`) |
 | OS | Windows 10/11 (for `.exe` builds) |
 | Network | Same LAN / VPN (Hamachi, Radmin) |
 
@@ -251,6 +252,16 @@ blip/
 | Borders | `2px solid` |
 | Radius | **0** everywhere |
 
+<h3 id="en-community">Community</h3>
+
+| Doc | Purpose |
+|-----|---------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, dev workflow, PR expectations |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical map of the app |
+
 <h3 id="en-license">License</h3>
 
 This project is licensed under **[GNU GPL v3](LICENSE)**.
@@ -319,7 +330,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 
 | | |
 |---|---|
-| Node.js | **18+** |
+| Node.js | **20+** (see `.nvmrc`) |
 | ОС | Windows 10/11 (сборка `.exe`) |
 | Сеть | Одна LAN / VPN (Hamachi, Radmin) |
 
@@ -445,6 +456,16 @@ blip/
 | Muted | `#333333` |
 | Borders | `2px solid` |
 | Radius | **0** (везде) |
+
+<h3 id="ru-community">Сообщество</h3>
+
+| Документ | Зачем |
+|----------|--------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Сборка, dev, правила PR |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Правила сообщества |
+| [SECURITY.md](SECURITY.md) | Как сообщить об уязвимости |
+| [CHANGELOG.md](CHANGELOG.md) | История версий |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура кода |
 
 <h3 id="ru-license">Лицензия</h3>
 
