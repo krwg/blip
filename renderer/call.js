@@ -307,6 +307,9 @@ export function createCallUI(config, api) {
       console.error('[call] outgoing:', err);
       hide();
     }
+    
+    // Очищаем входящий оффер при исходящем звонке
+    incomingOffer = null;
   }
 
   async function acceptIncoming() {
@@ -345,11 +348,19 @@ export function createCallUI(config, api) {
       console.error('[call] accept:', err);
       hide();
     }
+    
+    // Очищаем входящий оффер после принятия звонка
+    incomingOffer = null;
   }
 
   async function handleIncoming(data) {
     const from = Number(data.from);
     if (!from) return;
+
+    // Если уже есть активный звонок, игнорируем новый входящий
+    if (pc || (incomingOffer && activeCall?.pending)) {
+      return;
+    }
 
     peerId = from;
     withVideo = data.video ?? false;
@@ -388,6 +399,12 @@ export function createCallUI(config, api) {
       await setRemoteDescription(data.sdp);
       setConnectedStatus();
       startTimer();
+      
+      // У звонящего сбрасываем статус "набор" после принятия звонка
+      if (activeCall && activeCall.peerId === Number(data.from)) {
+        statusEl.dataset.i18n = 'call.connected';
+        statusEl.textContent = t('call.connected');
+      }
     } catch (err) {
       console.error('[call] answer:', err);
     }
@@ -440,7 +457,7 @@ export function createCallUI(config, api) {
     handleEnded,
     hide,
     end: hide,
-    isActive: () => !!pc || !!incomingOffer,
+    isActive: () => !!pc || !!(incomingOffer && activeCall?.pending),
   };
 }
 
