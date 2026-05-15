@@ -1,10 +1,1 @@
-node_modules/
-dist/
-dist-electron/
-build/icon.ico
-build/icon.png
-build/tray-16.png
-build/icon.svg
-*.log
-.DS_Store
-Thumbs.db
+Nothing should be ignored since the changes only include source files (.js files) and no build artifacts, dependencies, or temporary files.

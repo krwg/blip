@@ -594,6 +594,10 @@ export function updatePeers({ peers, occupiedIds }) {
     gridComponent.updateOccupied(occupiedIds.filter((id) => id !== state.config.blipId));
   }
 
+  // Не обновляем view, если активен звонок
+  const callUI = getCallUI();
+  if (callUI?.isActive()) return;
+
   if ((state.view === 'peers' || state.view === 'chat') && mainContent) {
     renderView(state.view);
   }
@@ -603,6 +607,10 @@ export function handleTcpMessage(msg) {
   const peerId = msg.from === state.config.blipId ? msg.to : msg.from;
   ensureChatView(peerId);
   state.chatViews.get(peerId)?.handleIncoming(msg);
+
+  // Не переключаем на чат, если активен звонок
+  const callUI = getCallUI();
+  if (callUI?.isActive()) return;
 
   if (state.view !== 'chat' || state.activePeer !== peerId) {
     state.view = 'chat';

@@ -108,6 +108,15 @@ export function createChatView(peerId, config, onSend, onBack) {
 
   function renderMessages() {
     const msgs = getMessages(peerId);
+    
+    // Сохраняем фокус, если он в поле ввода
+    const hasFocus = document.activeElement === input;
+    const cursorPos = hasFocus ? input.selectionStart : null;
+    
+    // Сохраняем позицию прокрутки
+    const scrollPos = messagesEl.scrollTop;
+    const wasAtBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50;
+    
     messagesEl.innerHTML = '';
     if (msgs.length === 0) {
       const p = document.createElement('p');
@@ -125,7 +134,21 @@ export function createChatView(peerId, config, onSend, onBack) {
       block.appendChild(text);
       messagesEl.appendChild(block);
     });
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    
+    // Восстанавливаем фокус и позицию курсора
+    if (hasFocus) {
+      input.focus();
+      if (cursorPos !== null) {
+        input.setSelectionRange(cursorPos, cursorPos);
+      }
+    }
+    
+    // Прокручиваем вниз, если были внизу или новое сообщение входящее
+    if (wasAtBottom || !hasFocus) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else {
+      messagesEl.scrollTop = scrollPos;
+    }
   }
 
   function flashNew() {
