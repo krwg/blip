@@ -1,0 +1,40 @@
+appId: com.blip.messenger
+productName: BLIP
+copyright: Copyright © 2026 BLIP
+directories:
+  output: dist-electron
+  buildResources: build
+files:
+  - main/**/*
+  - preload.cjs
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: build/icon.png
+    to: icons/icon.png
+  - from: build/tray-16.png
+    to: icons/tray-16.png
+win:
+  icon: icon.ico
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico
+  installerHeaderIcon: icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: BLIP
+  runAfterFinish: true
+  uninstallDisplayName: BLIP
+  artifactName: ${productName}-Setup-${version}.${ext}
+  installerLanguages:
+    - en_US
+    - ru_RU
+portable:
+  artifactName: ${productName}-${version}-Portable.${ext}
