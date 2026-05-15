@@ -1,1 +1,4 @@
-Nothing should be ignored since the changes only include source files (.js files) and no build artifacts, dependencies, or temporary files.
+node_modules
+dist-electron
+dist
+issues

@@ -52,7 +52,7 @@ function formatDuration(ms) {
   return `${pad(m)}:${pad(s % 60)}`;
 }
 
-export function createCallUI(config, api) {
+export function createCallUI(config, api, options = {}) {
   const overlay = document.createElement('div');
   overlay.className = 'call-overlay hidden';
 
@@ -166,6 +166,7 @@ export function createCallUI(config, api) {
   function hide() {
     overlay.classList.add('hidden');
     cleanup();
+    options.onClosed?.();
   }
 
   function cleanup() {
@@ -394,19 +395,21 @@ export function createCallUI(config, api) {
   });
 
   async function handleAnswer(data) {
-    if (!isForCurrentPeer(data) || !pc) return;
+    if (!pc) {
+      console.warn('[BLIP call] handleAnswer: no peer connection', data);
+      return;
+    }
+    const aid = Number(data?.from);
+    if (aid && peerId && aid !== Number(peerId)) {
+      console.warn('[BLIP call] answer ignored (wrong peer)', { aid, peerId, data });
+      return;
+    }
     try {
       await setRemoteDescription(data.sdp);
       setConnectedStatus();
       startTimer();
-      
-      // У звонящего сбрасываем статус "набор" после принятия звонка
-      if (activeCall && activeCall.peerId === Number(data.from)) {
-        statusEl.dataset.i18n = 'call.connected';
-        statusEl.textContent = t('call.connected');
-      }
     } catch (err) {
-      console.error('[call] answer:', err);
+      console.error('[BLIP call] answer', err);
     }
   }
 
@@ -441,11 +444,13 @@ export function createCallUI(config, api) {
     deafenBtn.classList.toggle('active', deafened);
   });
 
-  endBtn.addEventListener('click', async () => {
+  async function hangupCall() {
     if (peerId) await api.callHangup({ to: peerId });
     sounds.callEnd();
     hide();
-  });
+  }
+
+  endBtn.addEventListener('click', () => hangupCall());
 
   return {
     el: overlay,
@@ -455,9 +460,11 @@ export function createCallUI(config, api) {
     handleCandidate,
     handleRejected,
     handleEnded,
+    hangupCall,
     hide,
     end: hide,
     isActive: () => !!pc || !!(incomingOffer && activeCall?.pending),
+    getPeerId: () => peerId,
   };
 }
 
