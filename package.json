@@ -4,6 +4,9 @@
   "description": "P2P messenger for local networks — no cloud, no servers",
   "main": "main/index.js",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "copy-fonts": "node scripts/copy-fonts.mjs",
