@@ -62,6 +62,12 @@ export function getAllGroups() {
   return [...groups.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
+/** Groups the local user still belongs to (hub / menus must use this). */
+export function getGroupsFor(blipId) {
+  const id = Number(blipId);
+  return getAllGroups().filter((g) => isGroupMember(g, id));
+}
+
 export function getGroup(groupId) {
   return groups.get(groupId) || null;
 }

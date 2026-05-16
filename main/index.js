@@ -363,6 +363,7 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'group-leave':
     case 'group-disband':
     case 'group-call-start':
+    case 'group-call-state':
     case 'group-call-signal':
     case 'group-call-end':
     case 'file-offer':

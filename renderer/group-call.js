@@ -1,5 +1,5 @@
 import { t, applyI18n } from './i18n.js';
-import { getGroup, saveGroup, amHost, isGroupMember, normalizeMemberIds, groupDisplayName } from './groups.js';
+import { getGroup, saveGroup, isGroupMember, normalizeMemberIds, groupDisplayName } from './groups.js';
 import { sounds } from './audio.js';
 import { showAppToast } from './toasts.js';
 import { createAvatarElement } from './avatar.js';
@@ -12,6 +12,10 @@ const pendingCandidates = new Map();
 /** @type {Map<number, HTMLAudioElement>} */
 const remoteAudios = new Map();
 
+/** @type {Map<string, { active: boolean, participants: Set<number> }>} */
+const ongoingByGroup = new Map();
+const dismissedRing = new Set();
+
 let localStream = null;
 let activeGroupId = null;
 let apiRef = null;
@@ -21,6 +25,7 @@ let muted = false;
 let deafened = false;
 let callStart = null;
 let timerInterval = null;
+let heartbeatTimer = null;
 let pendingInvite = null;
 
 function peerNum(id) {
@@ -54,36 +59,134 @@ function formatDuration(ms) {
   return `${pad(m)}:${pad(s % 60)}`;
 }
 
+function dispatchCallState(groupId) {
+  const snap = getOngoingGroupCall(groupId);
+  window.dispatchEvent(
+    new CustomEvent('blip-group-call-state', {
+      detail: { groupId, ...snap },
+    })
+  );
+}
+
+export function getOngoingGroupCall(groupId) {
+  const o = ongoingByGroup.get(groupId);
+  if (!o?.active) return { active: false, participants: [], count: 0 };
+  const participants = [...o.participants].sort((a, b) => a - b);
+  return { active: true, participants, count: participants.length };
+}
+
+function setOngoing(groupId, participantIds, active) {
+  if (!active || !participantIds?.length) {
+    ongoingByGroup.delete(groupId);
+  } else {
+    ongoingByGroup.set(groupId, {
+      active: true,
+      participants: new Set(participantIds.map(peerNum).filter(Number.isFinite)),
+    });
+  }
+  dispatchCallState(groupId);
+}
+
+function mergeOngoing(groupId, participantIds) {
+  if (!participantIds?.length) return;
+  let entry = ongoingByGroup.get(groupId);
+  if (!entry) {
+    entry = { active: true, participants: new Set() };
+    ongoingByGroup.set(groupId, entry);
+  }
+  entry.active = true;
+  for (const id of participantIds) entry.participants.add(peerNum(id));
+  dispatchCallState(groupId);
+}
+
+function localParticipantIds() {
+  const myId = peerNum(configRef?.blipId);
+  const set = new Set([myId]);
+  for (const id of peers.keys()) set.add(id);
+  return [...set];
+}
+
+async function broadcastCallState(groupId, { end = false } = {}) {
+  const group = getGroup(groupId);
+  if (!group || !apiRef) return;
+  const myId = peerNum(apiRef.config?.blipId);
+  const participants = end ? [] : localParticipantIds();
+  if (!end) setOngoing(groupId, participants, true);
+
+  for (const m of group.members) {
+    const mid = peerNum(m);
+    if (mid === myId) continue;
+    try {
+      await apiRef.sendTcpMessage({
+        type: 'group-call-state',
+        to: mid,
+        groupId,
+        host: group.hostId,
+        members: group.members,
+        active: !end,
+        participants,
+      });
+    } catch (err) {
+      console.warn('[group-call] state:', err?.message || err);
+    }
+  }
+}
+
+function startHeartbeat(groupId) {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (activeGroupId === groupId && localStream) void broadcastCallState(groupId);
+  }, 12000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+async function meshNewParticipants(groupId, participantIds) {
+  if (!localStream || activeGroupId !== groupId) return;
+  const myId = peerNum(configRef?.blipId);
+  for (const pid of participantIds) {
+    const mid = peerNum(pid);
+    if (mid === myId || peers.has(mid)) continue;
+    if (shouldInitiate(myId, mid)) void createPc(mid, groupId, true);
+  }
+}
+
 function createGroupCallShell(config) {
-  const overlay = document.createElement('div');
-  overlay.className = 'call-overlay hidden';
+  const overlay = document.createElement('motion');
+  overlay.className = 'call-overlay hidden group-call-overlay';
 
   const inner = document.createElement('motion');
-  inner.className = 'call-inner glass';
+  inner.className = 'call-inner glass group-call-inner';
 
-  const statusEl = document.createElement('div');
+  const statusEl = document.createElement('motion');
   statusEl.className = 'call-status';
   statusEl.dataset.i18n = 'group.call_active';
   statusEl.textContent = t('group.call_active');
 
-  const titleEl = document.createElement('div');
-  titleEl.className = 'group-call-name';
+  const titleEl = document.createElement('motion');
+  titleEl.className = 'group-call-title-line';
 
-  const voiceWrap = document.createElement('div');
-  voiceWrap.className = 'call-voice-wrap';
-  const avatarGrid = document.createElement('div');
+  const stage = document.createElement('motion');
+  stage.className = 'group-call-stage';
+
+  const avatarGrid = document.createElement('motion');
   avatarGrid.className = 'group-call-avatar-grid';
-  const waveform = document.createElement('div');
-  waveform.className = 'call-waveform';
+
+  const waveform = document.createElement('motion');
+  waveform.className = 'call-waveform group-call-waveform';
   for (let i = 0; i < 8; i++) {
-    const bar = document.createElement('div');
+    const bar = document.createElement('motion');
     bar.className = 'wave-bar';
     waveform.appendChild(bar);
   }
-  voiceWrap.appendChild(avatarGrid);
-  voiceWrap.appendChild(waveform);
 
-  const timerEl = document.createElement('div');
+  stage.appendChild(avatarGrid);
+  stage.appendChild(waveform);
+
+  const timerEl = document.createElement('motion');
   timerEl.className = 'call-timer';
   timerEl.textContent = '00:00';
 
@@ -128,7 +231,7 @@ function createGroupCallShell(config) {
 
   inner.appendChild(statusEl);
   inner.appendChild(titleEl);
-  inner.appendChild(voiceWrap);
+  inner.appendChild(stage);
   inner.appendChild(timerEl);
   inner.appendChild(controls);
   overlay.appendChild(inner);
@@ -141,10 +244,12 @@ function createGroupCallShell(config) {
 
   function show() {
     overlay.classList.remove('hidden');
+    inner.classList.add('group-call-inner--live');
   }
 
   function hide() {
     overlay.classList.add('hidden');
+    inner.classList.remove('group-call-inner--live', 'group-call-inner--incoming');
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
     endBtn.classList.remove('hidden');
@@ -154,6 +259,7 @@ function createGroupCallShell(config) {
 
   function showIncoming() {
     show();
+    inner.classList.add('group-call-inner--incoming');
     setStatus('group.call_incoming');
     acceptBtn.classList.remove('hidden');
     rejectBtn.classList.remove('hidden');
@@ -164,6 +270,7 @@ function createGroupCallShell(config) {
 
   function showActive() {
     show();
+    inner.classList.remove('group-call-inner--incoming');
     setStatus('group.call_active');
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
@@ -191,24 +298,40 @@ function createGroupCallShell(config) {
     avatarGrid.innerHTML = '';
     if (!group) return;
     const myId = peerNum(config.blipId);
+    const ongoing = getOngoingGroupCall(group.id);
+    const inVoice = new Set(ongoing.participants);
+
     group.members.forEach((id) => {
       const n = peerNum(id);
-      const cell = document.createElement('div');
+      const cell = document.createElement('motion');
       cell.className = 'group-call-member';
-      const slot = document.createElement('div');
+      const tile = document.createElement('motion');
+      const connected = n === myId ? !!localStream : peers.has(n);
+      const inCall = inVoice.has(n) || connected;
+      tile.className = `group-call-tile glass${inCall ? ' group-call-tile--live' : ''}${connected ? ' group-call-tile--linked' : ''}`;
+
+      const slot = document.createElement('motion');
       slot.className = 'call-avatar-slot group-call-avatar-slot';
       slot.appendChild(createAvatarElement(n, 4, { selfBlipId: config.blipId }));
+      tile.appendChild(slot);
+
+      if (connected) {
+        const ring = document.createElement('motion');
+        ring.className = 'group-call-tile-ring';
+        tile.appendChild(ring);
+      }
+
       const label = document.createElement('span');
       label.className = 'group-call-member-label';
-      const connected = n === myId || peers.has(n);
       label.textContent = n === myId ? t('group.you') : `#${n}`;
-      if (connected) {
-        const dot = document.createElement('span');
-        dot.className = 'group-call-member-on';
-        dot.textContent = ' ON';
-        label.appendChild(dot);
+      if (inCall) {
+        const live = document.createElement('span');
+        live.className = 'group-call-member-live';
+        live.textContent = connected ? ' · LINK' : ' · VOICE';
+        label.appendChild(live);
       }
-      cell.appendChild(slot);
+
+      cell.appendChild(tile);
       cell.appendChild(label);
       avatarGrid.appendChild(cell);
     });
@@ -226,9 +349,7 @@ function createGroupCallShell(config) {
 
   deafenBtn.addEventListener('click', () => {
     deafened = !deafened;
-    for (const audio of remoteAudios.values()) {
-      audio.muted = deafened;
-    }
+    for (const audio of remoteAudios.values()) audio.muted = deafened;
     deafenBtn.classList.toggle('active', deafened);
     deafenBtn.dataset.i18n = deafened ? 'call.undeafen' : 'call.deafen';
     deafenBtn.textContent = t(deafened ? 'call.undeafen' : 'call.deafen');
@@ -242,11 +363,13 @@ function createGroupCallShell(config) {
     if (pendingInvite) {
       const { groupId, api } = pendingInvite;
       pendingInvite = null;
+      dismissedRing.delete(groupId);
       void joinGroupCall(groupId, api, { skipInvite: true });
     }
   });
 
   rejectBtn.addEventListener('click', () => {
+    if (pendingInvite?.groupId) dismissedRing.add(pendingInvite.groupId);
     pendingInvite = null;
     hide();
     stopTimer();
@@ -279,15 +402,13 @@ async function sendSignal(groupId, targetId, payload) {
   const group = getGroup(groupId);
   if (!group || !apiRef) return;
   const myId = peerNum(apiRef.config?.blipId);
-  const hostId = peerNum(group.hostId);
   const target = peerNum(targetId);
-  const to = amHost(group, myId) ? target : hostId;
   try {
     const res = await apiRef.sendTcpMessage({
       type: 'group-call-signal',
-      to,
+      to: target,
       groupId,
-      host: hostId,
+      host: group.hostId,
       target,
       originFrom: myId,
       ...payload,
@@ -333,7 +454,13 @@ async function createPc(remoteId, groupId, initiator) {
     }
     audio.srcObject = ev.streams[0] || new MediaStream([ev.track]);
     audio.muted = deafened;
-    shell?.refreshAvatars(getGroup(groupId));
+    const group = getGroup(groupId);
+    shell?.refreshAvatars(group);
+    void broadcastCallState(groupId);
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') void broadcastCallState(groupId);
   };
 
   pc.onicecandidate = (ev) => {
@@ -364,6 +491,10 @@ export function isInGroupCall() {
   return !!activeGroupId;
 }
 
+export function getActiveGroupCallId() {
+  return activeGroupId;
+}
+
 export async function joinGroupCall(groupId, api, opts = {}) {
   const config = api.config;
   ensureShell(config);
@@ -383,6 +514,7 @@ export async function joinGroupCall(groupId, api, opts = {}) {
   configRef = config;
   activeGroupId = groupId;
   pendingInvite = null;
+  dismissedRing.delete(groupId);
 
   try {
     localStream = await getMic();
@@ -405,7 +537,12 @@ export async function joinGroupCall(groupId, api, opts = {}) {
   sounds.outgoingCall();
 
   const myId = peerNum(config.blipId);
-  const hostId = peerNum(group.hostId);
+  const ongoing = getOngoingGroupCall(groupId);
+
+  for (const pid of ongoing.participants) {
+    if (peerNum(pid) === myId) continue;
+    if (shouldInitiate(myId, pid)) void createPc(pid, groupId, true);
+  }
 
   for (const m of group.members) {
     const mid = peerNum(m);
@@ -413,19 +550,21 @@ export async function joinGroupCall(groupId, api, opts = {}) {
     if (shouldInitiate(myId, mid)) void createPc(mid, groupId, true);
   }
 
+  await broadcastCallState(groupId);
+  startHeartbeat(groupId);
+
   if (!opts.skipInvite) {
     for (const m of group.members) {
       const mid = peerNum(m);
       if (mid === myId) continue;
       try {
-        const res = await api.sendTcpMessage({
+        await api.sendTcpMessage({
           type: 'group-call-start',
           to: mid,
           groupId,
-          host: hostId,
+          host: group.hostId,
           members: group.members,
         });
-        if (res?.ok === false) console.warn('[group-call] invite', mid, res.error);
       } catch (err) {
         console.warn('[group-call] invite', mid, err?.message || err);
       }
@@ -436,19 +575,43 @@ export async function joinGroupCall(groupId, api, opts = {}) {
 export async function leaveGroupCall() {
   const gid = activeGroupId;
   const api = apiRef;
-  if (gid && api) {
+  const hadStream = !!localStream;
+
+  stopHeartbeat();
+
+  if (gid && api && hadStream) {
     const group = getGroup(gid);
     const myId = peerNum(api.config.blipId);
+    const remaining = [...peers.keys()];
     if (group) {
       for (const m of group.members) {
         const mid = peerNum(m);
         if (mid === myId) continue;
         void api.sendTcpMessage({
-          type: 'group-call-end',
+          type: 'group-call-state',
           to: mid,
           groupId: gid,
           host: group.hostId,
+          members: group.members,
+          active: remaining.length > 0,
+          participants: remaining,
         });
+      }
+      if (remaining.length === 0) {
+        setOngoing(gid, [], false);
+        for (const m of group.members) {
+          const mid = peerNum(m);
+          if (mid === myId) continue;
+          void api.sendTcpMessage({
+            type: 'group-call-end',
+            to: mid,
+            groupId: gid,
+            host: group.hostId,
+            active: false,
+          });
+        }
+      } else {
+        mergeOngoing(gid, remaining);
       }
     }
   }
@@ -466,7 +629,7 @@ export async function leaveGroupCall() {
   deafened = false;
   shell?.stopTimer();
   shell?.hide();
-  sounds.callEnd();
+  if (hadStream) sounds.callEnd();
 }
 
 export async function handleGroupCallSignal(msg, api) {
@@ -488,6 +651,7 @@ export async function handleGroupCallSignal(msg, api) {
   if (msg.signalKind === 'offer') {
     if (!localStream) {
       activeGroupId = groupId;
+      dismissedRing.delete(groupId);
       try {
         localStream = await getMic();
       } catch (err) {
@@ -502,6 +666,7 @@ export async function handleGroupCallSignal(msg, api) {
       shell.setTitle(groupDisplayName(group));
       shell.showActive();
       shell.startTimer();
+      startHeartbeat(groupId);
     }
     const pc = await createPc(remoteId, groupId, false);
     const offer = normalizeSdp(msg.sdp);
@@ -515,11 +680,8 @@ export async function handleGroupCallSignal(msg, api) {
       sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
     });
     shell.refreshAvatars(group);
-    for (const m of group.members) {
-      const mid = peerNum(m);
-      if (mid === myId || mid === remoteId) continue;
-      if (shouldInitiate(myId, mid)) void createPc(mid, groupId, true);
-    }
+    await meshNewParticipants(groupId, getOngoingGroupCall(groupId).participants);
+    await broadcastCallState(groupId);
     return;
   }
 
@@ -551,6 +713,42 @@ export async function handleGroupCallSignal(msg, api) {
   }
 }
 
+export async function handleGroupCallState(msg, api) {
+  let group = getGroup(msg.groupId);
+  if (!group && msg.members?.length) {
+    group = {
+      id: msg.groupId,
+      name: t('group.unnamed'),
+      hostId: Number(msg.host),
+      members: normalizeMemberIds(msg.members),
+      messages: [],
+    };
+    saveGroup(group);
+  }
+  if (!group || !isGroupMember(group, peerNum(api.config?.blipId))) return;
+
+  const participants = (msg.participants || []).map(peerNum).filter(Number.isFinite);
+  const myId = peerNum(api.config.blipId);
+
+  if (!msg.active) {
+    setOngoing(msg.groupId, [], false);
+    if (activeGroupId === msg.groupId && !localStream) {
+      shell?.hide();
+      pendingInvite = null;
+    }
+    return;
+  }
+
+  mergeOngoing(msg.groupId, participants);
+
+  if (activeGroupId === msg.groupId && localStream) {
+    await meshNewParticipants(msg.groupId, participants);
+    shell?.refreshAvatars(group);
+    return;
+  }
+
+}
+
 export async function handleGroupCallStart(msg, api) {
   let group = getGroup(msg.groupId);
   if (!group && Array.isArray(msg.members) && msg.members.length) {
@@ -563,14 +761,19 @@ export async function handleGroupCallStart(msg, api) {
     };
     saveGroup(group);
   }
-  if (!group || !isGroupMember(group, api.config.blipId)) return;
+  if (!group || !isGroupMember(group, peerNum(api.config?.blipId))) return;
+
+  const starter = wireFrom(msg);
+  mergeOngoing(msg.groupId, [starter]);
+
   if (activeGroupId === msg.groupId && localStream) {
     shell?.refreshAvatars(group);
     return;
   }
 
+  if (dismissedRing.has(msg.groupId)) return;
+
   ensureShell(api.config);
-  const starter = wireFrom(msg);
   shell.setTitle(groupDisplayName(group));
   shell.refreshAvatars(group);
   pendingInvite = { groupId: msg.groupId, api };
@@ -592,7 +795,19 @@ export async function handleGroupCallStart(msg, api) {
 }
 
 export async function handleGroupCallEnd(msg) {
-  if (msg.groupId !== activeGroupId) return;
+  const groupId = msg.groupId;
+
+  if (msg.active === false) {
+    setOngoing(groupId, [], false);
+    if (activeGroupId === groupId && !localStream) {
+      shell?.hide();
+      pendingInvite = null;
+    }
+    return;
+  }
+
+  if (activeGroupId !== groupId || !localStream) return;
+
   const remoteId = wireFrom(msg);
   const pc = peers.get(remoteId);
   if (pc) {
@@ -601,30 +816,6 @@ export async function handleGroupCallEnd(msg) {
   }
   remoteAudios.get(remoteId)?.remove();
   remoteAudios.delete(remoteId);
-  shell?.refreshAvatars(getGroup(msg.groupId));
-}
-
-export async function relayGroupCallSignal(msg, api) {
-  const myId = peerNum(api.config.blipId);
-  const group = getGroup(msg.groupId);
-  if (!group || !amHost(group, myId)) return;
-  const target = peerNum(msg.target);
-  const origin = signalOrigin(msg);
-  if (!target || target === myId) return;
-  if (!isGroupMember(group, target) || !isGroupMember(group, origin)) return;
-  try {
-    await api.sendTcpMessage({
-      type: 'group-call-signal',
-      to: target,
-      groupId: msg.groupId,
-      host: group.hostId,
-      target,
-      originFrom: origin,
-      signalKind: msg.signalKind,
-      sdp: msg.sdp,
-      candidate: msg.candidate,
-    });
-  } catch (err) {
-    console.warn('[group-call] relay failed:', err?.message || err);
-  }
+  shell?.refreshAvatars(getGroup(groupId));
+  void broadcastCallState(groupId);
 }

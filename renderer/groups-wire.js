@@ -22,7 +22,7 @@ import {
   handleGroupCallSignal,
   handleGroupCallStart,
   handleGroupCallEnd,
-  relayGroupCallSignal,
+  handleGroupCallState,
   isInGroupCall,
 } from './group-call.js';
 
@@ -89,18 +89,10 @@ export async function leaveGroup(api, config, groupId, statePeers) {
 
   const wasHost = amHost(group, myId);
   const online = onlineMemberIds(statePeers);
-
-  for (const m of group.members) {
-    if (Number(m) === myId) continue;
-    await safeSendTcp(api, {
-      type: 'group-leave',
-      to: m,
-      groupId,
-      host: group.hostId,
-    });
-  }
+  const notify = [...group.members];
 
   const updated = removeMemberFromGroup(groupId, myId);
+
   if (updated && wasHost) {
     const next = pickNextHost(myId, updated.members, online) ?? updated.members[0];
     updated.hostId = next;
@@ -114,6 +106,16 @@ export async function leaveGroup(api, config, groupId, statePeers) {
         members: updated.members,
       });
     }
+  }
+
+  for (const m of notify) {
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
+      type: 'group-leave',
+      to: m,
+      groupId,
+      host: group.hostId,
+    });
   }
 
   return { ok: true };
@@ -200,42 +202,30 @@ export function migrateGroupsHost(groups, onlineIds, api, config) {
   }
 }
 
+/** Full mesh: sender pushes to every other member on existing TCP sockets. */
 export async function sendGroupChatMessage(api, config, groupId, msg) {
   const group = getGroup(groupId);
   if (!group) return { ok: false };
-  const hostId = Number(group.hostId);
   const myId = Number(config.blipId);
   const author = myId;
+  const members = group.members;
 
-  if (amHost(group, myId)) {
-    for (const m of group.members) {
-      if (Number(m) === myId) continue;
-      await safeSendTcp(api, {
-        type: 'group-msg',
-        to: m,
-        groupId,
-        host: hostId,
-        author,
-        text: msg.text,
-        id: msg.id,
-        timestamp: msg.timestamp,
-        attachment: msg.attachment,
-      });
-    }
-    return { ok: true };
+  for (const m of members) {
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
+      type: 'group-msg',
+      to: m,
+      groupId,
+      host: group.hostId,
+      author,
+      members,
+      text: msg.text,
+      id: msg.id,
+      timestamp: msg.timestamp,
+      attachment: msg.attachment,
+    });
   }
-
-  return api.sendTcpMessage({
-    type: 'group-msg',
-    to: hostId,
-    groupId,
-    host: hostId,
-    author,
-    text: msg.text,
-    id: msg.id,
-    timestamp: msg.timestamp,
-    attachment: msg.attachment,
-  });
+  return { ok: true };
 }
 
 export async function handleGroupTcpMessage(msg, ctx) {
@@ -297,11 +287,29 @@ export async function handleGroupTcpMessage(msg, ctx) {
   }
 
   if (type === 'group-msg') {
-    const group = getGroup(msg.groupId);
-    if (!group || !isGroupMember(group, myId)) return true;
-
-    const hostId = Number(group.hostId);
+    let group = getGroup(msg.groupId);
     const author = messageAuthor(msg);
+
+    if (msg.members?.length) {
+      if (!group) {
+        group = {
+          id: msg.groupId,
+          name: t('group.unnamed'),
+          hostId: Number(msg.host) || author,
+          members: normalizeMemberIds(msg.members),
+          messages: [],
+        };
+        saveGroup(group);
+      } else {
+        group.members = normalizeMemberIds(msg.members);
+        saveGroup(group);
+      }
+    }
+
+    if (!group || !isGroupMember(group, myId)) return true;
+    if (tcpPeer !== author || !isGroupMember(group, author)) return true;
+    if (author === myId) return true;
+
     const incoming = {
       id: msg.id,
       from: author,
@@ -310,33 +318,7 @@ export async function handleGroupTcpMessage(msg, ctx) {
       attachment: msg.attachment,
     };
 
-    if (amHost(group, myId)) {
-      // Host accepts only direct uploads from members (TCP peer = author).
-      if (msg.relayed) return true;
-      if (tcpPeer !== author || !isGroupMember(group, author)) return true;
-      if (author === myId) return true;
-
-      deliverGroupMessage(msg.groupId, incoming, ctx);
-      for (const m of group.members) {
-        if (Number(m) === myId || Number(m) === author) continue;
-        await safeSendTcp(api, {
-          type: 'group-msg',
-          to: m,
-          groupId: msg.groupId,
-          host: hostId,
-          author,
-          relayed: true,
-          text: msg.text,
-          id: msg.id,
-          timestamp: msg.timestamp,
-          attachment: msg.attachment,
-        });
-      }
-    } else {
-      // Members only trust relayed traffic from the designated host.
-      if (tcpPeer !== hostId) return true;
-      deliverGroupMessage(msg.groupId, incoming, ctx, { bumpUnread: true });
-    }
+    deliverGroupMessage(msg.groupId, incoming, ctx, { bumpUnread: true });
     return true;
   }
 
@@ -383,13 +365,12 @@ export async function handleGroupTcpMessage(msg, ctx) {
   }
 
   if (type === 'group-call-signal') {
-    const group = getGroup(msg.groupId);
-    const target = Number(msg.target);
-    if (group && amHost(group, myId) && target && target !== myId) {
-      await relayGroupCallSignal(msg, api);
-    } else {
-      await handleGroupCallSignal(msg, api);
-    }
+    await handleGroupCallSignal(msg, api);
+    return true;
+  }
+
+  if (type === 'group-call-state') {
+    await handleGroupCallState(msg, api);
     return true;
   }
 
@@ -406,4 +387,10 @@ export async function handleGroupTcpMessage(msg, ctx) {
   return false;
 }
 
-export { isInGroupCall, joinGroupCall, leaveGroupCall } from './group-call.js';
+export {
+  isInGroupCall,
+  joinGroupCall,
+  leaveGroupCall,
+  getOngoingGroupCall,
+  getActiveGroupCallId,
+} from './group-call.js';

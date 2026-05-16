@@ -12,6 +12,7 @@ import {
 import { formatFileSize } from './file-transfer.js';
 import { createMessageId } from './message-id.js';
 import { addGroupMessage, getGroupMessages, groupDisplayName, amHost } from './groups.js';
+import { getOngoingGroupCall, isInGroupCall, getActiveGroupCallId } from './group-call.js';
 
 function formatChatTime(ts) {
   try {
@@ -43,7 +44,7 @@ function appendFileCard(block, attachment) {
   block.appendChild(card);
 }
 
-export function createGroupChatView(group, config, onSend, onBack, onGroupCall, onGroupMenu) {
+export function createGroupChatView(group, config, onSend, onBack, onGroupCall, onGroupMenu, onJoinOngoingCall) {
   const wrap = document.createElement('div');
   wrap.className = 'chat-view group-chat-view';
 
@@ -91,7 +92,23 @@ export function createGroupChatView(group, config, onSend, onBack, onGroupCall, 
   callBtn.addEventListener('click', () => onGroupCall?.(group.id));
   header.appendChild(callBtn);
 
-  const messagesEl = document.createElement("div");
+  const ongoingBar = document.createElement('div');
+  ongoingBar.className = 'group-call-ongoing glass hidden';
+  const ongoingPulse = document.createElement('span');
+  ongoingPulse.className = 'group-call-ongoing-pulse';
+  const ongoingText = document.createElement('span');
+  ongoingText.className = 'group-call-ongoing-text';
+  const ongoingJoin = document.createElement('button');
+  ongoingJoin.type = 'button';
+  ongoingJoin.className = 'btn btn-accent group-call-ongoing-join';
+  ongoingJoin.dataset.i18n = 'group.join_call';
+  ongoingJoin.textContent = t('group.join_call');
+  ongoingJoin.addEventListener('click', () => onJoinOngoingCall?.(group.id));
+  ongoingBar.appendChild(ongoingPulse);
+  ongoingBar.appendChild(ongoingText);
+  ongoingBar.appendChild(ongoingJoin);
+
+  const messagesEl = document.createElement('div');
   messagesEl.className = 'chat-messages glass';
 
   const inputRow = document.createElement("div");
@@ -201,7 +218,29 @@ export function createGroupChatView(group, config, onSend, onBack, onGroupCall, 
   inputRow.appendChild(sendBtn);
   inputRow.appendChild(fileInput);
 
+  function refreshOngoingBar() {
+    const snap = getOngoingGroupCall(group.id);
+    const inThisCall = isInGroupCall() && activeGroupMatches();
+    if (!snap.active || snap.count === 0 || inThisCall) {
+      ongoingBar.classList.add('hidden');
+      return;
+    }
+    ongoingBar.classList.remove('hidden');
+    ongoingText.textContent = t('group.call_ongoing_bar').replace('{n}', String(snap.count));
+  }
+
+  function activeGroupMatches() {
+    return getActiveGroupCallId() === group.id;
+  }
+
+  const onCallState = (ev) => {
+    if (ev.detail?.groupId === group.id) refreshOngoingBar();
+  };
+  window.addEventListener('blip-group-call-state', onCallState);
+  refreshOngoingBar();
+
   wrap.appendChild(header);
+  wrap.appendChild(ongoingBar);
   wrap.appendChild(messagesEl);
   wrap.appendChild(inputRow);
 
@@ -267,6 +306,11 @@ export function createGroupChatView(group, config, onSend, onBack, onGroupCall, 
       sub.textContent = `${t('group.members')}: ${group.members.length} · ${
         amHost(group, config.blipId) ? t('group.you_host') : t('group.host_line').replace('{id}', String(group.hostId))
       }`;
+      refreshOngoingBar();
+    },
+    refreshOngoingCall: refreshOngoingBar,
+    destroy() {
+      window.removeEventListener('blip-group-call-state', onCallState);
     },
   };
 }

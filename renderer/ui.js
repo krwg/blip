@@ -2,7 +2,14 @@ import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from '.
 import { createIdGrid } from './grid.js';
 import { createChatView, getMessages, applyReceiptToMessage } from './chat.js';
 import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
-import { getGroup, getAllGroups, groupDisplayName, getGroupMessages, amHost } from './groups.js';
+import {
+  getGroup,
+  getGroupsFor,
+  groupDisplayName,
+  getGroupMessages,
+  amHost,
+  isGroupMember,
+} from './groups.js';
 import { openGroupCreateDialog } from './group-create-dialog.js';
 import { createGroupChatView } from './group-chat.js';
 import {
@@ -13,6 +20,7 @@ import {
   joinGroupCall,
   leaveGroup,
   dissolveGroup,
+  getOngoingGroupCall,
 } from './groups-wire.js';
 import { logPeerEvent, getNetworkLogEntries, clearNetworkLog } from './network-log.js';
 import { createMessageId } from './message-id.js';
@@ -201,7 +209,8 @@ function ensureGroupChatView(groupId) {
       (e) => {
         const fresh = getGroup(groupId);
         if (fresh) showGroupContextMenu(e, fresh);
-      }
+      },
+      (gid) => joinGroupCall(gid, api, { skipInvite: true })
     );
     state.groupChatViews.set(groupId, view);
   }
@@ -209,7 +218,8 @@ function ensureGroupChatView(groupId) {
 }
 
 function openGroupChat(groupId) {
-  if (!getGroup(groupId)) return;
+  const group = getGroup(groupId);
+  if (!group || !isGroupMember(group, state.config.blipId)) return;
   state.activeGroup = groupId;
   state.activePeer = null;
   state.view = 'chat';
@@ -581,6 +591,7 @@ function peerForContextMenu(peerOrId) {
 }
 
 function closeGroupChatUi(groupId) {
+  state.groupChatViews.get(groupId)?.destroy?.();
   state.groupChatViews.delete(groupId);
   if (state.activeGroup === groupId) {
     state.activeGroup = null;
@@ -2807,7 +2818,7 @@ function renderChatHubView() {
   const list = document.createElement('div');
   list.className = 'chat-hub-list';
 
-  getAllGroups().forEach((group) => {
+  getGroupsFor(state.config.blipId).forEach((group) => {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'chat-hub-row glass chat-hub-row--group online';
@@ -2833,6 +2844,14 @@ function renderChatHubView() {
     badge.className = 'chat-hub-group-tag';
     badge.textContent = 'GRP';
     item.appendChild(badge);
+    const voice = getOngoingGroupCall(group.id);
+    if (voice.active && voice.count > 0) {
+      const live = document.createElement('span');
+      live.className = 'chat-hub-voice-live';
+      live.title = t('group.call_ongoing_hub');
+      live.textContent = 'VOICE';
+      item.appendChild(live);
+    }
     item.appendChild(info);
     const unread = unreadByGroup.get(group.id) || 0;
     if (unread > 0) {
@@ -2877,7 +2896,7 @@ function renderChatHubView() {
       return a.blipId - b.blipId;
     });
 
-  if (rows.length === 0 && getAllGroups().length === 0) {
+  if (rows.length === 0 && getGroupsFor(state.config.blipId).length === 0) {
     const empty = document.createElement('p');
     empty.className = 'hint';
     empty.dataset.i18n = 'chat.pick_peer';
@@ -3109,16 +3128,29 @@ export function initUI(config, blipApi) {
     if (state.view === 'chat' && !state.activePeer) renderView('chat');
   });
 
-  window.addEventListener('blip-groups-changed', () => {
-    if (state.view !== 'chat') return;
-    if (state.activeGroup && !getGroup(state.activeGroup)) {
-      closeGroupChatUi(state.activeGroup);
-    }
-    if (!state.activePeer && !state.activeGroup) {
+  window.addEventListener('blip-group-call-state', () => {
+    if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
       renderView('chat');
-    } else if (state.activeGroup) {
+    }
+    if (state.activeGroup) {
+      state.groupChatViews.get(state.activeGroup)?.refreshOngoingCall?.();
+    }
+  });
+
+  window.addEventListener('blip-groups-changed', () => {
+    if (state.activeGroup) {
       const g = getGroup(state.activeGroup);
-      if (g) ensureGroupChatView(state.activeGroup)?.updateGroup?.(g);
+      if (!g || !isGroupMember(g, state.config.blipId)) {
+        closeGroupChatUi(state.activeGroup);
+      }
+    }
+    if (state.view === 'chat') {
+      if (!state.activePeer && !state.activeGroup) {
+        renderView('chat');
+      } else if (state.activeGroup) {
+        const g = getGroup(state.activeGroup);
+        if (g) ensureGroupChatView(state.activeGroup)?.updateGroup?.(g);
+      }
     }
   });
 
@@ -3156,7 +3188,7 @@ export function updatePeers({ peers, occupiedIds }) {
     gridComponent.updateOccupied(occupiedIds.filter((id) => id !== state.config.blipId));
   }
 
-  migrateGroupsHost(getAllGroups(), nextOnline, api, state.config);
+  migrateGroupsHost(getGroupsFor(state.config.blipId), nextOnline, api, state.config);
 
   /* Never full re-render during active conversation (fixes scroll jump + input focus loss) */
   if (state.view === 'chat' && (state.activePeer || state.activeGroup) && mainContent) {

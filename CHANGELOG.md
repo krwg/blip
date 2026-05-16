@@ -9,6 +9,28 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+## [0.5.4] — Handshake
+
+### Added
+
+- **Ongoing group voice (Discord-style)** — `group-call-state` broadcasts who is in voice; non-participants see a join bar in chat, **VOICE** badge in hub, and can enter anytime.
+- **Late join** — mesh connects to participants already in call when you join mid-session.
+
+### Changed
+
+- **Group call UI** — same `call-overlay` shell as 1:1: participant tiles, link ring, waveform, timer, mute/deafen.
+
+## [0.5.3] — Handshake
+
+### Fixed
+
+- **Leave / delete group** — hub used `getAllGroups()` and showed groups after you left; now `getGroupsFor(blipId)` only lists memberships. Local leave/disband applies before TCP notify.
+- **Group calls** — WebRTC signals go peer-to-peer (no host relay); call overlay DOM fixed (`div` shell).
+
+### Changed
+
+- **Group chat** — full mesh: each sender pushes `group-msg` to every other member (`author` + `members` list); host relay removed.
+
 ## [0.5.2] — Handshake
 
 ### Fixed
