@@ -152,6 +152,11 @@ async function boot() {
       return;
     }
     if (key === 'Escape') {
+      if (callUI.isVideoFullscreen?.()) {
+        callUI.toggleVideoFullscreen();
+        e.preventDefault();
+        return;
+      }
       callUI.hangupCall();
       e.preventDefault();
       return;

@@ -3,6 +3,13 @@ import { getGroup, saveGroup, isGroupMember, normalizeMemberIds, groupDisplayNam
 import { sounds } from './audio.js';
 import { showAppToast } from './toasts.js';
 import { createAvatarElement } from './avatar.js';
+import { openScreenPickerDialog } from './screen-picker-dialog.js';
+import { captureDisplayStream } from './display-capture.js';
+import {
+  applyScreenTrackConstraints,
+  tuneVideoSender,
+  trackLooksLikeScreen,
+} from './call-media.js';
 
 const ICE = [];
 /** @type {Map<number, RTCPeerConnection>} */
@@ -11,12 +18,20 @@ const peers = new Map();
 const pendingCandidates = new Map();
 /** @type {Map<number, HTMLAudioElement>} */
 const remoteAudios = new Map();
+/** @type {Map<number, HTMLVideoElement>} */
+const remoteVideos = new Map();
+/** @type {Map<string, Set<number>>} */
+const voiceByGroup = new Map();
+/** @type {Map<number, { msg: object, groupId: string }>} */
+const pendingOffers = new Map();
 
 /** @type {Map<string, { active: boolean, participants: Set<number> }>} */
 const ongoingByGroup = new Map();
 const dismissedRing = new Set();
 
 let localStream = null;
+let screenStream = null;
+let sharingScreen = false;
 let activeGroupId = null;
 let apiRef = null;
 let configRef = null;
@@ -95,31 +110,60 @@ function setOngoing(groupId, participantIds, active) {
   dispatchCallState(groupId);
 }
 
-function mergeOngoing(groupId, participantIds) {
-  if (!participantIds?.length) return;
-  let entry = ongoingByGroup.get(groupId);
-  if (!entry) {
-    entry = { active: true, participants: new Set() };
-    ongoingByGroup.set(groupId, entry);
+function applyVoiceRoster(groupId, participantIds, active) {
+  if (!active || !participantIds?.length) {
+    voiceByGroup.delete(groupId);
+    setOngoing(groupId, [], false);
+    return;
   }
-  entry.active = true;
-  for (const id of participantIds) entry.participants.add(peerNum(id));
-  dispatchCallState(groupId);
+  const set = new Set(participantIds.map(peerNum).filter(Number.isFinite));
+  voiceByGroup.set(groupId, set);
+  setOngoing(groupId, [...set], true);
 }
 
-function localParticipantIds() {
-  const myId = peerNum(configRef?.blipId);
-  const set = new Set([myId]);
-  for (const id of peers.keys()) set.add(id);
-  return [...set];
+function addVoiceParticipant(groupId, id) {
+  const n = peerNum(id);
+  if (!Number.isFinite(n)) return;
+  let set = voiceByGroup.get(groupId);
+  if (!set) {
+    set = new Set();
+    voiceByGroup.set(groupId, set);
+  }
+  set.add(n);
+  setOngoing(groupId, [...set], true);
+}
+
+function removeVoiceParticipant(groupId, id) {
+  const s = voiceByGroup.get(groupId);
+  if (!s) return [];
+  s.delete(peerNum(id));
+  const list = [...s];
+  if (list.length === 0) voiceByGroup.delete(groupId);
+  setOngoing(groupId, list, list.length > 0);
+  return list;
+}
+
+function voiceParticipants(groupId) {
+  return [...(voiceByGroup.get(groupId) || [])];
+}
+
+function dismissIncomingUi(groupId) {
+  sounds.stopOutgoingRing();
+  if (pendingInvite?.groupId === groupId) pendingInvite = null;
+  if (activeGroupId === groupId && localStream) shell?.showActive();
 }
 
 async function broadcastCallState(groupId, { end = false } = {}) {
   const group = getGroup(groupId);
   if (!group || !apiRef) return;
   const myId = myBlipId(apiRef);
-  const participants = end ? [] : localParticipantIds();
-  if (!end) setOngoing(groupId, participants, true);
+  let participants = [];
+  if (end) {
+    applyVoiceRoster(groupId, [], false);
+  } else {
+    if (localStream && Number.isFinite(myId)) addVoiceParticipant(groupId, myId);
+    participants = voiceParticipants(groupId);
+  }
 
   for (const m of group.members) {
     const mid = peerNum(m);
@@ -213,6 +257,12 @@ function createGroupCallShell(config) {
   deafenBtn.dataset.i18n = 'call.deafen';
   deafenBtn.textContent = t('call.deafen');
 
+  const shareBtn = document.createElement('button');
+  shareBtn.type = 'button';
+  shareBtn.className = 'btn btn-accent hidden';
+  shareBtn.dataset.i18n = 'call.share';
+  shareBtn.textContent = t('call.share');
+
   const acceptBtn = document.createElement('button');
   acceptBtn.type = 'button';
   acceptBtn.className = 'btn btn-accent hidden';
@@ -233,6 +283,7 @@ function createGroupCallShell(config) {
 
   controls.appendChild(muteBtn);
   controls.appendChild(deafenBtn);
+  controls.appendChild(shareBtn);
   controls.appendChild(acceptBtn);
   controls.appendChild(rejectBtn);
   controls.appendChild(endBtn);
@@ -274,6 +325,7 @@ function createGroupCallShell(config) {
     endBtn.classList.add('hidden');
     muteBtn.classList.add('hidden');
     deafenBtn.classList.add('hidden');
+    shareBtn.classList.add('hidden');
   }
 
   function showActive() {
@@ -285,6 +337,13 @@ function createGroupCallShell(config) {
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
+    shareBtn.classList.remove('hidden');
+  }
+
+  function setShareButton(active) {
+    shareBtn.classList.toggle('active', active);
+    shareBtn.dataset.i18n = active ? 'call.share_stop' : 'call.share';
+    shareBtn.textContent = t(active ? 'call.share_stop' : 'call.share');
   }
 
   function startTimer() {
@@ -320,7 +379,18 @@ function createGroupCallShell(config) {
 
       const slot = document.createElement('div');
       slot.className = 'call-avatar-slot group-call-avatar-slot';
-      slot.appendChild(createAvatarElement(n, 4, { selfBlipId: config.blipId }));
+      const remoteVid = remoteVideos.get(n);
+      if (remoteVid?.srcObject) {
+        const v = document.createElement('video');
+        v.className = 'group-call-remote-video';
+        v.autoplay = true;
+        v.playsInline = true;
+        v.muted = true;
+        v.srcObject = remoteVid.srcObject;
+        slot.appendChild(v);
+      } else {
+        slot.appendChild(createAvatarElement(n, 4, { selfBlipId: config.blipId }));
+      }
       tile.appendChild(slot);
 
       if (connected) {
@@ -361,6 +431,10 @@ function createGroupCallShell(config) {
     deafenBtn.classList.toggle('active', deafened);
     deafenBtn.dataset.i18n = deafened ? 'call.undeafen' : 'call.deafen';
     deafenBtn.textContent = t(deafened ? 'call.undeafen' : 'call.deafen');
+  });
+
+  shareBtn.addEventListener('click', () => {
+    void toggleGroupScreenShare(setShareButton);
   });
 
   endBtn.addEventListener('click', () => {
@@ -427,6 +501,85 @@ async function sendSignal(groupId, targetId, payload) {
   }
 }
 
+function getVideoSender(pc) {
+  return pc?.getSenders().find((s) => s.track?.kind === 'video') ?? null;
+}
+
+async function applyVideoToPeer(rid, groupId, track, screenShare) {
+  const pc = peers.get(rid);
+  if (!pc) return;
+  const sender = getVideoSender(pc);
+  if (sender) {
+    await sender.replaceTrack(track);
+    if (track) await tuneVideoSender(sender, { screenShare });
+    return;
+  }
+  if (!track) return;
+  const stream = screenStream || new MediaStream([track]);
+  pc.addTrack(track, stream);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await sendSignal(groupId, rid, {
+    signalKind: 'offer',
+    sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+  });
+}
+
+async function applyVideoToAllPeers(groupId, track, screenShare) {
+  for (const rid of peers.keys()) {
+    await applyVideoToPeer(rid, groupId, track, screenShare);
+  }
+}
+
+async function stopGroupScreenShare(syncShareBtn) {
+  if (!sharingScreen && !screenStream) return;
+  screenStream?.getTracks().forEach((tr) => tr.stop());
+  screenStream = null;
+  sharingScreen = false;
+  syncShareBtn?.(false);
+  if (activeGroupId) await applyVideoToAllPeers(activeGroupId, null, false);
+}
+
+async function toggleGroupScreenShare(syncShareBtn) {
+  if (!localStream || !activeGroupId) return;
+  if (sharingScreen) {
+    await stopGroupScreenShare(syncShareBtn);
+    return;
+  }
+  try {
+    const sourceId = await openScreenPickerDialog();
+    if (!sourceId) return;
+    const stream = await captureDisplayStream(sourceId);
+    const screenTrack = stream.getVideoTracks()[0];
+    if (!screenTrack) throw new Error('No screen track');
+    await applyScreenTrackConstraints(screenTrack);
+    screenStream = stream;
+    sharingScreen = true;
+    syncShareBtn?.(true);
+    await applyVideoToAllPeers(activeGroupId, screenTrack, true);
+    screenTrack.onended = () => {
+      void stopGroupScreenShare(syncShareBtn);
+    };
+    shell?.refreshAvatars(getGroup(activeGroupId));
+  } catch (err) {
+    console.error('[group-call] screen share:', err);
+    showAppToast({
+      title: t('call.share_failed'),
+      variant: 'danger',
+      durationMs: 5000,
+    });
+  }
+}
+
+async function processPendingOffers(groupId) {
+  if (!apiRef) return;
+  for (const [rid, pending] of [...pendingOffers.entries()]) {
+    if (pending.groupId !== groupId) continue;
+    pendingOffers.delete(rid);
+    await handleGroupCallSignal(pending.msg, apiRef);
+  }
+}
+
 async function flushCandidates(remoteId, pc) {
   const pending = pendingCandidates.get(remoteId);
   if (!pending?.length || !pc?.remoteDescription) return;
@@ -452,6 +605,20 @@ async function createPc(remoteId, groupId, initiator) {
   }
 
   pc.ontrack = (ev) => {
+    const track = ev.track;
+    if (track.kind === 'video') {
+      let video = remoteVideos.get(rid);
+      if (!video) {
+        video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        remoteVideos.set(rid, video);
+      }
+      video.srcObject = ev.streams[0] || new MediaStream([track]);
+      shell?.refreshAvatars(getGroup(groupId));
+      return;
+    }
     let audio = remoteAudios.get(rid);
     if (!audio) {
       audio = document.createElement('audio');
@@ -460,15 +627,17 @@ async function createPc(remoteId, groupId, initiator) {
       remoteAudios.set(rid, audio);
       document.body.appendChild(audio);
     }
-    audio.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    audio.srcObject = ev.streams[0] || new MediaStream([track]);
     audio.muted = deafened;
-    const group = getGroup(groupId);
-    shell?.refreshAvatars(group);
+    shell?.refreshAvatars(getGroup(groupId));
     void broadcastCallState(groupId);
   };
 
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') void broadcastCallState(groupId);
+    if (pc.connectionState === 'connected') {
+      sounds.stopOutgoingRing();
+      void broadcastCallState(groupId);
+    }
   };
 
   pc.onicecandidate = (ev) => {
@@ -546,9 +715,13 @@ export async function joinGroupCall(groupId, api, opts = {}) {
   shell.showActive();
   shell.startTimer();
   shell.refreshAvatars(group);
-  sounds.outgoingCall();
+  dismissIncomingUi(groupId);
+  sounds.stopOutgoingRing();
+  if (!opts.skipInvite) sounds.outgoingCall();
+  else sounds.callConnected();
 
   const myId = peerNum(config.blipId);
+  addVoiceParticipant(groupId, myId);
   const ongoing = getOngoingGroupCall(groupId);
 
   for (const pid of ongoing.participants) {
@@ -562,6 +735,7 @@ export async function joinGroupCall(groupId, api, opts = {}) {
     if (shouldInitiate(myId, mid)) void createPc(mid, groupId, true);
   }
 
+  await processPendingOffers(groupId);
   await broadcastCallState(groupId);
   startHeartbeat(groupId);
 
@@ -595,7 +769,7 @@ export async function leaveGroupCall() {
   try {
     if (gid && api && hadStream && Number.isFinite(myId)) {
       const group = getGroup(gid);
-      const remaining = [...peers.keys()];
+      const participants = removeVoiceParticipant(gid, myId);
       if (group) {
         for (const m of group.members) {
           const mid = peerNum(m);
@@ -606,12 +780,11 @@ export async function leaveGroupCall() {
             groupId: gid,
             host: group.hostId,
             members: group.members,
-            active: remaining.length > 0,
-            participants: remaining,
+            active: participants.length > 0,
+            participants,
           });
         }
-        if (remaining.length === 0) {
-          setOngoing(gid, [], false);
+        if (participants.length === 0) {
           for (const m of group.members) {
             const mid = peerNum(m);
             if (mid === myId) continue;
@@ -623,21 +796,24 @@ export async function leaveGroupCall() {
               active: false,
             });
           }
-        } else {
-          mergeOngoing(gid, remaining);
         }
       }
     }
   } catch (err) {
     console.warn('[group-call] leave:', err?.message || err);
   } finally {
+  await stopGroupScreenShare();
   for (const pc of peers.values()) pc.close();
   peers.clear();
   pendingCandidates.clear();
+  pendingOffers.clear();
   remoteAudios.forEach((a) => a.remove());
   remoteAudios.clear();
+  remoteVideos.clear();
   localStream?.getTracks().forEach((tr) => tr.stop());
   localStream = null;
+  sharingScreen = false;
+  screenStream = null;
   activeGroupId = null;
   pendingInvite = null;
   muted = false;
@@ -666,28 +842,18 @@ export async function handleGroupCallSignal(msg, api) {
   if (!isGroupMember(group, remoteId) || !isGroupMember(group, myId)) return;
 
   if (msg.signalKind === 'offer') {
-    if (!localStream) {
-      activeGroupId = groupId;
-      dismissedRing.delete(groupId);
-      try {
-        localStream = await getMic();
-      } catch (err) {
-        console.error('[group-call] mic on offer:', err);
-        showAppToast({
-          title: t('group.call_mic_failed'),
-          variant: 'danger',
-          durationMs: 5000,
-        });
-        return;
-      }
-      shell.setTitle(groupDisplayName(group));
-      shell.showActive();
-      shell.startTimer();
-      startHeartbeat(groupId);
-    }
-    const pc = await createPc(remoteId, groupId, false);
     const offer = normalizeSdp(msg.sdp);
     if (!offer) return;
+
+    if (!localStream) {
+      pendingOffers.set(remoteId, { msg, groupId });
+      return;
+    }
+
+    dismissIncomingUi(groupId);
+    let pc = peers.get(remoteId);
+    if (!pc) pc = await createPc(remoteId, groupId, false);
+
     await pc.setRemoteDescription(offer);
     await flushCandidates(remoteId, pc);
     const answer = await pc.createAnswer();
@@ -697,7 +863,8 @@ export async function handleGroupCallSignal(msg, api) {
       sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
     });
     shell.refreshAvatars(group);
-    await meshNewParticipants(groupId, getOngoingGroupCall(groupId).participants);
+    sounds.stopOutgoingRing();
+    await meshNewParticipants(groupId, voiceParticipants(groupId));
     await broadcastCallState(groupId);
     return;
   }
@@ -748,6 +915,7 @@ export async function handleGroupCallState(msg, api) {
   const participants = (msg.participants || []).map(peerNum).filter(Number.isFinite);
 
   if (!msg.active) {
+    voiceByGroup.delete(msg.groupId);
     setOngoing(msg.groupId, [], false);
     if (activeGroupId === msg.groupId && !localStream) {
       shell?.hide();
@@ -756,7 +924,7 @@ export async function handleGroupCallState(msg, api) {
     return;
   }
 
-  mergeOngoing(msg.groupId, participants);
+  applyVoiceRoster(msg.groupId, participants, true);
 
   if (activeGroupId === msg.groupId && localStream) {
     await meshNewParticipants(msg.groupId, participants);
@@ -782,9 +950,11 @@ export async function handleGroupCallStart(msg, api) {
   if (!group || !isGroupMember(group, myId)) return;
 
   const starter = wireFrom(msg);
-  mergeOngoing(msg.groupId, [starter]);
+  const prev = getOngoingGroupCall(msg.groupId).participants;
+  applyVoiceRoster(msg.groupId, [...new Set([...prev, starter])], true);
 
   if (activeGroupId === msg.groupId && localStream) {
+    dismissIncomingUi(msg.groupId);
     shell?.refreshAvatars(group);
     return;
   }
@@ -816,6 +986,7 @@ export async function handleGroupCallEnd(msg) {
   const groupId = msg.groupId;
 
   if (msg.active === false) {
+    voiceByGroup.delete(groupId);
     setOngoing(groupId, [], false);
     if (activeGroupId === groupId && !localStream) {
       shell?.hide();
@@ -834,6 +1005,7 @@ export async function handleGroupCallEnd(msg) {
   }
   remoteAudios.get(remoteId)?.remove();
   remoteAudios.delete(remoteId);
+  remoteVideos.delete(remoteId);
   shell?.refreshAvatars(getGroup(groupId));
   void broadcastCallState(groupId);
 }

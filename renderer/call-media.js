@@ -1,9 +1,9 @@
 /** WebRTC capture constraints and sender tuning for BLIP calls. */
 
 export const CAMERA_VIDEO_CONSTRAINTS = {
-  width: { ideal: 1280, min: 640 },
-  height: { ideal: 720, min: 480 },
-  frameRate: { ideal: 24, max: 30 },
+  width: { ideal: 1920, min: 1280 },
+  height: { ideal: 1080, min: 720 },
+  frameRate: { ideal: 30, max: 30 },
 };
 
 export const SCREEN_CAPTURE_CONSTRAINTS = {
@@ -34,8 +34,8 @@ export async function tuneVideoSender(sender, { screenShare = false } = {}) {
     const params = sender.getParameters();
     if (!params.encodings?.length) params.encodings = [{}];
     const enc = params.encodings[0];
-    enc.maxBitrate = screenShare ? 4_000_000 : 1_200_000;
-    enc.maxFramerate = screenShare ? 30 : 24;
+    enc.maxBitrate = screenShare ? 6_000_000 : 2_500_000;
+    enc.maxFramerate = screenShare ? 30 : 30;
     if (screenShare) enc.scaleResolutionDownBy = 1;
     await sender.setParameters(params);
   } catch (err) {

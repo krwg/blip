@@ -222,6 +222,7 @@ export function createCallUI(config, api, options = {}) {
   let incomingOffer = null;
   let stageActive = false;
   let remotePeerScreenSharing = false;
+  let pseudoFullscreen = false;
 
   /** @type {'off'|'local'|'remote'|'both'} */
   let stageMode = 'off';
@@ -283,6 +284,14 @@ export function createCallUI(config, api, options = {}) {
     return remoteVideo.srcObject ? remoteVideo : localVideo;
   }
 
+  function exitPseudoFullscreen() {
+    if (!pseudoFullscreen) return;
+    pseudoFullscreen = false;
+    videoWrap.classList.remove('call-video-wrap--fullscreen');
+    overlay.classList.remove('call-overlay--theater-fs');
+    syncFullscreenButton();
+  }
+
   async function toggleVideoFullscreen() {
     if (fsBtn.classList.contains('hidden')) return;
     try {
@@ -290,23 +299,39 @@ export function createCallUI(config, api, options = {}) {
         await document.exitFullscreen();
         return;
       }
-      const target = getFullscreenTarget();
+      if (pseudoFullscreen) {
+        exitPseudoFullscreen();
+        return;
+      }
       const host = videoWrap;
-      if (host.requestFullscreen) await host.requestFullscreen();
-      else if (target.requestFullscreen) await target.requestFullscreen();
+      if (host.requestFullscreen) {
+        await host.requestFullscreen();
+        return;
+      }
+      if (host.webkitRequestFullscreen) {
+        host.webkitRequestFullscreen();
+        return;
+      }
     } catch (err) {
-      console.warn('[call] fullscreen:', err.message);
+      console.warn('[call] native fullscreen:', err.message);
     }
+    pseudoFullscreen = !pseudoFullscreen;
+    videoWrap.classList.toggle('call-video-wrap--fullscreen', pseudoFullscreen);
+    overlay.classList.toggle('call-overlay--theater-fs', pseudoFullscreen);
+    syncFullscreenButton();
   }
 
   function syncFullscreenButton() {
-    const on = !!document.fullscreenElement;
+    const on = !!document.fullscreenElement || pseudoFullscreen;
     fsBtn.dataset.i18n = on ? 'call.exit_fullscreen' : 'call.fullscreen';
     fsBtn.textContent = t(on ? 'call.exit_fullscreen' : 'call.fullscreen');
     fsBtn.title = fsBtn.textContent;
   }
 
-  document.addEventListener('fullscreenchange', syncFullscreenButton);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) exitPseudoFullscreen();
+    syncFullscreenButton();
+  });
 
   function show() {
     overlay.classList.remove('hidden');
@@ -329,6 +354,7 @@ export function createCallUI(config, api, options = {}) {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
+    exitPseudoFullscreen();
     setStageView('off');
     remotePeerScreenSharing = false;
     clearInterval(timerInterval);
@@ -1005,6 +1031,7 @@ export function createCallUI(config, api, options = {}) {
     toggleDeafen,
     toggleScreenShare,
     toggleVideoFullscreen,
+    isVideoFullscreen: () => !!document.fullscreenElement || pseudoFullscreen,
     isIncomingRinging,
     hide,
     end: hide,

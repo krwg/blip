@@ -19,9 +19,9 @@ export async function captureDisplayStream(sourceId) {
         mandatory: {
           chromeMediaSource,
           chromeMediaSourceId: sourceId,
-          minWidth: 1280,
+          minWidth: 1920,
           maxWidth: 1920,
-          minHeight: 720,
+          minHeight: 1080,
           maxHeight: 1080,
           maxFrameRate: 30,
         },
