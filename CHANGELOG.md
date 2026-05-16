@@ -9,6 +9,18 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+## [0.4.1] — Mesh
+
+### Added
+
+- **Screen share picker** — choose **SCREENS** or **WINDOWS** with thumbnails (Discord-style) before sharing.
+- **Drag & drop** — drop images into an open chat to send over LAN.
+
+### Fixed
+
+- **Screen share** — broken `getDisplayMedia` handler (`useSystemPicker` + empty callback); capture uses a pre-selected source again.
+- **ID grid** — slightly larger cells so single-digit IDs (e.g. **4**) fit cleanly.
+
 ## [0.4.0] — Mesh
 
 Rich LAN messaging: receipts, reactions, images, favorites, and presence — still no cloud.

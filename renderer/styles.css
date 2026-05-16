@@ -317,29 +317,34 @@ select.blip-select:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
 .id-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
+  gap: 5px;
   width: 100%;
-  max-width: 400px;
+  max-width: 448px;
   margin-bottom: 16px;
 }
 
 .id-cell {
   position: relative;
   aspect-ratio: 1;
+  min-height: 44px;
   border: 2px solid rgba(0, 255, 200, 0.35);
   background: #141414;
   color: var(--blip-text);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .id-cell:hover:not(:disabled) {
@@ -714,8 +719,104 @@ select.blip-select:focus {
   background: rgba(0, 255, 200, 0.15);
 }
 
+/* Screen share picker */
+.screen-picker-modal {
+  width: min(92vw, 560px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-picker-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.screen-picker-tabs .btn.selected {
+  border-color: var(--blip-accent);
+  color: var(--blip-accent);
+}
+
+.screen-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.screen-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: 2px solid var(--blip-border);
+  background: #141414;
+  cursor: pointer;
+  text-align: left;
+  color: var(--blip-text);
+}
+
+.screen-picker-card:hover {
+  border-color: var(--blip-accent);
+}
+
+.screen-picker-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  background: #0a0a0a;
+}
+
+.screen-picker-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--blip-muted);
+}
+
+.screen-picker-label {
+  font-size: 0.65rem;
+  padding: 6px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Chat drag & drop */
+.chat-view--drag .chat-messages {
+  outline: 2px dashed var(--blip-accent);
+}
+
+.chat-drop-overlay {
+  position: absolute;
+  inset: 48px 0 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  border: 2px dashed var(--blip-accent);
+  color: var(--blip-accent);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.chat-drop-overlay.hidden {
+  display: none;
+}
+
 /* Chat */
 .chat-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 120px);

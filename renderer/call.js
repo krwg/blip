@@ -8,6 +8,7 @@ import {
   tuneVideoSender,
   trackLooksLikeScreen,
 } from './call-media.js';
+import { openScreenPickerDialog } from './screen-picker-dialog.js';
 
 const ICE_SERVERS = [];
 
@@ -471,6 +472,12 @@ export function createCallUI(config, api, options = {}) {
     }
 
     try {
+      const sourceId = await openScreenPickerDialog();
+      if (!sourceId) return;
+
+      const prepared = await window.blip?.prepareDisplayCapture?.(sourceId);
+      if (!prepared?.ok) return;
+
       const stream = await navigator.mediaDevices.getDisplayMedia(SCREEN_CAPTURE_CONSTRAINTS);
       const screenTrack = stream.getVideoTracks()[0];
       if (!screenTrack) throw new Error('No screen track');

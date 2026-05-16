@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification, session, desktopCapturer } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification, session } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
@@ -13,6 +13,11 @@ import { resolvePorts } from './ports.js';
 import { serializeSdp, sendCallPayload } from './call-wire.js';
 import { fetchGithubReleases } from './github-releases.js';
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts.js';
+import {
+  listDisplaySources,
+  resolveDisplaySourceForCallback,
+  setPendingDisplaySource,
+} from './display-capture.js';
 import os from 'os';
 
 if (process.env.BLIP_USER_DATA_DIR) {
@@ -654,6 +659,14 @@ function setupIpc() {
     return showDesktopNotification(payload);
   });
 
+  ipcMain.handle('list-display-sources', () => listDisplaySources());
+
+  ipcMain.handle('prepare-display-capture', (_, sourceId) => {
+    if (typeof sourceId !== 'string' || !sourceId) return { ok: false };
+    setPendingDisplaySource(sourceId);
+    return { ok: true };
+  });
+
   ipcMain.handle('open-external', async (_, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false };
     await shell.openExternal(url);
@@ -722,31 +735,19 @@ function setupMediaPermissions() {
     return permission === 'media' || permission === 'display-capture';
   });
 
-  session.defaultSession.setDisplayMediaRequestHandler(
-    async (request, callback) => {
-      if (request.useSystemPicker) {
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const pick = await resolveDisplaySourceForCallback();
+      if (!pick) {
         callback({});
         return;
       }
-      try {
-        const sources = await desktopCapturer.getSources({
-          types: ['screen', 'window'],
-          thumbnailSize: { width: 1920, height: 1080 },
-        });
-        const screen = sources.find((s) => s.id.startsWith('screen:'));
-        const pick = screen ?? sources[0];
-        if (!pick) {
-          callback({});
-          return;
-        }
-        callback({ video: pick });
-      } catch (err) {
-        console.warn('[BLIP] display media:', err.message);
-        callback({});
-      }
-    },
-    { useSystemPicker: true }
-  );
+      callback({ video: pick, audio: false });
+    } catch (err) {
+      console.warn('[BLIP] display media:', err.message);
+      callback({});
+    }
+  });
 }
 
 app.whenReady().then(async () => {

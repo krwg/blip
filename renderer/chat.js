@@ -399,14 +399,7 @@ export function createChatView(peerId, config, onSend, onBack, onTyping, onRecei
   attachInput.addEventListener('change', async () => {
     const file = attachInput.files?.[0];
     attachInput.value = '';
-    if (!file) return;
-    try {
-      const attachment = await encodeChatImageAttachment(file);
-      await sendPayload({ text: t('chat.image_sent'), attachment });
-    } catch (err) {
-      const key = err?.message === 'file_too_big' ? 'chat.attach_too_big' : 'chat.attach_failed';
-      alert(t(key));
-    }
+    await sendImageFile(file);
   });
 
   sendBtn.addEventListener('click', send);
@@ -425,8 +418,73 @@ export function createChatView(peerId, config, onSend, onBack, onTyping, onRecei
   inputRow.appendChild(sendBtn);
   inputRow.appendChild(attachInput);
 
+  async function sendImageFile(file) {
+    if (!file) return;
+    try {
+      const attachment = await encodeChatImageAttachment(file);
+      await sendPayload({ text: t('chat.image_sent'), attachment });
+    } catch (err) {
+      const key = err?.message === 'file_too_big' ? 'chat.attach_too_big' : 'chat.attach_failed';
+      alert(t(key));
+    }
+  }
+
+  let dragDepth = 0;
+  const dropOverlay = document.createElement('div');
+  dropOverlay.className = 'chat-drop-overlay hidden';
+  dropOverlay.textContent = t('chat.drop_hint');
+  dropOverlay.dataset.i18n = 'chat.drop_hint';
+
+  function setDropActive(on) {
+    dropOverlay.classList.toggle('hidden', !on);
+    wrap.classList.toggle('chat-view--drag', on);
+  }
+
+  function hasImageFile(dt) {
+    if (!dt?.files?.length) return false;
+    return [...dt.files].some((f) => f.type.startsWith('image/'));
+  }
+
+  function onDragEnter(e) {
+    e.preventDefault();
+    dragDepth += 1;
+    if (hasImageFile(e.dataTransfer)) setDropActive(true);
+  }
+
+  function onDragLeave(e) {
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) setDropActive(false);
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    if (hasImageFile(e.dataTransfer)) e.dataTransfer.dropEffect = 'copy';
+  }
+
+  async function onDrop(e) {
+    e.preventDefault();
+    dragDepth = 0;
+    setDropActive(false);
+    const files = [...(e.dataTransfer?.files || [])];
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (!images.length) {
+      if (files.length) alert(t('chat.drop_images_only'));
+      return;
+    }
+    for (const file of images) {
+      await sendImageFile(file);
+    }
+  }
+
+  wrap.addEventListener('dragenter', onDragEnter);
+  wrap.addEventListener('dragleave', onDragLeave);
+  wrap.addEventListener('dragover', onDragOver);
+  wrap.addEventListener('drop', onDrop);
+
   wrap.appendChild(header);
   wrap.appendChild(messagesEl);
+  wrap.appendChild(dropOverlay);
   wrap.appendChild(typingBar);
   wrap.appendChild(inputRow);
 

@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('blip', {
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   getAppMetadata: () => ipcRenderer.invoke('get-app-metadata'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  listDisplaySources: () => ipcRenderer.invoke('list-display-sources'),
+  prepareDisplayCapture: (sourceId) => ipcRenderer.invoke('prepare-display-capture', sourceId),
   getPeers: () => ipcRenderer.invoke('get-peers'),
   getNetworkDiagnostics: () => ipcRenderer.invoke('get-network-diagnostics'),
   getGithubReleases: (limit) => ipcRenderer.invoke('get-github-releases', limit),
