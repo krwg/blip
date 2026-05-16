@@ -3,13 +3,14 @@ import {
   getGroup,
   saveGroup,
   deleteGroup,
-  getAllGroups,
   amHost,
   pickNextHost,
   addGroupMessage,
   generateGroupId,
   groupDisplayName,
   removeMemberFromGroup,
+  isGroupMember,
+  normalizeMemberIds,
 } from './groups.js';
 import { showAppToast } from './toasts.js';
 import { sounds } from './audio.js';
@@ -33,12 +34,42 @@ function onlineMemberIds(statePeers) {
   );
 }
 
+async function safeSendTcp(api, payload) {
+  try {
+    const res = await api.sendTcpMessage(payload);
+    if (res && res.ok === false) {
+      console.warn('[groups-wire] tcp:', payload.type, res.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[groups-wire] tcp:', payload.type, err?.message || err);
+    return false;
+  }
+}
+
+function deliverGroupMessage(groupId, incoming, ctx, { bumpUnread = false } = {}) {
+  const myId = Number(ctx.config.blipId);
+  const group = getGroup(groupId);
+  if (!group || !isGroupMember(group, myId)) return false;
+
+  const outgoing = Number(incoming.from) === myId;
+  const stored = addGroupMessage(groupId, { ...incoming, outgoing });
+  if (!stored) return false;
+
+  const view = ctx.getGroupChatView?.(groupId);
+  view?.renderMessages?.();
+  if (!outgoing) sounds.messageReceived();
+  if (bumpUnread && !outgoing) ctx.bumpGroupUnread?.(groupId);
+  return true;
+}
+
 /** Leave group locally and notify mesh. */
 export async function leaveGroup(api, config, groupId, statePeers) {
   const group = getGroup(groupId);
-  if (!group) return;
-  const myId = config.blipId;
-  if (!group.members.includes(myId)) return;
+  if (!group) return { ok: false, error: 'not_found' };
+  const myId = Number(config.blipId);
+  if (!isGroupMember(group, myId)) return { ok: false, error: 'not_member' };
 
   if (isInGroupCall()) await leaveGroupCall();
 
@@ -46,8 +77,8 @@ export async function leaveGroup(api, config, groupId, statePeers) {
   const online = onlineMemberIds(statePeers);
 
   for (const m of group.members) {
-    if (m === myId) continue;
-    await api.sendTcpMessage({
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
       type: 'group-leave',
       to: m,
       groupId,
@@ -62,7 +93,7 @@ export async function leaveGroup(api, config, groupId, statePeers) {
     updated.hostId = next;
     saveGroup(updated);
     for (const m of updated.members) {
-      await api.sendTcpMessage({
+      await safeSendTcp(api, {
         type: 'group-host',
         to: m,
         groupId,
@@ -71,20 +102,22 @@ export async function leaveGroup(api, config, groupId, statePeers) {
       });
     }
   }
+
+  return { ok: true };
 }
 
 /** Dissolve group (host only). */
 export async function dissolveGroup(api, config, groupId) {
   const group = getGroup(groupId);
-  if (!group) return;
-  const myId = config.blipId;
-  if (!amHost(group, myId)) return;
+  if (!group) return { ok: false, error: 'not_found' };
+  const myId = Number(config.blipId);
+  if (!amHost(group, myId)) return { ok: false, error: 'not_host' };
 
   if (isInGroupCall()) await leaveGroupCall();
 
   for (const m of group.members) {
-    if (m === myId) continue;
-    await api.sendTcpMessage({
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
       type: 'group-disband',
       to: m,
       groupId,
@@ -93,12 +126,13 @@ export async function dissolveGroup(api, config, groupId) {
     });
   }
   deleteGroup(groupId);
+  return { ok: true };
 }
 
 export async function createGroupFromUi(api, config, memberIds, name, seedPeerId) {
-  const myId = config.blipId;
+  const myId = Number(config.blipId);
   const groupId = generateGroupId();
-  const members = [myId, ...memberIds.filter((id) => id !== myId)];
+  const members = normalizeMemberIds([myId, ...memberIds.filter((id) => Number(id) !== myId)]);
   const group = {
     id: groupId,
     name: name || t('group.unnamed'),
@@ -110,8 +144,8 @@ export async function createGroupFromUi(api, config, memberIds, name, seedPeerId
   saveGroup(group);
 
   for (const m of members) {
-    if (m === myId) continue;
-    await api.sendTcpMessage({
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
       type: 'group-invite',
       to: m,
       groupId,
@@ -131,18 +165,18 @@ export async function createGroupFromUi(api, config, memberIds, name, seedPeerId
 }
 
 export function migrateGroupsHost(groups, onlineIds, api, config) {
-  const myId = config.blipId;
+  const myId = Number(config.blipId);
   for (const group of groups) {
-    if (!group.members.includes(myId)) continue;
-    if (onlineIds.has(group.hostId)) continue;
+    if (!isGroupMember(group, myId)) continue;
+    if (onlineIds.has(Number(group.hostId))) continue;
     const next = pickNextHost(group.hostId, group.members, onlineIds);
     if (!next) continue;
     group.hostId = next;
     saveGroup(group);
     if (next === myId) {
       for (const m of group.members) {
-        if (m === myId) continue;
-        void api.sendTcpMessage({
+        if (Number(m) === myId) continue;
+        void safeSendTcp(api, {
           type: 'group-host',
           to: m,
           groupId: group.id,
@@ -157,13 +191,13 @@ export function migrateGroupsHost(groups, onlineIds, api, config) {
 export async function sendGroupChatMessage(api, config, groupId, msg) {
   const group = getGroup(groupId);
   if (!group) return { ok: false };
-  const hostId = group.hostId;
-  const myId = config.blipId;
+  const hostId = Number(group.hostId);
+  const myId = Number(config.blipId);
 
   if (amHost(group, myId)) {
     for (const m of group.members) {
-      if (m === myId) continue;
-      await api.sendTcpMessage({
+      if (Number(m) === myId) continue;
+      await safeSendTcp(api, {
         type: 'group-msg',
         to: m,
         groupId,
@@ -192,8 +226,8 @@ export async function sendGroupChatMessage(api, config, groupId, msg) {
 }
 
 export async function handleGroupTcpMessage(msg, ctx) {
-  const { api, config, getGroupChatView, openGroupChat, bumpGroupUnread } = ctx;
-  const myId = config.blipId;
+  const { api, config, getGroupChatView, bumpGroupUnread } = ctx;
+  const myId = Number(config.blipId);
   const type = msg.type;
 
   if (type === 'group-invite') {
@@ -210,11 +244,11 @@ export async function handleGroupTcpMessage(msg, ctx) {
         id: msg.groupId,
         name: msg.name || t('group.unnamed'),
         hostId: Number(msg.host),
-        members: [...(msg.members || [])],
+        members: normalizeMemberIds(msg.members || []),
         messages: [],
       };
       saveGroup(group);
-      await api.sendTcpMessage({
+      await safeSendTcp(api, {
         type: 'group-invite-ack',
         to: msg.host,
         groupId: msg.groupId,
@@ -224,7 +258,7 @@ export async function handleGroupTcpMessage(msg, ctx) {
       });
       showAppToast({ title: t('group.joined'), body: group.name, durationMs: 4000 });
     } else {
-      await api.sendTcpMessage({
+      await safeSendTcp(api, {
         type: 'group-invite-ack',
         to: msg.host,
         groupId: msg.groupId,
@@ -245,7 +279,7 @@ export async function handleGroupTcpMessage(msg, ctx) {
     const group = getGroup(msg.groupId);
     if (!group) return true;
     group.hostId = Number(msg.host);
-    if (msg.members) group.members = msg.members;
+    if (msg.members) group.members = normalizeMemberIds(msg.members);
     saveGroup(group);
     getGroupChatView(msg.groupId)?.updateGroup?.(group);
     return true;
@@ -253,39 +287,35 @@ export async function handleGroupTcpMessage(msg, ctx) {
 
   if (type === 'group-msg') {
     const group = getGroup(msg.groupId);
-    if (!group || !group.members.includes(myId)) return true;
+    if (!group || !isGroupMember(group, myId)) return true;
 
     const incoming = {
       id: msg.id,
-      from: msg.from,
+      from: Number(msg.from),
       text: msg.text,
       timestamp: msg.timestamp || Date.now(),
       attachment: msg.attachment,
     };
 
     if (amHost(group, myId)) {
-      if (Number(msg.from) !== myId) {
-        addGroupMessage(msg.groupId, { ...incoming, outgoing: false });
-        getGroupChatView(msg.groupId)?.handleIncoming?.(incoming);
-        for (const m of group.members) {
-          if (m === myId || m === Number(msg.from)) continue;
-          await api.sendTcpMessage({
-            type: 'group-msg',
-            to: m,
-            groupId: msg.groupId,
-            host: group.hostId,
-            from: msg.from,
-            text: msg.text,
-            id: msg.id,
-            timestamp: msg.timestamp,
-            attachment: msg.attachment,
-          });
-        }
+      if (Number(msg.from) === myId) return true;
+      deliverGroupMessage(msg.groupId, incoming, ctx);
+      for (const m of group.members) {
+        if (Number(m) === myId || Number(m) === Number(msg.from)) continue;
+        await safeSendTcp(api, {
+          type: 'group-msg',
+          to: m,
+          groupId: msg.groupId,
+          host: group.hostId,
+          from: msg.from,
+          text: msg.text,
+          id: msg.id,
+          timestamp: msg.timestamp,
+          attachment: msg.attachment,
+        });
       }
     } else {
-      addGroupMessage(msg.groupId, { ...incoming, outgoing: Number(msg.from) === myId });
-      getGroupChatView(msg.groupId)?.handleIncoming?.(incoming);
-      bumpGroupUnread?.(msg.groupId);
+      deliverGroupMessage(msg.groupId, incoming, ctx, { bumpUnread: true });
     }
     return true;
   }
@@ -294,7 +324,7 @@ export async function handleGroupTcpMessage(msg, ctx) {
     const group = getGroup(msg.groupId);
     if (!group) return true;
     const leaverId = Number(msg.from);
-    if (!group.members.includes(leaverId)) return true;
+    if (!isGroupMember(group, leaverId)) return true;
     const wasHost = Number(group.hostId) === leaverId;
     removeMemberFromGroup(msg.groupId, leaverId);
     const updated = getGroup(msg.groupId);
@@ -310,8 +340,8 @@ export async function handleGroupTcpMessage(msg, ctx) {
       saveGroup(updated);
       if (amHost(updated, myId)) {
         for (const m of updated.members) {
-          if (m === myId) continue;
-          await api.sendTcpMessage({
+          if (Number(m) === myId) continue;
+          await safeSendTcp(api, {
             type: 'group-host',
             to: m,
             groupId: msg.groupId,

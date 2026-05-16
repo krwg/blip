@@ -9,6 +9,14 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+## [0.5.1] — Group fixes
+
+### Fixed
+
+- **Group messages duplicated** — TCP handler called `addGroupMessage` and `handleIncoming` (which added again); dedupe by message `id` on store and load.
+- **Leave / delete group errors** — member IDs normalized (`Number`); TCP notify uses safe send (offline peers no longer abort leave); UI shows toast on failure.
+- **Group calls not arriving** — `isGroupMember` / `shouldInitiate` used strict `includes` and string IDs; invite uses `showAppToast` directly; call-start works when group record exists.
+
 ## [0.5.0] — Handshake
 
 ### Added

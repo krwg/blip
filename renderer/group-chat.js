@@ -256,7 +256,8 @@ export function createGroupChatView(group, config, onSend, onBack, onGroupCall, 
     el: wrap,
     renderMessages,
     handleIncoming(msg) {
-      addGroupMessage(group.id, { ...msg, outgoing: false });
+      const stored = addGroupMessage(group.id, { ...msg, outgoing: false });
+      if (!stored) return;
       renderMessages();
       sounds.messageReceived();
     },

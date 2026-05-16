@@ -623,9 +623,28 @@ function showGroupContextMenu(e, group) {
       confirmLabel: t('group.menu_leave'),
     });
     if (!ok) return;
-    await leaveGroup(api, state.config, group.id, state.peers);
-    closeGroupChatUi(group.id);
-    if (state.view === 'chat') renderView('chat');
+    try {
+      const res = await leaveGroup(api, state.config, group.id, state.peers);
+      if (!res?.ok) {
+        showAppToast({
+          title: t('group.leave_failed'),
+          body: t(`group.err_${res?.error || 'unknown'}`),
+          variant: 'danger',
+          durationMs: 5000,
+        });
+        return;
+      }
+      closeGroupChatUi(group.id);
+      if (state.view === 'chat') renderView('chat');
+    } catch (err) {
+      console.error('[group] leave:', err);
+      showAppToast({
+        title: t('group.leave_failed'),
+        body: err?.message || String(err),
+        variant: 'danger',
+        durationMs: 5000,
+      });
+    }
   });
 
   const disbandItem = document.createElement('button');
@@ -639,9 +658,28 @@ function showGroupContextMenu(e, group) {
         confirmLabel: t('group.menu_disband'),
       });
       if (!ok) return;
-      await dissolveGroup(api, state.config, group.id);
-      closeGroupChatUi(group.id);
-      if (state.view === 'chat') renderView('chat');
+      try {
+        const res = await dissolveGroup(api, state.config, group.id);
+        if (!res?.ok) {
+          showAppToast({
+            title: t('group.disband_failed'),
+            body: t(`group.err_${res?.error || 'unknown'}`),
+            variant: 'danger',
+            durationMs: 5000,
+          });
+          return;
+        }
+        closeGroupChatUi(group.id);
+        if (state.view === 'chat') renderView('chat');
+      } catch (err) {
+        console.error('[group] disband:', err);
+        showAppToast({
+          title: t('group.disband_failed'),
+          body: err?.message || String(err),
+          variant: 'danger',
+          durationMs: 5000,
+        });
+      }
     });
   } else {
     disbandItem.disabled = true;

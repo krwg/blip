@@ -9,7 +9,12 @@ function load() {
     if (!raw) return;
     const o = JSON.parse(raw);
     for (const [id, g] of Object.entries(o)) {
-      if (g && typeof g === 'object' && g.id) groups.set(id, g);
+      if (g && typeof g === 'object' && g.id) {
+        if (g.hostId != null) g.hostId = Number(g.hostId);
+        if (Array.isArray(g.members)) g.members = normalizeMemberIds(g.members);
+        if (Array.isArray(g.messages)) g.messages = dedupeMessages(g.messages);
+        groups.set(id, g);
+      }
     }
   } catch (e) {
     console.warn('[BLIP groups] load', e);
@@ -24,6 +29,27 @@ function persist() {
   } catch (e) {
     console.warn('[BLIP groups] persist', e);
   }
+}
+
+export function normalizeMemberIds(members) {
+  return [...new Set((members || []).map((m) => Number(m)).filter(Number.isFinite))];
+}
+
+export function dedupeMessages(messages) {
+  const seen = new Set();
+  const out = [];
+  for (const m of messages || []) {
+    if (m?.id && seen.has(m.id)) continue;
+    if (m?.id) seen.add(m.id);
+    out.push(m);
+  }
+  return out;
+}
+
+export function isGroupMember(group, blipId) {
+  if (!group?.members) return false;
+  const id = Number(blipId);
+  return group.members.some((m) => Number(m) === id);
 }
 
 load();
@@ -41,9 +67,18 @@ export function getGroup(groupId) {
 }
 
 export function saveGroup(group) {
-  groups.set(group.id, { ...group, updatedAt: Date.now() });
+  const normalized = {
+    ...group,
+    hostId: Number(group.hostId),
+    members: normalizeMemberIds(group.members),
+    updatedAt: Date.now(),
+  };
+  if (Array.isArray(normalized.messages)) {
+    normalized.messages = dedupeMessages(normalized.messages);
+  }
+  groups.set(normalized.id, normalized);
   persist();
-  window.dispatchEvent(new CustomEvent('blip-groups-changed', { detail: { groupId: group.id } }));
+  window.dispatchEvent(new CustomEvent('blip-groups-changed', { detail: { groupId: normalized.id } }));
 }
 
 export function deleteGroup(groupId) {
@@ -72,7 +107,7 @@ export function amHost(group, blipId) {
 }
 
 export function pickNextHost(currentHost, members, onlineIds) {
-  const sorted = [...new Set(members.map(Number))].sort((a, b) => a - b);
+  const sorted = normalizeMemberIds(members).sort((a, b) => a - b);
   const idx = sorted.indexOf(Number(currentHost));
   if (idx < 0) return sorted.find((id) => onlineIds.has(id)) ?? null;
   for (let i = 1; i <= sorted.length; i++) {
@@ -88,14 +123,17 @@ export function getGroupMessages(groupId) {
   return g.messages;
 }
 
+/** @returns {boolean} true if message was stored */
 export function addGroupMessage(groupId, msg) {
   const g = getGroup(groupId);
-  if (!g) return;
+  if (!g) return false;
   if (!g.messages) g.messages = [];
+  if (msg.id && g.messages.some((m) => m.id === msg.id)) return false;
   g.messages.push(msg);
   if (g.messages.length > 500) g.messages = g.messages.slice(-500);
   g.updatedAt = Date.now();
   persist();
+  return true;
 }
 
 export function groupDisplayName(group) {
