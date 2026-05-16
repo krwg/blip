@@ -1,9 +1,9 @@
 const STORAGE_KEY = 'blip_avatar_custom_v1';
-const MAX_FILE_BYTES = 1024 * 1024;
-const MAX_DATA_URL_CHARS = 100000;
-const OUTPUT_PX = 64;
+const SEED_KEY = 'blip_avatar_seed_v1';
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+const MAX_DATA_URL_CHARS = 280000;
+const OUTPUT_PX = 128;
 
-const ACCENT = '#00ffc8';
 const SHADES = ['#004d3d', '#008f72', '#00ffc8'];
 
 function hashBlipId(blipId) {
@@ -19,8 +19,55 @@ function seededRandom(seed) {
   };
 }
 
+function getAvatarSeed(blipId) {
+  try {
+    const raw = localStorage.getItem(SEED_KEY);
+    if (!raw) return blipId;
+    const o = JSON.parse(raw);
+    const n = Number(o?.[String(blipId)]);
+    return Number.isFinite(n) ? n : blipId;
+  } catch {
+    return blipId;
+  }
+}
+
+export function setAvatarSeed(blipId, seed) {
+  try {
+    const raw = localStorage.getItem(SEED_KEY);
+    const o = raw ? JSON.parse(raw) : {};
+    o[String(blipId)] = seed;
+    localStorage.setItem(SEED_KEY, JSON.stringify(o));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** New random generated avatar; clears custom upload. */
+export function regenerateAvatar(blipId) {
+  const seed = Math.floor(Math.random() * 2147483646) + 1;
+  setAvatarSeed(blipId, seed);
+  clearCustomAvatar();
+}
+
+function inferImageMime(file) {
+  const mime = (file?.type || '').toLowerCase().split(';')[0].trim();
+  if (mime.startsWith('image/')) return mime;
+  const ext = (file?.name || '').split('.').pop()?.toLowerCase();
+  const map = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    bmp: 'image/bmp',
+    avif: 'image/avif',
+  };
+  return map[ext] || '';
+}
+
 export function generateAvatarData(blipId) {
-  const rand = seededRandom(Math.floor(hashBlipId(blipId) * 1e9) + blipId);
+  const seed = getAvatarSeed(blipId);
+  const rand = seededRandom(Math.floor(hashBlipId(seed) * 1e9) + Number(seed));
   const pixels = [];
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 4; x++) {
@@ -85,8 +132,8 @@ export function hasCustomAvatar() {
 export async function encodeAvatarFileToDataUrl(file) {
   if (!file || !file.size) throw new Error('empty');
   if (file.size > MAX_FILE_BYTES) throw new Error('file_too_big');
-  const mime = (file.type || '').toLowerCase();
-  if (!['image/png', 'image/webp', 'image/jpeg'].includes(mime)) throw new Error('bad_mime');
+  const mime = inferImageMime(file);
+  if (!mime && file.type && !file.type.startsWith('image/')) throw new Error('bad_mime');
 
   const blobUrl = URL.createObjectURL(file);
   try {
@@ -116,8 +163,8 @@ export async function encodeAvatarFileToDataUrl(file) {
 
     let q = 0.88;
     let out = canvas.toDataURL('image/jpeg', q);
-    while (out.length > MAX_DATA_URL_CHARS && q > 0.45) {
-      q -= 0.07;
+    while (out.length > MAX_DATA_URL_CHARS && q > 0.4) {
+      q -= 0.06;
       out = canvas.toDataURL('image/jpeg', q);
     }
     if (out.length > MAX_DATA_URL_CHARS) throw new Error('too_large');
@@ -127,7 +174,7 @@ export async function encodeAvatarFileToDataUrl(file) {
   }
 }
 
-function appendCustomImg(wrap, dataUrl, scale) {
+function appendCustomImg(wrap, dataUrl, scale, blipId) {
   const px = 8 * scale;
   const img = document.createElement('img');
   img.className = 'avatar-img';
@@ -136,6 +183,13 @@ function appendCustomImg(wrap, dataUrl, scale) {
   img.width = px;
   img.height = px;
   img.decoding = 'async';
+  img.addEventListener('error', () => {
+    img.remove();
+    const canvas = document.createElement('canvas');
+    canvas.className = 'avatar-canvas';
+    drawAvatar(canvas, blipId, scale);
+    wrap.appendChild(canvas);
+  });
   wrap.appendChild(img);
 }
 
@@ -152,8 +206,11 @@ export function createAvatarElement(blipId, scale = 4, opts = {}) {
     selfId != null && Number(blipId) === selfId && Number.isFinite(selfId) && hasCustomAvatar();
 
   if (useCustom) {
-    appendCustomImg(wrap, getCustomAvatarDataUrl(), scale);
-    return wrap;
+    const url = getCustomAvatarDataUrl();
+    if (url) {
+      appendCustomImg(wrap, url, scale, blipId);
+      return wrap;
+    }
   }
 
   const canvas = document.createElement('canvas');

@@ -18,6 +18,10 @@ const DEFAULT_CONFIG = {
   desktopCallNotifications: true,
   uiSoundsEnabled: true,
   uiSoundsVolume: 1,
+  /** `deviceId` from enumerateDevices; empty = system default mic. */
+  audioInputDeviceId: '',
+  /** `deviceId` for remote audio (`HTMLMediaElement.setSinkId`). */
+  audioOutputDeviceId: '',
 };
 
 let configPath = null;

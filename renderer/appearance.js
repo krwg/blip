@@ -35,30 +35,30 @@ export function normalizeBgId(id) {
 }
 
 export const THEME_META = [
-  { id: 'light-paper', en: 'Paper', ru: 'Бумага' },
-  { id: 'light-fog', en: 'Fog', ru: 'Туман' },
-  { id: 'light-sand', en: 'Sand', ru: 'Песок' },
-  { id: 'light-glacier', en: 'Glacier', ru: 'Лёд' },
-  { id: 'light-meadow', en: 'Meadow', ru: 'Луг' },
+  { id: 'light-paper', en: 'Stack', ru: 'Стек' },
+  { id: 'light-fog', en: 'Cloud', ru: 'Облако' },
+  { id: 'light-sand', en: 'Legacy', ru: 'Легаси' },
+  { id: 'light-glacier', en: 'Cryo', ru: 'Крио' },
+  { id: 'light-meadow', en: 'IDE', ru: 'IDE' },
   { id: 'dark-signal', en: 'Signal', ru: 'Сигнал' },
-  { id: 'dark-void', en: 'Void', ru: 'Пустота' },
-  { id: 'dark-violet', en: 'Violet', ru: 'Фиолет' },
-  { id: 'dark-forest', en: 'Forest', ru: 'Лес' },
-  { id: 'dark-ember', en: 'Ember', ru: 'Угли' },
+  { id: 'dark-void', en: 'Null', ru: 'Null' },
+  { id: 'dark-violet', en: 'Hex', ru: 'Hex' },
+  { id: 'dark-forest', en: 'Terminal', ru: 'Терминал' },
+  { id: 'dark-ember', en: 'Kernel', ru: 'Ядро' },
 ];
 
 export const BG_META = [
-  { id: 'none', en: 'None', ru: 'Нет' },
-  { id: 'waves', en: 'Waves', ru: 'Волны' },
-  { id: 'aurora', en: 'Aurora', ru: 'Аврора' },
-  { id: 'grid', en: 'Grid', ru: 'Сетка' },
-  { id: 'scanlines', en: 'Scanlines', ru: 'Строки' },
-  { id: 'nebula', en: 'Nebula', ru: 'Туманность' },
-  { id: 'drift', en: 'Drift', ru: 'Дрейф' },
-  { id: 'pulse', en: 'Pulse', ru: 'Пульс' },
-  { id: 'circuit', en: 'Circuit', ru: 'Схема' },
-  { id: 'shards', en: 'Shards', ru: 'Осколки' },
-  { id: 'tide', en: 'Tide', ru: 'Прилив' },
+  { id: 'none', en: 'Off', ru: 'Выкл' },
+  { id: 'waves', en: 'Ping', ru: 'Ping' },
+  { id: 'aurora', en: 'Compile', ru: 'Компилятор' },
+  { id: 'grid', en: 'Matrix', ru: 'Матрица' },
+  { id: 'scanlines', en: 'CRT', ru: 'CRT' },
+  { id: 'nebula', en: 'VM', ru: 'VM' },
+  { id: 'drift', en: 'Packet', ru: 'Пакет' },
+  { id: 'pulse', en: 'Heartbeat', ru: 'Пульс' },
+  { id: 'circuit', en: 'PCB', ru: 'PCB' },
+  { id: 'shards', en: 'Fragment', ru: 'Фрагмент' },
+  { id: 'tide', en: 'Sync', ru: 'Синх' },
 ];
 
 export function labelTheme(id, lang) {

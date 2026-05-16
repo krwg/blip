@@ -9,6 +9,28 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+## [0.2.0] — Mesh
+
+### Added
+
+- **Chat**: search within the active conversation; **export** chat to a `.txt` file; chat actions menu (⋮).
+- **Settings → Call**: choose **microphone** and **speaker** (saved in config, used by the call window).
+- **Settings → Network**: BLIP ID, LAN ports, local IPv4 hint, online peer count.
+- **Settings → Updates**: list of recent GitHub releases with notes excerpt.
+- **Call window**: theme/language sync with main app; minimize and maximize; title bar uses theme colors.
+- **Dial**: centered ID input with actions below.
+- **Profile**: regenerate pixel avatar; improved local photo upload (any image, up to 4 MB; CSP allows `data:` avatars).
+- **Mesh Labels**: local-only peer nicknames (right-click in **Peers**); shown in chat and notifications.
+- **Appearance**: tech-themed names for color schemes and animated backgrounds (e.g. Terminal, Matrix, CRT).
+
+## [0.1.8] — Relay
+
+### Fixed
+
+- **Calls**: serialize WebRTC SDP as plain `{ type, sdp }` over TCP/IPC (fixes empty offers/answers after `JSON.stringify`).
+- **Calls**: send **answer / reject / ICE / hangup** on the peer’s existing inbound TCP socket when possible (fixes accept path).
+- **Calls**: auto-allow **microphone/camera** in Electron; failed accept no longer closes the call window immediately (shows error, can retry).
+
 ### Added
 
 - **Settings → Sound**: toggle UI sounds and volume slider (messages, calls, peer online).

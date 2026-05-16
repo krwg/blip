@@ -54,6 +54,24 @@ export function clearPeerMessages(peerId) {
   persist();
 }
 
+export function exportPeerChat(peerId, displayName) {
+  const msgs = getMessages(peerId);
+  const label = displayName || `BLIP-${peerId}`;
+  const lines = msgs.map((m) => {
+    const who = m.outgoing ? 'You' : label;
+    const time = new Date(m.timestamp || Date.now()).toLocaleString();
+    return `[${time}] ${who}: ${m.text}`;
+  });
+  const body = lines.length ? `${lines.join('\n')}\n` : '';
+  const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `blip-${peerId}-chat.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function createChatView(peerId, config, onSend, onBack) {
   const wrap = document.createElement('div');
   wrap.className = 'chat-view';
@@ -92,21 +110,96 @@ export function createChatView(peerId, config, onSend, onBack) {
   header.appendChild(avatarMount);
   header.appendChild(meta);
 
-  const headSpacer = document.createElement('div');
-  headSpacer.style.flex = '1';
-  header.appendChild(headSpacer);
+  const headActions = document.createElement('div');
+  headActions.className = 'chat-header-actions';
 
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'btn btn-lang chat-clear-btn';
-  clearBtn.dataset.i18n = 'chat.clear';
-  clearBtn.textContent = t('chat.clear');
-  clearBtn.addEventListener('click', () => {
+  const searchInput = document.createElement('input');
+  searchInput.type = 'search';
+  searchInput.className = 'input chat-search-input';
+  searchInput.maxLength = 120;
+  searchInput.placeholder = t('chat.search_placeholder');
+  searchInput.dataset.i18nPlaceholder = 'chat.search_placeholder';
+  let searchQuery = '';
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value.trim().toLowerCase();
+    renderMessages();
+  });
+
+  const menuWrap = document.createElement('div');
+  menuWrap.className = 'chat-menu-wrap';
+
+  const menuBtn = document.createElement('button');
+  menuBtn.type = 'button';
+  menuBtn.className = 'btn btn-lang chat-menu-btn';
+  menuBtn.setAttribute('aria-label', t('chat.menu'));
+  menuBtn.title = t('chat.menu');
+  menuBtn.textContent = '⋮';
+
+  const menu = document.createElement('div');
+  menu.className = 'chat-menu-dropdown hidden';
+
+  const exportItem = document.createElement('button');
+  exportItem.type = 'button';
+  exportItem.className = 'chat-menu-item';
+  exportItem.dataset.i18n = 'chat.export';
+  exportItem.textContent = t('chat.export');
+  exportItem.addEventListener('click', () => {
+    menu.classList.add('hidden');
+    exportPeerChat(peerId, name.textContent);
+  });
+
+  const clearItem = document.createElement('button');
+  clearItem.type = 'button';
+  clearItem.className = 'chat-menu-item chat-menu-item--danger';
+  clearItem.dataset.i18n = 'chat.clear';
+  clearItem.textContent = t('chat.clear');
+  clearItem.addEventListener('click', () => {
+    menu.classList.add('hidden');
     if (!confirm(t('chat.clear_confirm'))) return;
     clearPeerMessages(peerId);
     renderMessages();
   });
-  header.appendChild(clearBtn);
+
+  menu.appendChild(exportItem);
+  menu.appendChild(clearItem);
+  menuWrap.appendChild(menuBtn);
+  menuWrap.appendChild(menu);
+
+  function closeMenu() {
+    menu.classList.add('hidden');
+    if (menu.parentElement === document.body) {
+      menuWrap.appendChild(menu);
+      menu.style.position = '';
+      menu.style.top = '';
+      menu.style.right = '';
+      menu.style.left = '';
+      menu.style.zIndex = '';
+    }
+  }
+
+  function openMenu() {
+    menu.classList.remove('hidden');
+    document.body.appendChild(menu);
+    const rect = menuBtn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+    menu.style.left = 'auto';
+    menu.style.zIndex = '500';
+    requestAnimationFrame(() => {
+      document.addEventListener('click', closeMenu, { once: true });
+    });
+  }
+
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains('hidden')) openMenu();
+    else closeMenu();
+  });
+
+  headActions.appendChild(searchInput);
+  headActions.appendChild(menuWrap);
+  header.appendChild(headActions);
 
   const messagesEl = document.createElement('div');
   messagesEl.className = 'chat-messages glass';
@@ -171,7 +264,10 @@ export function createChatView(peerId, config, onSend, onBack) {
   wrap.appendChild(inputRow);
 
   function renderMessages() {
-    const msgs = getMessages(peerId);
+    const msgs = getMessages(peerId).filter((m) => {
+      if (!searchQuery) return true;
+      return String(m.text || '').toLowerCase().includes(searchQuery);
+    });
 
     const hasFocus = document.activeElement === input;
     const cursorPos = hasFocus ? input.selectionStart : null;
@@ -184,7 +280,7 @@ export function createChatView(peerId, config, onSend, onBack) {
     if (msgs.length === 0) {
       const p = document.createElement('p');
       p.className = 'chat-empty';
-      p.textContent = t('chat.empty');
+      p.textContent = searchQuery ? t('chat.search_empty') : t('chat.empty');
       messagesEl.appendChild(p);
       if (hasFocus) {
         requestAnimationFrame(() => {

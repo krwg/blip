@@ -1,14 +1,17 @@
 /**
  * Standalone call window — WebRTC only; main window no longer hosts call overlay.
  */
-import { setLang } from './i18n.js';
+import { setLang, applyI18n, onLangChange } from './i18n.js';
 import { createCallUI } from './call.js';
 import { applyAppearance, listenReducedMotion } from './appearance.js';
 import { setSoundPrefs } from './audio.js';
 
 let callAppearanceRm = null;
+let callUI = null;
+let liveConfig = null;
 
 const api = {
+  getConfig: () => window.blip.getConfig(),
   saveConfig: (data) => window.blip.saveConfig(data),
   sendTcpMessage: (payload) => window.blip.sendTcpMessage(payload),
   initiateCall: (payload) =>
@@ -31,8 +34,12 @@ const api = {
   callHangup: (payload) => window.blip.callHangup(payload),
 };
 
-function dbg(...args) {
-  console.log('[BLIP call-window]', ...args);
+function applyCallWindowChrome(cfg) {
+  liveConfig = cfg;
+  setLang(cfg.language || localStorage.getItem('blip_lang') || 'en');
+  applyAppearance(cfg);
+  applyI18n(document);
+  callUI?.refreshI18n?.();
 }
 
 async function boot() {
@@ -43,17 +50,15 @@ async function boot() {
   }
 
   const config = await window.blip.getConfig();
-  setLang(config.language || localStorage.getItem('blip_lang') || 'en');
   setSoundPrefs({
     enabled: config.uiSoundsEnabled !== false,
     volume: typeof config.uiSoundsVolume === 'number' ? config.uiSoundsVolume : 1,
   });
-  applyAppearance(config);
+  applyCallWindowChrome(config);
   callAppearanceRm?.();
   callAppearanceRm = listenReducedMotion(() => {});
 
   const root = document.getElementById('call-root');
-  let callUI = null;
 
   callUI = createCallUI(config, api, {
     onClosed: () => {
@@ -62,42 +67,45 @@ async function boot() {
   });
   root.appendChild(callUI.el);
 
+  document.getElementById('call-win-min')?.addEventListener('click', () => {
+    window.blip.callWindowMinimize?.();
+  });
+  document.getElementById('call-win-max')?.addEventListener('click', () => {
+    window.blip.callWindowMaximize?.();
+  });
   document.getElementById('call-win-close')?.addEventListener('click', () => {
     callUI?.hangupCall?.();
   });
 
+  onLangChange(() => applyI18n(document));
+  window.blip.onConfigUpdated?.((cfg) => applyCallWindowChrome(cfg));
+
   window.blip.onCallOutgoing?.((payload) => {
-    dbg('call-outgoing', payload);
     const peerId = payload?.peerId;
     const video = !!payload?.video;
     if (peerId) callUI.startOutgoing(peerId, video);
   });
 
   window.blip.onIncomingCall((data) => {
-    dbg('incoming-call', data);
     callUI.handleIncoming(data);
   });
   window.blip.onCallAnswer((data) => {
-    dbg('call-answer', data);
     callUI.handleAnswer(data);
   });
   window.blip.onCallCandidate((data) => {
-    dbg('call-candidate', data);
     callUI.handleCandidate(data);
   });
   window.blip.onCallRejected((data) => {
-    dbg('call-rejected', data);
     callUI.handleRejected(data);
   });
   window.blip.onCallEnded((data) => {
-    dbg('call-ended', data);
     callUI.handleEnded(data);
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
     const tag = e.target?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
     const key = e.key;
     if (key === 'm' || key === 'M') {

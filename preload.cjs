@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('blip', {
   getAppMetadata: () => ipcRenderer.invoke('get-app-metadata'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   getPeers: () => ipcRenderer.invoke('get-peers'),
+  getNetworkDiagnostics: () => ipcRenderer.invoke('get-network-diagnostics'),
+  getGithubReleases: (limit) => ipcRenderer.invoke('get-github-releases', limit),
   sendTcpMessage: (payload) => ipcRenderer.invoke('send-tcp-message', payload),
   initiateCall: (payload) => ipcRenderer.invoke('initiate-call', payload),
   callAccept: (payload) => ipcRenderer.invoke('call-accept', payload),
@@ -74,5 +76,11 @@ contextBridge.exposeInMainWorld('blip', {
   windowMaximize: () => ipcRenderer.send('window-maximize'),
   windowClose: () => ipcRenderer.send('window-close'),
   callWindowMinimize: () => ipcRenderer.send('call-window-minimize'),
+  callWindowMaximize: () => ipcRenderer.send('call-window-maximize'),
   callWindowClose: () => ipcRenderer.send('call-window-close'),
+  onConfigUpdated: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('config-updated', handler);
+    return () => ipcRenderer.removeListener('config-updated', handler);
+  },
 });

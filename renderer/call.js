@@ -1,4 +1,4 @@
-import { t } from './i18n.js';
+import { t, applyI18n } from './i18n.js';
 import { sounds } from './audio.js';
 import { createAvatarElement } from './avatar.js';
 
@@ -8,10 +8,28 @@ let activeCall = null;
 let pendingCandidates = [];
 let pendingOffer = null;
 
+/** Plain SessionDescription for IPC / TCP (RTCSessionDescription may not JSON.stringify). */
+export function toSdpWire(desc) {
+  if (!desc) return null;
+  if (typeof desc.type === 'string' && typeof desc.sdp === 'string' && desc.sdp.length > 0) {
+    return { type: desc.type, sdp: desc.sdp };
+  }
+  return null;
+}
+
 function normalizeSdp(sdp) {
   if (!sdp) return null;
   if (typeof sdp === 'string') return { type: 'offer', sdp };
-  return { type: sdp.type, sdp: sdp.sdp };
+  let type = sdp.type;
+  let body = sdp.sdp;
+  if (body && typeof body === 'object' && typeof body.sdp === 'string') {
+    type = body.type ?? type;
+    body = body.sdp;
+  }
+  if (typeof type === 'string' && typeof body === 'string' && body.length > 0) {
+    return { type, sdp: body };
+  }
+  return null;
 }
 
 function normalizeCandidate(candidate) {
@@ -206,11 +224,53 @@ export function createCallUI(config, api, options = {}) {
     return Number(data.from) === Number(peerId);
   }
 
+  async function resolveAudioDeviceId(kind) {
+    const key = kind === 'output' ? 'audioOutputDeviceId' : 'audioInputDeviceId';
+    try {
+      const fresh = await api.getConfig?.();
+      if (fresh?.[key]) return fresh[key];
+    } catch {
+      /* ignore */
+    }
+    return config?.[key] || '';
+  }
+
+  async function applyRemoteAudioSink() {
+    const deviceId = await resolveAudioDeviceId('output');
+    if (!deviceId || !remoteVideo.setSinkId) return;
+    try {
+      await remoteVideo.setSinkId(deviceId);
+    } catch (err) {
+      console.warn('[call] setSinkId:', err.message);
+    }
+  }
+
+  function attachRemoteStream(stream) {
+    remoteVideo.srcObject = stream;
+    void applyRemoteAudioSink();
+    setConnectedStatus();
+    startTimer();
+  }
+
   async function getMedia(video) {
-    return navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: video ? { width: 320, height: 320 } : false,
-    });
+    const deviceId = await resolveAudioDeviceId('input');
+    const audio =
+      deviceId && deviceId !== 'default'
+        ? { deviceId: { exact: deviceId } }
+        : true;
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio,
+        video: video ? { width: 320, height: 320 } : false,
+      });
+    } catch (err) {
+      if (!deviceId) throw err;
+      console.warn('[call] mic device failed, using default:', err.message);
+      return navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: video ? { width: 320, height: 320 } : false,
+      });
+    }
   }
 
   function startTimer() {
@@ -290,9 +350,7 @@ export function createCallUI(config, api, options = {}) {
       if (video) localVideo.srcObject = localStream;
 
       pc = createPeerConnection((stream) => {
-        remoteVideo.srcObject = stream;
-        setConnectedStatus();
-        startTimer();
+        attachRemoteStream(stream);
       });
 
       localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
@@ -302,9 +360,12 @@ export function createCallUI(config, api, options = {}) {
 
       bindActiveCall(targetId);
 
+      const offerWire = toSdpWire(pc.localDescription);
+      if (!offerWire) throw new Error('Invalid local SDP');
+
       const result = await api.initiateCall({
         to: targetId,
-        sdp: pc.localDescription,
+        sdp: offerWire,
         video,
       });
       if (!result?.ok) throw new Error(result?.error || 'Call failed');
@@ -317,26 +378,44 @@ export function createCallUI(config, api, options = {}) {
     incomingOffer = null;
   }
 
+  function rollbackAcceptAttempt() {
+    if (localStream) {
+      localStream.getTracks().forEach((tr) => tr.stop());
+      localStream = null;
+    }
+    if (pc) {
+      pc.close();
+      pc = null;
+    }
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+    activeCall = null;
+  }
+
   async function acceptIncoming() {
     clearInterval(pulseTimer);
     inner.style.borderColor = '';
+
+    const offer = normalizeSdp(incomingOffer);
+    if (!offer) {
+      console.error('[BLIP call] accept: missing or invalid offer SDP', incomingOffer);
+      statusEl.textContent = t('call.signal_lost');
+      statusEl.dataset.i18n = 'call.signal_lost';
+      return;
+    }
+
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
 
-    const offer = incomingOffer;
-    if (!offer) return;
-
     try {
       localStream = await getMedia(withVideo);
       if (withVideo) localVideo.srcObject = localStream;
 
       pc = createPeerConnection((stream) => {
-        remoteVideo.srcObject = stream;
-        setConnectedStatus();
-        startTimer();
+        attachRemoteStream(stream);
       });
 
       localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
@@ -345,17 +424,28 @@ export function createCallUI(config, api, options = {}) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
+      const answerWire = toSdpWire(pc.localDescription);
+      if (!answerWire) throw new Error('Invalid local SDP');
+
       bindActiveCall(peerId);
 
-      const result = await api.callAccept({ to: peerId, sdp: pc.localDescription });
+      const result = await api.callAccept({ to: peerId, sdp: answerWire });
       if (!result?.ok) throw new Error(result?.error || 'Accept failed');
+
+      incomingOffer = null;
+      statusEl.dataset.i18n = 'call.connected';
     } catch (err) {
-      console.error('[call] accept:', err);
-      hide();
+      console.error('[BLIP call] accept:', err);
+      rollbackAcceptAttempt();
+      incomingOffer = offer;
+      statusEl.textContent = err?.message || t('call.signal_lost');
+      statusEl.dataset.i18n = '';
+      acceptBtn.classList.remove('hidden');
+      rejectBtn.classList.remove('hidden');
+      endBtn.classList.add('hidden');
+      muteBtn.classList.add('hidden');
+      deafenBtn.classList.add('hidden');
     }
-    
-    // Очищаем входящий оффер после принятия звонка
-    incomingOffer = null;
   }
 
   async function handleIncoming(data) {
@@ -369,7 +459,12 @@ export function createCallUI(config, api, options = {}) {
 
     peerId = from;
     withVideo = data.video ?? false;
-    incomingOffer = data.sdp;
+    const offer = normalizeSdp(data.sdp);
+    if (!offer) {
+      console.error('[BLIP call] incoming: invalid offer SDP', data.sdp);
+      return;
+    }
+    incomingOffer = offer;
     pendingCandidates = [];
 
     show();
@@ -407,8 +502,13 @@ export function createCallUI(config, api, options = {}) {
       console.warn('[BLIP call] answer ignored (wrong peer)', { aid, peerId, data });
       return;
     }
+    const answer = normalizeSdp(data.sdp);
+    if (!answer) {
+      console.error('[BLIP call] answer: invalid SDP', data.sdp);
+      return;
+    }
     try {
-      await setRemoteDescription(data.sdp);
+      await setRemoteDescription(answer);
       setConnectedStatus();
       startTimer();
     } catch (err) {
@@ -479,6 +579,9 @@ export function createCallUI(config, api, options = {}) {
     isIncomingRinging,
     hide,
     end: hide,
+    refreshI18n() {
+      applyI18n(overlay);
+    },
     isActive: () => !!pc || !!(incomingOffer && activeCall?.pending),
     getPeerId: () => peerId,
   };

@@ -1,15 +1,17 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification, session } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
 import { Discovery } from './discovery.js';
 import { createTcpServer } from './tcp-server.js';
 import { connectToPeer, sendOnSocket, pingPeer } from './tcp-client.js';
-import { loadConfig, saveConfig, initConfigPath } from './config.js';
+import { loadConfig, saveConfig, initConfigPath, getLocalIp, getLocalIpv4Set } from './config.js';
 import { createTray, destroyTray } from './tray.js';
 import { setupAutoUpdater, checkForUpdatesNow, quitAndInstallUpdater } from './updater.js';
 import { resolveBuildAsset } from './paths.js';
 import { resolvePorts } from './ports.js';
+import { serializeSdp, sendCallPayload } from './call-wire.js';
+import { fetchGithubReleases } from './github-releases.js';
 
 if (process.env.BLIP_USER_DATA_DIR) {
   app.setPath('userData', process.env.BLIP_USER_DATA_DIR);
@@ -398,12 +400,31 @@ function setupIpc() {
     if (typeof updates?.language === 'string' && updates.language !== prevLang) {
       installTray();
     }
+    if (callWindow && !callWindow.isDestroyed()) {
+      callWindow.webContents.send('config-updated', config);
+    }
     return config;
   });
+
+  ipcMain.handle('get-github-releases', async (_, limit) => fetchGithubReleases(limit ?? 8));
   ipcMain.handle('get-peers', () => ({
     peers: discovery?.getPeers() || [],
     occupiedIds: discovery?.getOccupiedIds() || [],
   }));
+
+  ipcMain.handle('get-network-diagnostics', () => {
+    const { tcpPort, udpPort } = resolvePorts(config);
+    const peers = discovery?.getPeers() || [];
+    return {
+      blipId: config.blipId,
+      localIp: getLocalIp(),
+      localIpv4s: [...getLocalIpv4Set()],
+      tcpPort,
+      udpPort,
+      onlinePeers: peers.filter((p) => p.online).length,
+      totalPeers: peers.length,
+    };
+  });
 
   ipcMain.handle('send-tcp-message', async (_, payload) => {
     try {
@@ -423,12 +444,13 @@ function setupIpc() {
 
   ipcMain.handle('initiate-call', async (_, payload) => {
     try {
-      const socket = await ensurePeerSocket(payload.to);
-      await sendOnSocket(socket, {
+      const sdp = serializeSdp(payload.sdp);
+      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
+      await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-offer',
         from: config.blipId,
         to: payload.to,
-        sdp: payload.sdp,
+        sdp,
         video: payload.video ?? false,
       });
       return { ok: true };
@@ -439,12 +461,13 @@ function setupIpc() {
 
   ipcMain.handle('call-accept', async (_, payload) => {
     try {
-      const socket = await ensurePeerSocket(payload.to);
-      await sendOnSocket(socket, {
+      const sdp = serializeSdp(payload.sdp);
+      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
+      await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-answer',
         from: config.blipId,
         to: payload.to,
-        sdp: payload.sdp,
+        sdp,
       });
       return { ok: true };
     } catch (err) {
@@ -454,8 +477,7 @@ function setupIpc() {
 
   ipcMain.handle('call-reject', async (_, payload) => {
     try {
-      const socket = await ensurePeerSocket(payload.to);
-      await sendOnSocket(socket, {
+      await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-reject',
         from: config.blipId,
         to: payload.to,
@@ -468,8 +490,7 @@ function setupIpc() {
 
   ipcMain.handle('call-candidate', async (_, payload) => {
     try {
-      const socket = await ensurePeerSocket(payload.to);
-      await sendOnSocket(socket, {
+      await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-candidate',
         from: config.blipId,
         to: payload.to,
@@ -483,8 +504,7 @@ function setupIpc() {
 
   ipcMain.handle('call-hangup', async (_, payload) => {
     try {
-      const socket = await ensurePeerSocket(payload.to);
-      await sendOnSocket(socket, {
+      await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-hangup',
         from: config.blipId,
         to: payload.to,
@@ -554,6 +574,11 @@ function setupIpc() {
   });
   ipcMain.on('window-close', () => mainWindow?.close());
   ipcMain.on('call-window-minimize', () => callWindow?.minimize());
+  ipcMain.on('call-window-maximize', () => {
+    if (!callWindow || callWindow.isDestroyed()) return;
+    if (callWindow.isMaximized()) callWindow.unmaximize();
+    else callWindow.maximize();
+  });
   ipcMain.on('call-window-close', () => {
     if (callWindow && !callWindow.isDestroyed()) callWindow.hide();
   });
@@ -579,10 +604,22 @@ function showFatalPortDialog(err) {
   );
 }
 
+function setupMediaPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    const allow = permission === 'media' || permission === 'display-capture';
+    callback(allow);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    return permission === 'media' || permission === 'display-capture';
+  });
+}
+
 app.whenReady().then(async () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.blip.messenger');
   }
+
+  setupMediaPermissions();
 
   initConfigPath();
   config = loadConfig();
