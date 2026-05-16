@@ -2,6 +2,12 @@ import dgram from 'dgram';
 import mdns from 'multicast-dns';
 import { getLocalIp, getLocalIpv4Set, normalizePeerIp } from './config.js';
 import { resolvePorts, getDiscoveryBroadcastPorts } from './ports.js';
+import {
+  MESH_PROTO,
+  announceCanonical,
+  signCanonical,
+  verifyAnnouncePayload,
+} from './mesh-identity.js';
 
 const ANNOUNCE_INTERVAL = 5000;
 const PEER_TIMEOUT = 30000;
@@ -115,16 +121,35 @@ export class Discovery {
     const { udpPort, tcpPort } = resolvePorts(this.config);
     let presence = this.config.presenceStatus || 'online';
     if (this.config.doNotDisturb) presence = 'busy';
-    return {
+    const ip = getLocalIp();
+    const meshAnnounceTs = Date.now();
+    const meshPubkey = this.config.meshPublicKey || '';
+    const base = {
       type: 'announce',
       blipId: this.config.blipId,
       displayName: this.config.displayName,
       presence,
       presenceText: sanitizePresenceText(this.config.presenceText),
-      ip: getLocalIp(),
+      ip,
       udpPort,
       tcpPort,
+      meshProto: MESH_PROTO,
+      meshPubkey,
+      meshAnnounceTs,
     };
+    const canonical = announceCanonical({
+      blipId: base.blipId,
+      displayName: base.displayName || '',
+      presence: base.presence,
+      presenceText: base.presenceText,
+      ip: base.ip,
+      udpPort: base.udpPort,
+      tcpPort: base.tcpPort,
+      meshAnnounceTs,
+      meshPubkey,
+    });
+    const meshAnnounceSig = signCanonical(this.config, canonical);
+    return { ...base, meshAnnounceSig };
   }
 
   announce() {
@@ -163,6 +188,15 @@ export class Discovery {
     const presence =
       data.presence === 'away' || data.presence === 'busy' ? data.presence : 'online';
     const presenceText = sanitizePresenceText(data.presenceText);
+    let meshVerified = false;
+    let meshLegacy = Number(data.meshProto) !== MESH_PROTO;
+    const meshPubkey = String(data.meshPubkey || '');
+    if (Number(data.meshProto) === MESH_PROTO) {
+      const check = verifyAnnouncePayload(data);
+      meshVerified = check.ok;
+      meshLegacy = !check.ok;
+    }
+
     const peer = {
       blipId: data.blipId,
       displayName: data.displayName || `BLIP-${data.blipId}`,
@@ -173,6 +207,9 @@ export class Discovery {
       udpPort: peerUdp,
       lastSeen: Date.now(),
       online: true,
+      meshVerified,
+      meshLegacy,
+      meshPubkey,
     };
 
     if (
@@ -181,7 +218,9 @@ export class Discovery {
       existing.displayName !== peer.displayName ||
       existing.presence !== peer.presence ||
       existing.presenceText !== peer.presenceText ||
-      existing.tcpPort !== peer.tcpPort
+      existing.tcpPort !== peer.tcpPort ||
+      existing.meshVerified !== peer.meshVerified ||
+      existing.meshLegacy !== peer.meshLegacy
     ) {
       this.peers.set(data.blipId, peer);
     } else {
@@ -191,6 +230,9 @@ export class Discovery {
       existing.presenceText = presenceText;
       existing.tcpPort = peerTcp;
       existing.udpPort = peerUdp;
+      existing.meshVerified = meshVerified;
+      existing.meshLegacy = meshLegacy;
+      existing.meshPubkey = meshPubkey;
     }
 
     this.occupiedIds.add(data.blipId);

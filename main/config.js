@@ -34,6 +34,16 @@ const DEFAULT_CONFIG = {
   presenceStatus: 'online',
   /** Optional custom status line (shown to peers when online) */
   presenceText: '',
+  /** Ed25519 SPKI DER base64 (Mesh Handshake) */
+  meshPublicKey: '',
+  /** Ed25519 PKCS8 DER base64 — keep local */
+  meshPrivateKey: '',
+  /** BLIP IDs trusted for chat (synced with renderer) */
+  trustedPeerIds: [],
+  /** BLIP IDs blocked at TCP layer */
+  blockedPeerIds: [],
+  /** TOFU: blipId string → meshPublicKey */
+  knownPeerKeys: {},
 };
 
 let configPath = null;

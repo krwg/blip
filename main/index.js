@@ -5,7 +5,18 @@ import { existsSync, readFileSync } from 'fs';
 import { Discovery } from './discovery.js';
 import { createTcpServer } from './tcp-server.js';
 import { connectToPeer, sendOnSocket, pingPeer } from './tcp-client.js';
+import { createTcpLineReader } from './tcp-framing.js';
 import { loadConfig, saveConfig, initConfigPath, getLocalIp, getLocalIpv4Set } from './config.js';
+import { ensureMeshIdentity } from './mesh-identity.js';
+import {
+  handleMeshHandshakeMessage,
+  assertAuthenticated,
+  isSocketAuthenticated,
+  performOutboundHandshake,
+  clearSocketSession,
+  initInboundSession,
+} from './mesh-handshake.js';
+import { isPeerBlocked } from './trust-policy.js';
 import { createTray, destroyTray } from './tray.js';
 import { setupAutoUpdater, checkForUpdatesNow, quitAndInstallUpdater } from './updater.js';
 import { resolveBuildAsset } from './paths.js';
@@ -213,6 +224,27 @@ function sendToRenderer(channel, data) {
   }
 }
 
+function patchConfig(updates) {
+  config = saveConfig(updates);
+  discovery?.updateConfig(config);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('config-updated', config);
+  }
+  if (callWindow && !callWindow.isDestroyed()) {
+    callWindow.webContents.send('config-updated', config);
+  }
+  return config;
+}
+
+function meshHandshakeContext() {
+  return {
+    config,
+    discovery,
+    tcpServer,
+    onConfigPatch: (updates) => patchConfig(updates),
+  };
+}
+
 function showDesktopNotification(payload) {
   if (!Notification.isSupported()) return { ok: false, reason: 'unsupported' };
   const peerId = Number(payload?.peerId);
@@ -266,32 +298,58 @@ async function ensurePeerSocket(blipId) {
   }
 
   const socket = await connectToPeer(peer.ip, blipId, tcpPort);
-  peerSockets.set(socketKey, socket);
+  initInboundSession(socket, peer.ip);
 
-  let buffer = '';
-  socket.on('data', (chunk) => {
-    buffer += chunk.toString();
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const msg = JSON.parse(line);
-        handleTcpPayload(msg, blipId);
-      } catch {
-        /* ignore */
-      }
+  const reader = createTcpLineReader(() => {
+    try {
+      socket.destroy();
+    } catch {
+      /* ignore */
     }
   });
 
-  socket.on('close', () => peerSockets.delete(socketKey));
-  tcpServer.registerConnection(blipId, socket);
+  const onSocketLine = (msg) => {
+    if (msg.type === 'ping') return;
+    if (handleMeshHandshakeMessage(msg, socket, meshHandshakeContext())) return;
+    if (!isSocketAuthenticated(socket)) return;
+    const auth = assertAuthenticated(socket, msg);
+    if (!auth.ok) return;
+    if (isPeerBlocked(config, auth.from)) return;
+    handleTcpPayload(msg, auth.from);
+  };
+
+  socket.on('data', (chunk) => {
+    try {
+      for (const line of reader.push(chunk)) {
+        try {
+          onSocketLine(JSON.parse(line));
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (e) {
+      if (e?.code === 'LINE_TOO_LARGE') socket.destroy();
+    }
+  });
+
+  socket.on('close', () => {
+    clearSocketSession(socket);
+    peerSockets.delete(socketKey);
+  });
+
+  await performOutboundHandshake(socket, config, blipId, discovery);
+  peerSockets.set(socketKey, socket);
   return socket;
 }
 
 function handleTcpPayload(msg, fromBlipId) {
+  if (isPeerBlocked(config, fromBlipId)) return;
+
   switch (msg.type) {
     case 'ping':
+      return;
+    case 'mesh-handshake':
+    case 'mesh-handshake-ack':
       return;
     case 'message':
     case 'typing':
@@ -302,6 +360,8 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'group-msg':
     case 'group-host':
     case 'group-sync':
+    case 'group-leave':
+    case 'group-disband':
     case 'group-call-start':
     case 'group-call-signal':
     case 'group-call-end':
@@ -371,11 +431,25 @@ function createTcpHandlers() {
         return;
       }
 
-      if (msg.from) {
-        tcpServer.registerConnection(msg.from, socket);
+      if (handleMeshHandshakeMessage(msg, socket, meshHandshakeContext())) return;
+
+      if (!isSocketAuthenticated(socket)) {
+        return;
       }
 
-      handleTcpPayload(msg, msg.from);
+      const auth = assertAuthenticated(socket, msg);
+      if (!auth.ok) {
+        try {
+          socket.destroy();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+
+      if (isPeerBlocked(config, auth.from)) return;
+
+      handleTcpPayload(msg, auth.from);
     },
   };
 }
@@ -451,6 +525,9 @@ function setupIpc() {
     discovery?.announce();
     if (typeof updates?.language === 'string' && updates.language !== prevLang) {
       installTray();
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('config-updated', config);
     }
     if (callWindow && !callWindow.isDestroyed()) {
       callWindow.webContents.send('config-updated', config);
@@ -772,6 +849,14 @@ app.whenReady().then(async () => {
 
   initConfigPath();
   config = loadConfig();
+  const hadMeshKeys = !!(config.meshPrivateKey && config.meshPublicKey);
+  config = ensureMeshIdentity(config);
+  if (!hadMeshKeys && config.meshPrivateKey) {
+    config = saveConfig({
+      meshPublicKey: config.meshPublicKey,
+      meshPrivateKey: config.meshPrivateKey,
+    });
+  }
 
   try {
     await bootstrapNetworking();

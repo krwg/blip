@@ -43,7 +43,7 @@ function appendFileCard(block, attachment) {
   block.appendChild(card);
 }
 
-export function createGroupChatView(group, config, onSend, onBack, onGroupCall) {
+export function createGroupChatView(group, config, onSend, onBack, onGroupCall, onGroupMenu) {
   const wrap = document.createElement('div');
   wrap.className = 'chat-view group-chat-view';
 
@@ -71,6 +71,17 @@ export function createGroupChatView(group, config, onSend, onBack, onGroupCall) 
   meta.appendChild(name);
   meta.appendChild(sub);
   header.appendChild(meta);
+
+  if (onGroupMenu) {
+    const openMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onGroupMenu(e, group);
+    };
+    header.addEventListener('contextmenu', openMenu);
+    meta.addEventListener('contextmenu', openMenu);
+    name.addEventListener('contextmenu', openMenu);
+  }
 
   const callBtn = document.createElement('button');
   callBtn.type = 'button';

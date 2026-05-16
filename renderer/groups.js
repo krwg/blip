@@ -52,6 +52,21 @@ export function deleteGroup(groupId) {
   window.dispatchEvent(new CustomEvent('blip-groups-changed', { detail: { groupId } }));
 }
 
+export function removeMemberFromGroup(groupId, blipId) {
+  const g = getGroup(groupId);
+  if (!g) return null;
+  const id = Number(blipId);
+  g.members = g.members.filter((m) => Number(m) !== id);
+  g.updatedAt = Date.now();
+  if (!g.members.length) {
+    deleteGroup(groupId);
+    return null;
+  }
+  persist();
+  window.dispatchEvent(new CustomEvent('blip-groups-changed', { detail: { groupId } }));
+  return g;
+}
+
 export function amHost(group, blipId) {
   return group && Number(group.hostId) === Number(blipId);
 }

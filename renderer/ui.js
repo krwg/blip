@@ -2,7 +2,7 @@ import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from '.
 import { createIdGrid } from './grid.js';
 import { createChatView, getMessages, applyReceiptToMessage } from './chat.js';
 import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
-import { getGroup, getAllGroups, groupDisplayName, getGroupMessages } from './groups.js';
+import { getGroup, getAllGroups, groupDisplayName, getGroupMessages, amHost } from './groups.js';
 import { openGroupCreateDialog } from './group-create-dialog.js';
 import { createGroupChatView } from './group-chat.js';
 import {
@@ -11,6 +11,8 @@ import {
   migrateGroupsHost,
   sendGroupChatMessage,
   joinGroupCall,
+  leaveGroup,
+  dissolveGroup,
 } from './groups-wire.js';
 import { logPeerEvent, getNetworkLogEntries, clearNetworkLog } from './network-log.js';
 import { createMessageId } from './message-id.js';
@@ -36,6 +38,8 @@ import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
 import { openConfirmDialog } from './confirm-dialog.js';
 import {
+  initPeerTrust,
+  applyTrustFromConfig,
   isTrusted,
   trustPeer,
   isBlocked,
@@ -193,7 +197,11 @@ function ensureGroupChatView(groupId) {
         state.activeGroup = null;
         renderView('chat');
       },
-      (gid) => joinGroupCall(gid, api)
+      (gid) => joinGroupCall(gid, api),
+      (e) => {
+        const fresh = getGroup(groupId);
+        if (fresh) showGroupContextMenu(e, fresh);
+      }
     );
     state.groupChatViews.set(groupId, view);
   }
@@ -462,6 +470,19 @@ function renderPeersView() {
         name.appendChild(star);
       }
       name.appendChild(document.createTextNode(formatPeerDisplayName(peer)));
+      if (peer.meshVerified) {
+        const hs = document.createElement('span');
+        hs.className = 'peer-handshake-badge';
+        hs.title = t('peers.handshake_ok');
+        hs.textContent = 'HS';
+        name.appendChild(hs);
+      } else if (peer.meshLegacy) {
+        const leg = document.createElement('span');
+        leg.className = 'peer-handshake-badge peer-handshake-badge--legacy';
+        leg.title = t('peers.handshake_legacy');
+        leg.textContent = '!';
+        name.appendChild(leg);
+      }
       const idSpan = document.createElement('span');
       idSpan.className = 'peer-id';
       idSpan.textContent = `#${peer.blipId}`;
@@ -557,6 +578,81 @@ function peerForContextMenu(peerOrId) {
     presence: 'offline',
     presenceText: '',
   };
+}
+
+function closeGroupChatUi(groupId) {
+  state.groupChatViews.delete(groupId);
+  if (state.activeGroup === groupId) {
+    state.activeGroup = null;
+    if (state.view === 'chat') renderView('chat');
+  }
+}
+
+function showGroupContextMenu(e, group) {
+  const menu = document.createElement('div');
+  menu.className = 'context-menu glass';
+  menu.style.left = `${e.clientX}px`;
+  menu.style.top = `${e.clientY}px`;
+
+  function bindItem(btn, handler) {
+    btn.addEventListener('mousedown', (ev) => ev.stopPropagation());
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      menu.remove();
+      handler();
+    });
+  }
+
+  const openItem = document.createElement('button');
+  openItem.type = 'button';
+  openItem.textContent = t('group.menu_open');
+  bindItem(openItem, () => openGroupChat(group.id));
+
+  const callItem = document.createElement('button');
+  callItem.type = 'button';
+  callItem.textContent = t('group.call');
+  bindItem(callItem, () => void joinGroupCall(group.id, api));
+
+  const leaveItem = document.createElement('button');
+  leaveItem.type = 'button';
+  leaveItem.textContent = t('group.menu_leave');
+  bindItem(leaveItem, async () => {
+    const ok = await openConfirmDialog({
+      title: t('group.leave_confirm_title'),
+      body: t('group.leave_confirm_body').replace('{name}', groupDisplayName(group)),
+      confirmLabel: t('group.menu_leave'),
+    });
+    if (!ok) return;
+    await leaveGroup(api, state.config, group.id, state.peers);
+    closeGroupChatUi(group.id);
+    if (state.view === 'chat') renderView('chat');
+  });
+
+  const disbandItem = document.createElement('button');
+  disbandItem.type = 'button';
+  disbandItem.textContent = t('group.menu_disband');
+  if (amHost(group, state.config.blipId)) {
+    bindItem(disbandItem, async () => {
+      const ok = await openConfirmDialog({
+        title: t('group.disband_confirm_title'),
+        body: t('group.disband_confirm_body').replace('{name}', groupDisplayName(group)),
+        confirmLabel: t('group.menu_disband'),
+      });
+      if (!ok) return;
+      await dissolveGroup(api, state.config, group.id);
+      closeGroupChatUi(group.id);
+      if (state.view === 'chat') renderView('chat');
+    });
+  } else {
+    disbandItem.disabled = true;
+  }
+
+  menu.appendChild(openItem);
+  menu.appendChild(callItem);
+  menu.appendChild(leaveItem);
+  menu.appendChild(disbandItem);
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
 }
 
 function showPeerContextMenu(e, peerOrId, options = {}) {
@@ -2708,6 +2804,11 @@ function renderChatHubView() {
       item.appendChild(ub);
     }
     item.addEventListener('click', () => openGroupChat(group.id));
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showGroupContextMenu(e, group);
+    });
     list.appendChild(item);
   });
 
@@ -2891,6 +2992,7 @@ function render() {
 export function initUI(config, blipApi) {
   api = blipApi;
   state.config = config;
+  initPeerTrust(config, blipApi);
   setLang(config.language || localStorage.getItem('blip_lang') || 'en');
   applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
@@ -2926,6 +3028,13 @@ export function initUI(config, blipApi) {
       const id = Number(peerId);
       if (!Number.isFinite(id)) return;
       openChat(id);
+    });
+  }
+
+  if (typeof window.blip.onConfigUpdated === 'function') {
+    window.blip.onConfigUpdated((cfg) => {
+      state.config = cfg;
+      applyTrustFromConfig(cfg);
     });
   }
 
@@ -3059,12 +3168,25 @@ export function handleTcpMessage(msg) {
     void handleGroupTcpMessage(msg, {
       api,
       config: state.config,
+      statePeers: state.peers,
       getGroupChatView: (id) => state.groupChatViews.get(id),
       openGroupChat,
       bumpGroupUnread: (groupId) => {
         if (state.view === 'chat' && state.activeGroup === groupId) return;
         unreadByGroup.set(groupId, (unreadByGroup.get(groupId) || 0) + 1);
         if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
+          renderView('chat');
+        }
+      },
+      onGroupRemoved: (groupId) => {
+        closeGroupChatUi(groupId);
+        unreadByGroup.delete(groupId);
+        if (state.view === 'chat') renderView('chat');
+      },
+      onMemberLeft: (groupId) => {
+        if (state.view === 'chat' && state.activeGroup === groupId) {
+          ensureGroupChatView(groupId)?.updateGroup?.(getGroup(groupId));
+        } else if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
           renderView('chat');
         }
       },

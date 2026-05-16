@@ -103,6 +103,20 @@ All UI audio is synthesized in the renderer via **Web Audio** (no asset files).
 
 Config: `uiSoundsEnabled`, `uiSoundsVolume`, `uiSoundPack`, `uiMelodyPack`. **Settings → Sound** — pack toggles + preview grid (`sounds.preview()` resumes `AudioContext` on user click).
 
+## Mesh Handshake (0.5.0)
+
+Codename **Handshake**. Each client has an Ed25519 keypair in `blip-config.json` (`meshPublicKey` / `meshPrivateKey`).
+
+| Layer | Mechanism |
+|-------|-----------|
+| UDP/mDNS | Signed announce (`meshAnnounceSig` over canonical fields, `meshProto: 1`) |
+| TCP | `mesh-handshake` → `mesh-handshake-ack` before any other app packet |
+| Binding | Peer IP must match discovery; `msg.from` must match authenticated session |
+| TOFU | `knownPeerKeys[blipId]` updated after successful handshake |
+| Policy | `blockedPeerIds` dropped in main; `trustedPeerIds` for UI chat gate |
+
+Legacy peers without `meshProto` appear with `meshLegacy` — TCP mesh with 0.5 requires both sides on Handshake.
+
 ## File transfer (0.4.8)
 
 | Mode | Limit | Wire |

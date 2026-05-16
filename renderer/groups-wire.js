@@ -2,12 +2,14 @@ import { t } from './i18n.js';
 import {
   getGroup,
   saveGroup,
+  deleteGroup,
   getAllGroups,
   amHost,
   pickNextHost,
   addGroupMessage,
   generateGroupId,
   groupDisplayName,
+  removeMemberFromGroup,
 } from './groups.js';
 import { showAppToast } from './toasts.js';
 import { sounds } from './audio.js';
@@ -21,6 +23,77 @@ import {
   relayGroupCallSignal,
   isInGroupCall,
 } from './group-call.js';
+
+function onlineMemberIds(statePeers) {
+  return new Set(
+    (statePeers || [])
+      .filter((p) => p.online)
+      .map((p) => Number(p.blipId))
+      .filter(Number.isFinite)
+  );
+}
+
+/** Leave group locally and notify mesh. */
+export async function leaveGroup(api, config, groupId, statePeers) {
+  const group = getGroup(groupId);
+  if (!group) return;
+  const myId = config.blipId;
+  if (!group.members.includes(myId)) return;
+
+  if (isInGroupCall()) await leaveGroupCall();
+
+  const wasHost = amHost(group, myId);
+  const online = onlineMemberIds(statePeers);
+
+  for (const m of group.members) {
+    if (m === myId) continue;
+    await api.sendTcpMessage({
+      type: 'group-leave',
+      to: m,
+      groupId,
+      host: group.hostId,
+      from: myId,
+    });
+  }
+
+  const updated = removeMemberFromGroup(groupId, myId);
+  if (updated && wasHost) {
+    const next = pickNextHost(myId, updated.members, online) ?? updated.members[0];
+    updated.hostId = next;
+    saveGroup(updated);
+    for (const m of updated.members) {
+      await api.sendTcpMessage({
+        type: 'group-host',
+        to: m,
+        groupId,
+        host: next,
+        members: updated.members,
+      });
+    }
+  }
+}
+
+/** Dissolve group (host only). */
+export async function dissolveGroup(api, config, groupId) {
+  const group = getGroup(groupId);
+  if (!group) return;
+  const myId = config.blipId;
+  if (!amHost(group, myId)) return;
+
+  if (isInGroupCall()) await leaveGroupCall();
+
+  for (const m of group.members) {
+    if (m === myId) continue;
+    await api.sendTcpMessage({
+      type: 'group-disband',
+      to: m,
+      groupId,
+      host: myId,
+      from: myId,
+    });
+  }
+  deleteGroup(groupId);
+}
 
 export async function createGroupFromUi(api, config, memberIds, name, seedPeerId) {
   const myId = config.blipId;
@@ -217,9 +290,52 @@ export async function handleGroupTcpMessage(msg, ctx) {
     return true;
   }
 
+  if (type === 'group-leave') {
+    const group = getGroup(msg.groupId);
+    if (!group) return true;
+    const leaverId = Number(msg.from);
+    if (!group.members.includes(leaverId)) return true;
+    const wasHost = Number(group.hostId) === leaverId;
+    removeMemberFromGroup(msg.groupId, leaverId);
+    const updated = getGroup(msg.groupId);
+    if (!updated) {
+      ctx.onGroupRemoved?.(msg.groupId);
+      return true;
+    }
+    getGroupChatView(msg.groupId)?.updateGroup?.(updated);
+    if (wasHost) {
+      const online = onlineMemberIds(ctx.statePeers);
+      const next = pickNextHost(leaverId, updated.members, online) ?? updated.members[0];
+      updated.hostId = next;
+      saveGroup(updated);
+      if (amHost(updated, myId)) {
+        for (const m of updated.members) {
+          if (m === myId) continue;
+          await api.sendTcpMessage({
+            type: 'group-host',
+            to: m,
+            groupId: msg.groupId,
+            host: next,
+            members: updated.members,
+          });
+        }
+      }
+    }
+    ctx.onMemberLeft?.(msg.groupId, leaverId);
+    return true;
+  }
+
+  if (type === 'group-disband') {
+    deleteGroup(msg.groupId);
+    ctx.onGroupRemoved?.(msg.groupId);
+    showAppToast({ title: t('group.disbanded'), durationMs: 4000 });
+    return true;
+  }
+
   if (type === 'group-call-signal') {
     const group = getGroup(msg.groupId);
-    if (group && amHost(group, myId) && Number(msg.target) !== myId) {
+    const target = Number(msg.target);
+    if (group && amHost(group, myId) && target && target !== myId) {
       await relayGroupCallSignal(msg, api);
     } else {
       await handleGroupCallSignal(msg, api);
@@ -240,4 +356,4 @@ export async function handleGroupTcpMessage(msg, ctx) {
   return false;
 }
 
-export { getAllGroups, isInGroupCall, joinGroupCall, leaveGroupCall };
+export { isInGroupCall, joinGroupCall, leaveGroupCall } from './group-call.js';

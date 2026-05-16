@@ -1409,6 +1409,34 @@ select.blip-select:focus {
   display: none;
 }
 
+/* Local screen share only — full stage (not PiP camera tile) */
+.call-video-wrap--local-primary.call-video-wrap--stage .call-video.local.call-video--stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  bottom: auto;
+  right: auto;
+  z-index: 2;
+}
+
+.call-video-wrap--local-primary .call-video.remote {
+  display: none;
+}
+
+.call-video-wrap--remote-primary.call-video-wrap--stage .call-video.remote.call-video--stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.call-video-wrap--remote-primary .call-video.local {
+  display: none;
+}
+
 .call-voice-wrap {
   display: flex;
   flex-direction: column;
@@ -1816,6 +1844,21 @@ select.blip-select:focus {
 
 .peer-pulse--status {
   color: var(--blip-accent);
+}
+
+.peer-handshake-badge {
+  margin-left: 6px;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-family: var(--blip-font, 'Minecraft', monospace);
+  border: 1px solid var(--blip-accent);
+  color: var(--blip-accent);
+  vertical-align: middle;
+}
+
+.peer-handshake-badge--legacy {
+  border-color: var(--blip-danger);
+  color: var(--blip-danger);
 }
 
 .chat-file-card {

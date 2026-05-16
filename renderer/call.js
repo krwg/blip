@@ -221,25 +221,59 @@ export function createCallUI(config, api, options = {}) {
   let pulseTimer = null;
   let incomingOffer = null;
   let stageActive = false;
+  let remotePeerScreenSharing = false;
 
-  function setStageView(active, { localScreen = false, remoteScreen = false } = {}) {
+  /** @type {'off'|'local'|'remote'|'both'} */
+  let stageMode = 'off';
+
+  function setStageView(mode) {
+    stageMode = mode;
+    const active = mode !== 'off';
     stageActive = active;
     overlay.classList.toggle('call-overlay--theater', active);
     inner.classList.toggle('call-inner--stage', active);
     videoWrap.classList.toggle('call-video-wrap--stage', active);
     videoWrap.classList.toggle('call-video-wrap--camera', !active);
-    gridOverlay.classList.toggle('hidden', active);
+    videoWrap.classList.toggle('call-video-wrap--local-primary', mode === 'local');
+    videoWrap.classList.toggle('call-video-wrap--remote-primary', mode === 'remote' || mode === 'both');
+    gridOverlay.classList.add('hidden');
     fsBtn.classList.toggle('hidden', !active);
 
-    remoteVideo.classList.toggle('call-video--stage', active && remoteScreen);
-    remoteVideo.classList.toggle('call-video--camera', !active || !remoteScreen);
-    localVideo.classList.toggle('call-video--stage', active && localScreen);
-    localVideo.classList.toggle('call-video--camera', !active || !localScreen);
+    remoteVideo.classList.toggle('hidden', mode === 'local');
+    localVideo.classList.toggle('hidden', mode === 'remote');
 
-    if (active && localScreen) {
+    remoteVideo.classList.toggle('call-video--stage', mode === 'remote' || mode === 'both');
+    remoteVideo.classList.toggle('call-video--camera', mode === 'off');
+    localVideo.classList.toggle('call-video--stage', mode === 'local' || mode === 'both');
+    localVideo.classList.toggle('call-video--camera', mode === 'off');
+
+    if (mode === 'both') {
       localVideo.classList.remove('hidden');
-    } else if (active && remoteScreen) {
-      localVideo.classList.toggle('hidden', !sharingScreen);
+    }
+  }
+
+  function refreshStageLayout() {
+    const remoteTrack = remoteVideo.srcObject?.getVideoTracks?.()?.[0];
+    const remoteScreen =
+      remotePeerScreenSharing || (remoteTrack && trackLooksLikeScreen(remoteTrack));
+    const anyScreen = sharingScreen || remoteScreen;
+
+    if (!anyScreen) {
+      const hadVideo = withVideo || remoteTrack;
+      setStageView('off');
+      if (hadVideo) {
+        remoteVideo.classList.add('call-video--camera');
+        localVideo.classList.add('call-video--camera');
+      }
+      return;
+    }
+
+    if (sharingScreen && remoteScreen) {
+      setStageView('both');
+    } else if (sharingScreen) {
+      setStageView('local');
+    } else {
+      setStageView('remote');
     }
   }
 
@@ -295,7 +329,8 @@ export function createCallUI(config, api, options = {}) {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
-    setStageView(false);
+    setStageView('off');
+    remotePeerScreenSharing = false;
     clearInterval(timerInterval);
     clearInterval(pulseTimer);
     pulseTimer = null;
@@ -350,6 +385,10 @@ export function createCallUI(config, api, options = {}) {
   function applyRemoteState(state) {
     remoteMuted = !!state?.muted;
     remoteDeafened = !!state?.deafened;
+    if (typeof state?.screenSharing === 'boolean') {
+      remotePeerScreenSharing = state.screenSharing;
+      refreshStageLayout();
+    }
     updateRemoteBadges();
   }
 
@@ -448,17 +487,17 @@ export function createCallUI(config, api, options = {}) {
       if (withVideo && restore) {
         await applyOutgoingVideoTrack(restore, { screenShare: false });
         localVideo.srcObject = new MediaStream([restore]);
-        setStageView(false);
+        refreshStageLayout();
         localVideo.classList.remove('hidden');
       } else if (!withVideo) {
         await removeOutgoingVideo();
         videoWrap.classList.add('hidden');
         voiceWrap.classList.remove('hidden');
         localVideo.srcObject = null;
-        setStageView(false);
+        refreshStageLayout();
       } else {
         localVideo.srcObject = null;
-        setStageView(false);
+        refreshStageLayout();
       }
     } catch (err) {
       console.warn('[call] stop share:', err.message);
@@ -491,7 +530,6 @@ export function createCallUI(config, api, options = {}) {
       videoWrap.classList.remove('hidden');
       voiceWrap.classList.add('hidden');
       localVideo.srcObject = stream;
-      setStageView(true, { localScreen: true, remoteScreen: false });
 
       const sender = getVideoSender();
       if (sender?.track?.kind === 'video' && !savedCameraTrack) {
@@ -504,10 +542,12 @@ export function createCallUI(config, api, options = {}) {
       }
 
       await applyOutgoingVideoTrack(screenTrack, { screenShare: true });
+      refreshStageLayout();
 
       screenTrack.onended = () => {
         void stopScreenShare();
       };
+      screenTrack.onresize = () => refreshStageLayout();
 
       broadcastCallState();
     } catch (err) {
@@ -562,14 +602,11 @@ export function createCallUI(config, api, options = {}) {
     if (vTrack) {
       videoWrap.classList.remove('hidden');
       voiceWrap.classList.add('hidden');
-      const remoteScreen = trackLooksLikeScreen(vTrack);
-      if (remoteScreen || sharingScreen) {
-        setStageView(true, {
-          localScreen: sharingScreen,
-          remoteScreen: !sharingScreen,
-        });
-      } else {
-        setStageView(false);
+      if (!trackLooksLikeScreen(vTrack)) {
+        remotePeerScreenSharing = false;
+      }
+      refreshStageLayout();
+      if (stageMode === 'off') {
         remoteVideo.classList.add('call-video--camera');
         localVideo.classList.add('call-video--camera');
       }

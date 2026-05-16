@@ -5,6 +5,8 @@ import { sounds } from './audio.js';
 const ICE = [];
 /** @type {Map<number, RTCPeerConnection>} */
 const peers = new Map();
+/** @type {Map<number, RTCIceCandidateInit[]>} */
+const pendingCandidates = new Map();
 let localStream = null;
 let activeGroupId = null;
 let panelEl = null;
@@ -69,12 +71,28 @@ async function sendSignal(groupId, targetId, payload) {
   });
 }
 
+async function flushCandidates(remoteId, pc) {
+  const pending = pendingCandidates.get(remoteId);
+  if (!pending?.length || !pc?.remoteDescription) return;
+  for (const c of pending) {
+    try {
+      await pc.addIceCandidate(c);
+    } catch {
+      /* ignore */
+    }
+  }
+  pendingCandidates.delete(remoteId);
+}
+
 async function createPc(remoteId, groupId, initiator) {
   if (peers.has(remoteId)) return peers.get(remoteId);
   const pc = new RTCPeerConnection({ iceServers: ICE });
   peers.set(remoteId, pc);
+  pendingCandidates.set(remoteId, []);
 
-  localStream?.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
+  if (localStream) {
+    localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
+  }
 
   pc.ontrack = (ev) => {
     const audio = document.createElement('audio');
@@ -109,12 +127,30 @@ export function isInGroupCall() {
 }
 
 export async function joinGroupCall(groupId, api) {
+  if (activeGroupId === groupId) {
+    apiRef = api;
+    refreshRoster(getGroup(groupId));
+    return;
+  }
   if (activeGroupId) await leaveGroupCall();
   const group = getGroup(groupId);
   if (!group) return;
   apiRef = api;
   activeGroupId = groupId;
-  localStream = await getMic();
+  try {
+    localStream = await getMic();
+  } catch (err) {
+    console.error('[group-call] mic:', err);
+    if (typeof window.__blipShowToast === 'function') {
+      window.__blipShowToast({
+        title: t('group.call_mic_failed'),
+        variant: 'danger',
+        durationMs: 5000,
+      });
+    }
+    activeGroupId = null;
+    return;
+  }
   ensurePanel();
   panelEl.classList.remove('hidden');
   refreshRoster(group);
@@ -127,10 +163,8 @@ export async function joinGroupCall(groupId, api) {
     if (myId < m) void createPc(m, groupId, true);
   }
 
-  const notify = amHost(group, myId)
-    ? group.members.filter((m) => m !== myId)
-    : [hostId];
-  for (const m of notify) {
+  for (const m of group.members) {
+    if (m === myId) continue;
     await api.sendTcpMessage({
       type: 'group-call-start',
       to: m,
@@ -155,12 +189,14 @@ export async function leaveGroupCall() {
           to: m,
           groupId: gid,
           host: group.hostId,
+          from: api.config.blipId,
         });
       }
     }
   }
   for (const pc of peers.values()) pc.close();
   peers.clear();
+  pendingCandidates.clear();
   localStream?.getTracks().forEach((t) => t.stop());
   localStream = null;
   activeGroupId = null;
@@ -194,6 +230,7 @@ export async function handleGroupCallSignal(msg, api) {
     const offer = normalizeSdp(msg.sdp);
     if (!offer) return;
     await pc.setRemoteDescription(offer);
+    await flushCandidates(remoteId, pc);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     const hostId = group.hostId;
@@ -202,24 +239,37 @@ export async function handleGroupCallSignal(msg, api) {
       sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
     });
     refreshRoster(group);
+    for (const m of group.members) {
+      if (m === myId || m === remoteId) continue;
+      if (myId < m) void createPc(m, groupId, true);
+    }
     return;
   }
 
   if (msg.signalKind === 'answer') {
     const pc = peers.get(remoteId);
     const answer = normalizeSdp(msg.sdp);
-    if (pc && answer) await pc.setRemoteDescription(answer);
+    if (pc && answer) {
+      await pc.setRemoteDescription(answer);
+      await flushCandidates(remoteId, pc);
+    }
+    refreshRoster(group);
     return;
   }
 
   if (msg.signalKind === 'candidate') {
     const pc = peers.get(remoteId);
-    if (pc && msg.candidate) {
-      try {
-        await pc.addIceCandidate(msg.candidate);
-      } catch {
-        /* ignore */
-      }
+    if (!pc || !msg.candidate) return;
+    if (!pc.remoteDescription) {
+      const q = pendingCandidates.get(remoteId) || [];
+      q.push(msg.candidate);
+      pendingCandidates.set(remoteId, q);
+      return;
+    }
+    try {
+      await pc.addIceCandidate(msg.candidate);
+    } catch {
+      /* ignore */
     }
   }
 }
@@ -227,6 +277,10 @@ export async function handleGroupCallSignal(msg, api) {
 export async function handleGroupCallStart(msg, api) {
   const group = getGroup(msg.groupId);
   if (!group) return;
+  if (activeGroupId === msg.groupId) {
+    refreshRoster(group);
+    return;
+  }
   showAppToastInvite(msg, api);
 }
 
@@ -264,14 +318,16 @@ export async function relayGroupCallSignal(msg, api) {
   const group = getGroup(msg.groupId);
   if (!group || !amHost(group, myId)) return;
   const target = Number(msg.target);
+  const from = Number(msg.from);
   if (!target || target === myId) return;
+  if (!group.members.includes(target) || !group.members.includes(from)) return;
   await api.sendTcpMessage({
     type: 'group-call-signal',
     to: target,
     groupId: msg.groupId,
     host: group.hostId,
     target,
-    from: Number(msg.from),
+    from,
     signalKind: msg.signalKind,
     sdp: msg.sdp,
     candidate: msg.candidate,

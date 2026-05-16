@@ -1,36 +1,61 @@
 import net from 'net';
 import { DEFAULT_TCP_PORT } from './ports.js';
+import { createTcpLineReader } from './tcp-framing.js';
+import { initInboundSession, clearSocketSession } from './mesh-handshake.js';
 
 const connections = new Map();
 
 export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
   const server = net.createServer((socket) => {
-    let buffer = '';
     const remoteIp = socket.remoteAddress?.replace('::ffff:', '') || '';
+    initInboundSession(socket, remoteIp);
+
+    const reader = createTcpLineReader(() => {
+      try {
+        socket.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
 
     socket.on('data', (chunk) => {
-      buffer += chunk.toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
+      try {
+        const lines = reader.push(chunk);
+        for (const line of lines) {
+          try {
+            const msg = JSON.parse(line);
+            handlers.onMessage(msg, socket, remoteIp);
+          } catch {
+            /* ignore malformed */
+          }
+        }
+      } catch (e) {
+        if (e?.code === 'LINE_TOO_LARGE') {
+          console.warn('[TCP] line too large from', remoteIp);
+        }
         try {
-          const msg = JSON.parse(line);
-          handlers.onMessage(msg, socket, remoteIp);
+          socket.destroy();
         } catch {
-          /* ignore malformed */
+          /* ignore */
         }
       }
     });
 
     socket.on('close', () => {
+      clearSocketSession(socket);
       for (const [key, s] of connections) {
         if (s === socket) connections.delete(key);
       }
     });
 
-    socket.on('error', () => socket.destroy());
+    socket.on('error', () => {
+      clearSocketSession(socket);
+      try {
+        socket.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
   });
 
   const api = {

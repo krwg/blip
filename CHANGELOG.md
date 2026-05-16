@@ -9,6 +9,24 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+## [0.5.0] — Handshake
+
+### Added
+
+- **Mesh Handshake** — Ed25519 device identity; signed UDP announce (`meshProto` 1); TCP `mesh-handshake` / `mesh-handshake-ack` before app traffic.
+- **TOFU peer keys** — `knownPeerKeys` in config; pubkey mismatch rejects handshake.
+- **TCP hardening** — max line size 4 MB; inbound `from` must match authenticated session; IP must match discovery for peer ID.
+- **Block list in main** — `blockedPeerIds` in config enforced before renderer (drops messages/calls/file transfer).
+- **Trust sync** — `trustedPeerIds` / `blockedPeerIds` in `blip-config.json` (migrated from localStorage).
+
+### Changed
+
+- Peers with verified announce show **HS** badge; legacy (&lt;0.5) peers show **!** — TCP mesh requires Handshake on both sides.
+
+### Security
+
+- Addresses spoofed `from`, unbounded TCP lines, and UI-only block list (see local `SECURITY.local.md`).
+
 ## [0.4.8] — Mesh
 
 ### Added

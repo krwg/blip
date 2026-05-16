@@ -1,8 +1,12 @@
 /**
- * Local trust & block lists (never sent over the network).
+ * Trust & block lists — persisted in blip-config.json (enforced in main over TCP).
  */
 const TRUST_KEY = 'blip_trusted_peers_v1';
 const BLOCK_KEY = 'blip_blocked_peers_v1';
+
+let trustedIds = new Set();
+let blockedIds = new Set();
+let saveApi = null;
 
 function loadSet(key) {
   try {
@@ -20,35 +24,71 @@ function saveSet(key, set) {
   localStorage.setItem(key, JSON.stringify([...set]));
 }
 
+function persistToMain() {
+  if (!saveApi) return;
+  void saveApi({
+    trustedPeerIds: [...trustedIds].sort((a, b) => a - b),
+    blockedPeerIds: [...blockedIds].sort((a, b) => a - b),
+  });
+}
+
+/** Call once from initUI with config + api.saveConfig */
+export function initPeerTrust(cfg, api) {
+  saveApi = (updates) => api.saveConfig(updates);
+  const fromConfigTrusted = Array.isArray(cfg?.trustedPeerIds) ? cfg.trustedPeerIds : null;
+  const fromConfigBlocked = Array.isArray(cfg?.blockedPeerIds) ? cfg.blockedPeerIds : null;
+
+  if (fromConfigTrusted?.length || fromConfigBlocked?.length) {
+    trustedIds = new Set(fromConfigTrusted.map((n) => Number(n)).filter(Number.isFinite));
+    blockedIds = new Set(fromConfigBlocked.map((n) => Number(n)).filter(Number.isFinite));
+    saveSet(TRUST_KEY, trustedIds);
+    saveSet(BLOCK_KEY, blockedIds);
+  } else {
+    trustedIds = loadSet(TRUST_KEY);
+    blockedIds = loadSet(BLOCK_KEY);
+    if (trustedIds.size || blockedIds.size) persistToMain();
+  }
+}
+
+export function applyTrustFromConfig(cfg) {
+  if (Array.isArray(cfg?.trustedPeerIds)) {
+    trustedIds = new Set(cfg.trustedPeerIds.map((n) => Number(n)).filter(Number.isFinite));
+    saveSet(TRUST_KEY, trustedIds);
+  }
+  if (Array.isArray(cfg?.blockedPeerIds)) {
+    blockedIds = new Set(cfg.blockedPeerIds.map((n) => Number(n)).filter(Number.isFinite));
+    saveSet(BLOCK_KEY, blockedIds);
+  }
+}
+
 export function isTrusted(peerId) {
-  return loadSet(TRUST_KEY).has(Number(peerId));
+  return trustedIds.has(Number(peerId));
 }
 
 export function trustPeer(peerId) {
-  const set = loadSet(TRUST_KEY);
-  set.add(Number(peerId));
-  saveSet(TRUST_KEY, set);
+  trustedIds.add(Number(peerId));
+  saveSet(TRUST_KEY, trustedIds);
+  persistToMain();
 }
 
 export function isBlocked(peerId) {
-  return loadSet(BLOCK_KEY).has(Number(peerId));
+  return blockedIds.has(Number(peerId));
 }
 
 export function blockPeer(peerId) {
-  const set = loadSet(BLOCK_KEY);
-  set.add(Number(peerId));
-  saveSet(BLOCK_KEY, set);
+  blockedIds.add(Number(peerId));
+  saveSet(BLOCK_KEY, blockedIds);
+  persistToMain();
   window.dispatchEvent(new CustomEvent('blip-peer-trust-changed'));
 }
 
 export function unblockPeer(peerId) {
-  const set = loadSet(BLOCK_KEY);
-  set.delete(Number(peerId));
-  saveSet(BLOCK_KEY, set);
+  blockedIds.delete(Number(peerId));
+  saveSet(BLOCK_KEY, blockedIds);
+  persistToMain();
   window.dispatchEvent(new CustomEvent('blip-peer-trust-changed'));
 }
 
-/** Sorted BLIP IDs blocked on this device. */
 export function getBlockedPeerIds() {
-  return [...loadSet(BLOCK_KEY)].sort((a, b) => a - b);
+  return [...blockedIds].sort((a, b) => a - b);
 }
