@@ -9,6 +9,13 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
+### Added
+
+- **Settings → Sound**: toggle UI sounds and volume slider (messages, calls, peer online).
+- **Settings → Shortcuts**: reference list for call-window keys (**M** mute, **D** deafen, **Enter** accept, **Esc** end).
+- **Call window keyboard shortcuts** (when the call window is focused).
+- **Desktop notification** for incoming calls (toggle in **Settings → Notifications**).
+
 ## [0.1.6]
 
 ### Added

@@ -4,6 +4,7 @@
 import { setLang } from './i18n.js';
 import { createCallUI } from './call.js';
 import { applyAppearance, listenReducedMotion } from './appearance.js';
+import { setSoundPrefs } from './audio.js';
 
 let callAppearanceRm = null;
 
@@ -43,6 +44,10 @@ async function boot() {
 
   const config = await window.blip.getConfig();
   setLang(config.language || localStorage.getItem('blip_lang') || 'en');
+  setSoundPrefs({
+    enabled: config.uiSoundsEnabled !== false,
+    volume: typeof config.uiSoundsVolume === 'number' ? config.uiSoundsVolume : 1,
+  });
   applyAppearance(config);
   callAppearanceRm?.();
   callAppearanceRm = listenReducedMotion(() => {});
@@ -87,6 +92,33 @@ async function boot() {
   window.blip.onCallEnded((data) => {
     dbg('call-ended', data);
     callUI.handleEnded(data);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const key = e.key;
+    if (key === 'm' || key === 'M') {
+      callUI.toggleMute();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'd' || key === 'D') {
+      callUI.toggleDeafen();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'Escape') {
+      callUI.hangupCall();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'Enter' && callUI.isIncomingRinging()) {
+      callUI.acceptIncoming();
+      e.preventDefault();
+    }
   });
 }
 

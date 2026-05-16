@@ -433,19 +433,28 @@ export function createCallUI(config, api, options = {}) {
     hide();
   }
 
-  muteBtn.addEventListener('click', () => {
+  function toggleMute() {
+    if (muteBtn.classList.contains('hidden')) return;
     muted = !muted;
     localStream?.getAudioTracks().forEach((tr) => {
       tr.enabled = !muted;
     });
     muteBtn.classList.toggle('active', muted);
-  });
+  }
 
-  deafenBtn.addEventListener('click', () => {
+  function toggleDeafen() {
+    if (deafenBtn.classList.contains('hidden')) return;
     deafened = !deafened;
     remoteVideo.muted = deafened;
     deafenBtn.classList.toggle('active', deafened);
-  });
+  }
+
+  function isIncomingRinging() {
+    return !!incomingOffer && !pc;
+  }
+
+  muteBtn.addEventListener('click', () => toggleMute());
+  deafenBtn.addEventListener('click', () => toggleDeafen());
 
   async function hangupCall() {
     if (peerId) await api.callHangup({ to: peerId });
@@ -464,6 +473,10 @@ export function createCallUI(config, api, options = {}) {
     handleRejected,
     handleEnded,
     hangupCall,
+    acceptIncoming,
+    toggleMute,
+    toggleDeafen,
+    isIncomingRinging,
     hide,
     end: hide,
     isActive: () => !!pc || !!(incomingOffer && activeCall?.pending),

@@ -9,7 +9,7 @@ import {
   hasCustomAvatar,
   setCustomAvatarDataUrl,
 } from './avatar.js';
-import { sounds } from './audio.js';
+import { sounds, setSoundPrefs } from './audio.js';
 import {
   THEME_GROUPS,
   BG_META,
@@ -546,8 +546,25 @@ function buildAppearanceSection() {
   return block;
 }
 
+function applySoundPrefsFromConfig(cfg = state.config) {
+  setSoundPrefs({
+    enabled: cfg?.uiSoundsEnabled !== false,
+    volume: typeof cfg?.uiSoundsVolume === 'number' ? cfg.uiSoundsVolume : 1,
+  });
+}
+
 function getSettingsSectionIds() {
-  const ids = ['profile', 'language', 'notifications', 'appearance', 'system', 'updates', 'about'];
+  const ids = [
+    'profile',
+    'language',
+    'notifications',
+    'sound',
+    'shortcuts',
+    'appearance',
+    'system',
+    'updates',
+    'about',
+  ];
   if (typeof window !== 'undefined' && window.blip?.platform !== 'win32') {
     return ids.filter((id) => id !== 'system');
   }
@@ -665,7 +682,148 @@ function buildSettingsNotificationsPanel() {
     state.config = await api.saveConfig({ desktopNotifications: cb.checked });
   });
 
+  const callLabel = document.createElement('label');
+  callLabel.className = 'settings-tray-toggle-row';
+
+  const callCb = document.createElement('input');
+  callCb.type = 'checkbox';
+  callCb.checked = state.config.desktopCallNotifications !== false;
+
+  const callSpan = document.createElement('span');
+  callSpan.dataset.i18n = 'settings.notifications_calls';
+  callSpan.textContent = t('settings.notifications_calls');
+
+  callLabel.appendChild(callCb);
+  callLabel.appendChild(callSpan);
+
+  callCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ desktopCallNotifications: callCb.checked });
+  });
+
   frag.appendChild(label);
+  frag.appendChild(callLabel);
+  return frag;
+}
+
+function buildSettingsSoundPanel() {
+  const frag = document.createElement('div');
+  frag.className = 'settings-panel';
+
+  const h = document.createElement('h2');
+  h.className = 'settings-panel-title';
+  h.dataset.i18n = 'settings.section_sound';
+  h.textContent = t('settings.section_sound');
+  frag.appendChild(h);
+
+  const enableLabel = document.createElement('label');
+  enableLabel.className = 'settings-tray-toggle-row';
+
+  const enableCb = document.createElement('input');
+  enableCb.type = 'checkbox';
+  enableCb.checked = state.config.uiSoundsEnabled !== false;
+
+  const enableSpan = document.createElement('span');
+  enableSpan.dataset.i18n = 'settings.sound_enable';
+  enableSpan.textContent = t('settings.sound_enable');
+
+  enableLabel.appendChild(enableCb);
+  enableLabel.appendChild(enableSpan);
+
+  const volLabel = document.createElement('label');
+  volLabel.className = 'settings-sound-volume-label';
+  volLabel.dataset.i18n = 'settings.sound_volume';
+  volLabel.textContent = t('settings.sound_volume');
+
+  const volRow = document.createElement('div');
+  volRow.className = 'settings-sound-volume-row';
+
+  const volRange = document.createElement('input');
+  volRange.type = 'range';
+  volRange.min = '0';
+  volRange.max = '100';
+  volRange.step = '5';
+  volRange.className = 'settings-sound-range';
+  const volPct = Math.round(
+    (typeof state.config.uiSoundsVolume === 'number' ? state.config.uiSoundsVolume : 1) * 100
+  );
+  volRange.value = String(volPct);
+
+  const volVal = document.createElement('span');
+  volVal.className = 'settings-sound-volume-val';
+  volVal.textContent = `${volPct}%`;
+
+  async function persistVolume() {
+    const v = Number(volRange.value) / 100;
+    volVal.textContent = `${volRange.value}%`;
+    state.config = await api.saveConfig({ uiSoundsVolume: v });
+    applySoundPrefsFromConfig(state.config);
+  }
+
+  volRange.addEventListener('input', () => {
+    volVal.textContent = `${volRange.value}%`;
+    applySoundPrefs({
+      enabled: enableCb.checked,
+      volume: Number(volRange.value) / 100,
+    });
+  });
+  volRange.addEventListener('change', () => {
+    void persistVolume();
+  });
+
+  function syncVolumeDisabled() {
+    volRange.disabled = !enableCb.checked;
+    volLabel.style.opacity = enableCb.checked ? '1' : '0.45';
+  }
+  syncVolumeDisabled();
+
+  enableCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ uiSoundsEnabled: enableCb.checked });
+    applySoundPrefsFromConfig(state.config);
+    syncVolumeDisabled();
+  });
+
+  volRow.appendChild(volRange);
+  volRow.appendChild(volVal);
+  frag.appendChild(enableLabel);
+  frag.appendChild(volLabel);
+  frag.appendChild(volRow);
+  return frag;
+}
+
+function buildSettingsShortcutsPanel() {
+  const frag = document.createElement('div');
+  frag.className = 'settings-panel';
+
+  const h = document.createElement('h2');
+  h.className = 'settings-panel-title';
+  h.dataset.i18n = 'settings.section_shortcuts';
+  h.textContent = t('settings.section_shortcuts');
+  frag.appendChild(h);
+
+  const sub = document.createElement('p');
+  sub.className = 'settings-shortcuts-sub';
+  sub.dataset.i18n = 'settings.shortcuts_call_scope';
+  sub.textContent = t('settings.shortcuts_call_scope');
+  frag.appendChild(sub);
+
+  const list = document.createElement('dl');
+  list.className = 'settings-shortcuts-list';
+  const rows = [
+    ['settings.shortcuts_mute', 'M'],
+    ['settings.shortcuts_deafen', 'D'],
+    ['settings.shortcuts_accept', 'Enter'],
+    ['settings.shortcuts_end', 'Esc'],
+  ];
+  for (const [key, keys] of rows) {
+    const dt = document.createElement('dt');
+    dt.dataset.i18n = key;
+    dt.textContent = t(key);
+    const dd = document.createElement('dd');
+    dd.textContent = keys;
+    list.appendChild(dt);
+    list.appendChild(dd);
+  }
+  frag.appendChild(list);
   return frag;
 }
 
@@ -879,6 +1037,10 @@ function renderSettingsMainPanel() {
       return buildSettingsLanguagePanel();
     case 'notifications':
       return buildSettingsNotificationsPanel();
+    case 'sound':
+      return buildSettingsSoundPanel();
+    case 'shortcuts':
+      return buildSettingsShortcutsPanel();
     case 'appearance':
       return buildAppearancePanelWithTitle();
     case 'system':
@@ -1155,6 +1317,7 @@ export function initUI(config, blipApi) {
   api = blipApi;
   state.config = config;
   setLang(config.language || localStorage.getItem('blip_lang') || 'en');
+  applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
   appearanceListenerDispose?.();
   appearanceListenerDispose = listenReducedMotion(() => {});

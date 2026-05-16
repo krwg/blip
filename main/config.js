@@ -15,6 +15,9 @@ const DEFAULT_CONFIG = {
   closeToTray: process.platform === 'win32',
   /** OS toast when a new chat message arrives (main window). */
   desktopNotifications: true,
+  desktopCallNotifications: true,
+  uiSoundsEnabled: true,
+  uiSoundsVolume: 1,
 };
 
 let configPath = null;

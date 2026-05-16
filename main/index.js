@@ -187,6 +187,40 @@ function sendToRenderer(channel, data) {
   }
 }
 
+function showDesktopNotification(payload) {
+  if (!Notification.isSupported()) return { ok: false, reason: 'unsupported' };
+  const peerId = Number(payload?.peerId);
+  const kind = payload?.kind === 'call' ? 'call' : 'chat';
+  const title =
+    typeof payload?.title === 'string' ? payload.title.trim().slice(0, 128) : 'BLIP';
+  let body = typeof payload?.body === 'string' ? payload.body.replace(/\s+/g, ' ').trim() : '';
+  body = body.slice(0, 256);
+  if (!body) body = ' ';
+  try {
+    const n = new Notification({ title: title || 'BLIP', body, silent: false });
+    n.on('click', () => {
+      if (kind === 'call') {
+        void ensureCallWindow().then((win) => {
+          if (win && !win.isDestroyed()) {
+            win.show();
+            win.focus();
+          }
+        });
+        return;
+      }
+      if (Number.isFinite(peerId) && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('notification-open-chat', peerId);
+      }
+    });
+    n.show();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 function findPeer(blipId) {
   const peers = discovery?.getPeers() || [];
   return peers.find((p) => p.blipId === blipId && p.online) || null;
@@ -236,18 +270,28 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'message':
       sendToRenderer('tcp-message', msg);
       break;
-    case 'call-offer':
+    case 'call-offer': {
+      const callerId = msg.from ?? fromBlipId;
+      if (config?.desktopCallNotifications !== false) {
+        showDesktopNotification({
+          kind: 'call',
+          peerId: callerId,
+          title: 'BLIP',
+          body: `Incoming call · #${callerId}`,
+        });
+      }
       void sendToCallWindow(
         'incoming-call',
         {
           ...msg,
-          from: msg.from ?? fromBlipId,
+          from: callerId,
           sdp: msg.sdp,
           video: msg.video,
         },
         { focus: true }
       );
       break;
+    }
     case 'call-answer':
       void sendToCallWindow('call-answer', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
@@ -479,31 +523,7 @@ function setupIpc() {
     return { ok: true };
   });
 
-  ipcMain.handle('show-message-notification', (_, payload) => {
-    if (!Notification.isSupported()) return { ok: false, reason: 'unsupported' };
-    const peerId = Number(payload?.peerId);
-    const title =
-      typeof payload?.title === 'string' ? payload.title.trim().slice(0, 128) : 'BLIP';
-    let body = typeof payload?.body === 'string' ? payload.body.replace(/\s+/g, ' ').trim() : '';
-    body = body.slice(0, 256);
-    if (!body) body = ' ';
-    try {
-      const n = new Notification({ title: title || 'BLIP', body, silent: false });
-      if (Number.isFinite(peerId)) {
-        n.on('click', () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.show();
-            mainWindow.focus();
-            mainWindow.webContents.send('notification-open-chat', peerId);
-          }
-        });
-      }
-      n.show();
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e?.message || String(e) };
-    }
-  });
+  ipcMain.handle('show-message-notification', (_, payload) => showDesktopNotification(payload));
 
   ipcMain.handle('open-external', async (_, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false };
