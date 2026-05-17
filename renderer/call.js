@@ -11,6 +11,7 @@ import {
 import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
+import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 
 const ICE_SERVERS = [];
 
@@ -516,6 +517,7 @@ export function createCallUI(config, api, options = {}) {
       outgoingAudioCtx = null;
     }
     activeCall = null;
+    dispatchReactiveAudio({ active: false });
     inner.style.borderColor = '';
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
@@ -983,6 +985,7 @@ export function createCallUI(config, api, options = {}) {
         }
       }
       if (!result?.ok) throw new Error(result?.error || 'Call failed');
+      dispatchReactiveAudio({ active: true, stream: localStream });
     } catch (err) {
       console.error('[call] outgoing:', err);
       hide();
@@ -1058,6 +1061,7 @@ export function createCallUI(config, api, options = {}) {
       sounds.callConnected();
       statusEl.dataset.i18n = 'call.connected';
       showInCallControls();
+      dispatchReactiveAudio({ active: true, stream: localStream });
     } catch (err) {
       console.error('[BLIP call] accept:', err);
       rollbackAcceptAttempt();

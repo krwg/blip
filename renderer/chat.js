@@ -1,15 +1,20 @@
 import { t } from './i18n.js';
 import { sounds } from './audio.js';
 import { createAvatarElement } from './avatar.js';
-import { appendLinkifiedText } from './linkify.js';
 import { attachEmojiPicker } from './emoji-picker.js';
 import {
   encodeChatImageAttachment,
   isImageFile,
+  isVideoFile,
   validateChatFile,
+  registerMediaPlaceholder,
 } from './chat-attachments.js';
+import {
+  appendChatMessageBody,
+  buildReplyPreview,
+  formatReplyFromLabel,
+} from './chat-message-content.js';
 import { normalizeFileLimitGb } from './file-transfer-limits.js';
-import { formatFileSize } from './file-transfer.js';
 
 function formatFileLimitLabelForChat(config) {
   return `${normalizeFileLimitGb(config?.maxFileTransferGb)} GB`;
@@ -122,51 +127,6 @@ export function exportPeerChat(peerId, displayName) {
   URL.revokeObjectURL(url);
 }
 
-function openExternalUrl(url) {
-  if (window.blip?.openExternal) void window.blip.openExternal(url);
-}
-
-function appendFileAttachment(block, attachment, openExternalUrl) {
-  if (attachment?.kind !== 'file') return;
-  const card = document.createElement('div');
-  card.className = 'chat-file-card';
-  const label = document.createElement('span');
-  label.className = 'chat-file-name';
-  label.textContent = attachment.name || 'file';
-  const meta = document.createElement('span');
-  meta.className = 'chat-file-meta';
-  meta.textContent = formatFileSize(attachment.size);
-  card.appendChild(label);
-  card.appendChild(meta);
-  if (attachment.dataUrl) {
-    const dl = document.createElement('a');
-    dl.className = 'btn btn-lang chat-file-dl';
-    dl.href = attachment.dataUrl;
-    dl.download = attachment.name || 'download';
-    dl.textContent = t('chat.file_download');
-    dl.dataset.i18n = 'chat.file_download';
-    dl.addEventListener('click', (e) => e.stopPropagation());
-    card.appendChild(dl);
-  } else if (attachment.pending) {
-    const pct = Math.min(100, Math.max(0, Number(attachment.progress) || 0));
-    const prog = document.createElement('div');
-    prog.className = 'chat-file-progress';
-    const track = document.createElement('div');
-    track.className = 'chat-file-progress-track';
-    const fill = document.createElement('div');
-    fill.className = 'chat-file-progress-fill';
-    fill.style.width = `${pct}%`;
-    track.appendChild(fill);
-    prog.appendChild(track);
-    const label = document.createElement('span');
-    label.className = 'chat-file-pending';
-    label.textContent = t('chat.file_sending').replace('{pct}', String(pct));
-    prog.appendChild(label);
-    card.appendChild(prog);
-  }
-  block.appendChild(card);
-}
-
 export function createChatView(
   peerId,
   config,
@@ -177,6 +137,10 @@ export function createChatView(
   onSendFile,
   onPeerMenu
 ) {
+  registerMediaPlaceholder(t('chat.image_sent'));
+  registerMediaPlaceholder(t('chat.file_sent'));
+  registerMediaPlaceholder(t('chat.file_received'));
+
   const wrap = document.createElement('div');
   wrap.className = 'chat-view';
 
@@ -426,6 +390,45 @@ export function createChatView(
     }, 4500);
   }
 
+  let pendingReply = null;
+
+  const replyBar = document.createElement('div');
+  replyBar.className = 'chat-reply-bar hidden';
+  const replyLabel = document.createElement('span');
+  replyLabel.className = 'chat-reply-label';
+  replyLabel.dataset.i18n = 'chat.replying';
+  replyLabel.textContent = t('chat.replying');
+  const replyPreview = document.createElement('span');
+  replyPreview.className = 'chat-reply-preview';
+  const replyCancel = document.createElement('button');
+  replyCancel.type = 'button';
+  replyCancel.className = 'chat-reply-cancel';
+  replyCancel.textContent = '×';
+  replyBar.appendChild(replyLabel);
+  replyBar.appendChild(replyPreview);
+  replyBar.appendChild(replyCancel);
+
+  function clearReplyTarget() {
+    pendingReply = null;
+    replyBar.classList.add('hidden');
+  }
+
+  function setReplyTarget(m) {
+    if (!m?.id) return;
+    pendingReply = {
+      id: m.id,
+      from: m.outgoing ? config.blipId : peerId,
+      fromLabel: m.outgoing ? t('chat.reply_you') : formatReplyFromLabel(peerId, name.textContent),
+      preview: buildReplyPreview(m, peerId),
+      text: m.text || '',
+    };
+    replyPreview.textContent = pendingReply.preview;
+    replyBar.classList.remove('hidden');
+    input.focus();
+  }
+
+  replyCancel.addEventListener('click', clearReplyTarget);
+
   async function sendPayload(payload) {
     const msg = {
       id: payload.id || createMessageId(),
@@ -435,7 +438,9 @@ export function createChatView(
       timestamp: payload.timestamp || Date.now(),
       outgoing: true,
       attachment: payload.attachment,
+      replyTo: pendingReply ? { ...pendingReply } : undefined,
     };
+    clearReplyTarget();
     addMessage(peerId, msg);
     renderMessages();
     sounds.messageSent();
@@ -473,7 +478,9 @@ export function createChatView(
     }
   });
 
-  inputRow.appendChild(fileBtn);
+  wrap.appendChild(replyBar);
+
+    inputRow.appendChild(fileBtn);
   inputRow.appendChild(emojiBtn);
   inputRow.appendChild(input);
   inputRow.appendChild(sendBtn);
@@ -483,7 +490,7 @@ export function createChatView(
     if (!file) return;
     try {
       const attachment = await encodeChatImageAttachment(file);
-      await sendPayload({ text: t('chat.image_sent'), attachment });
+      await sendPayload({ text: '', attachment });
     } catch (err) {
       const key = err?.message === 'file_too_big' ? 'chat.attach_too_big' : 'chat.attach_failed';
       alert(t(key));
@@ -677,22 +684,21 @@ export function createChatView(
       block.className = `chat-block ${m.outgoing ? 'outgoing' : 'incoming'}`;
       block.dataset.messageId = m.id || '';
 
-      if (m.attachment?.kind === 'image' && m.attachment.dataUrl) {
-        const img = document.createElement('img');
-        img.className = 'chat-image';
-        img.src = m.attachment.dataUrl;
-        img.alt = m.attachment.name || 'image';
-        img.loading = 'lazy';
-        block.appendChild(img);
-      } else if (m.attachment?.kind === 'file') {
-        appendFileAttachment(block, m.attachment, openExternalUrl);
-      }
+      appendChatMessageBody(block, m);
 
-      if (m.text && !(m.attachment?.pending && !m.text.trim())) {
-        const text = document.createElement('span');
-        text.className = 'chat-text';
-        appendLinkifiedText(text, m.text, openExternalUrl);
-        block.appendChild(text);
+      const actions = document.createElement('div');
+      actions.className = 'chat-block-actions';
+      if (m.id) {
+        const replyBtn = document.createElement('button');
+        replyBtn.type = 'button';
+        replyBtn.className = 'chat-reply-btn';
+        replyBtn.title = t('chat.reply');
+        replyBtn.textContent = '↩';
+        replyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setReplyTarget(m);
+        });
+        actions.appendChild(replyBtn);
       }
 
       const metaRow = document.createElement('div');
@@ -704,6 +710,7 @@ export function createChatView(
         time.title = new Date(m.timestamp).toLocaleString();
         metaRow.appendChild(time);
       }
+      if (actions.childElementCount) block.appendChild(actions);
       block.appendChild(metaRow);
 
       if (m.id) block.appendChild(buildReactionRow(m));

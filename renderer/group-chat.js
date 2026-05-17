@@ -1,15 +1,15 @@
 import { t } from './i18n.js';
 import { sounds } from './audio.js';
-import { appendLinkifiedText } from './linkify.js';
 import { attachEmojiPicker } from './emoji-picker.js';
 import {
   encodeChatImageAttachment,
   encodeInlineFileAttachment,
   isImageFile,
   validateChatFile,
+  registerMediaPlaceholder,
   INLINE_FILE_BYTES,
 } from './chat-attachments.js';
-import { formatFileSize } from './file-transfer.js';
+import { appendChatMessageBody } from './chat-message-content.js';
 import { getMaxFileBytes } from './file-transfer-limits.js';
 import { createMessageId } from './message-id.js';
 import { addGroupMessage, getGroupMessages, groupDisplayName, amHost } from './groups.js';
@@ -22,50 +22,6 @@ function formatChatTime(ts) {
   } catch {
     return '';
   }
-}
-
-function appendFileCard(block, attachment) {
-  const card = document.createElement("div");
-  card.className = 'chat-file-card';
-  const label = document.createElement('span');
-  label.className = 'chat-file-name';
-  label.textContent = attachment.name || 'file';
-  const meta = document.createElement('span');
-  meta.className = 'chat-file-meta';
-  meta.textContent = formatFileSize(attachment.size);
-  card.appendChild(label);
-  card.appendChild(meta);
-  if (attachment.dataUrl) {
-    const dl = document.createElement('a');
-    dl.className = 'btn btn-lang chat-file-dl';
-    dl.href = attachment.dataUrl;
-    dl.download = attachment.name || 'download';
-    dl.textContent = t('chat.file_download');
-    card.appendChild(dl);
-  } else if (attachment.pending) {
-    const pct = Math.min(100, Math.max(0, Number(attachment.progress) || 0));
-    const prog = document.createElement('div');
-    prog.className = 'chat-file-progress';
-    const track = document.createElement('div');
-    track.className = 'chat-file-progress-track';
-    const fill = document.createElement('div');
-    fill.className = 'chat-file-progress-fill';
-    fill.style.width = `${pct}%`;
-    track.appendChild(fill);
-    prog.appendChild(track);
-    const pendingLbl = document.createElement('span');
-    pendingLbl.className = 'chat-file-pending';
-    pendingLbl.textContent = t('chat.file_sending').replace('{pct}', String(pct));
-    prog.appendChild(pendingLbl);
-    card.appendChild(prog);
-  } else if (attachment.cancelled) {
-    const cancelledLbl = document.createElement('span');
-    cancelledLbl.className = 'chat-file-pending';
-    cancelledLbl.dataset.i18n = 'chat.file_cancelled';
-    cancelledLbl.textContent = t('chat.file_cancelled');
-    card.appendChild(cancelledLbl);
-  }
-  block.appendChild(card);
 }
 
 function formatGroupFileLimit(config) {
@@ -228,7 +184,7 @@ export function createGroupChatView(
       let text;
       if (isImageFile(file)) {
         attachment = await encodeChatImageAttachment(file);
-        text = t('chat.image_sent');
+        text = '';
       } else {
         validateChatFile(file, config);
         attachment = await encodeInlineFileAttachment(file, config);
@@ -371,22 +327,7 @@ export function createGroupChatView(
       who.className = 'group-msg-from';
       who.textContent = mine ? t('group.you') : `#${m.from}`;
       block.appendChild(who);
-      if (m.attachment?.kind === 'image' && m.attachment.dataUrl) {
-        const img = document.createElement('img');
-        img.className = 'chat-image';
-        img.src = m.attachment.dataUrl;
-        img.alt = m.attachment.name || 'image';
-        img.loading = 'lazy';
-        block.appendChild(img);
-      } else if (m.attachment?.kind === 'file') {
-        appendFileCard(block, m.attachment);
-      }
-      if (m.text) {
-        const text = document.createElement('span');
-        text.className = 'chat-text';
-        appendLinkifiedText(text, m.text, (url) => window.blip?.openExternal?.(url));
-        block.appendChild(text);
-      }
+      appendChatMessageBody(block, m);
       if (m.timestamp) {
         const time = document.createElement('span');
         time.className = 'chat-time';

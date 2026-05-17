@@ -2911,6 +2911,261 @@ select.blip-select:focus {
   margin-left: auto;
 }
 
+/* —— Chat media bubbles & viewer —— */
+.chat-media-bubble {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: min(100%, 420px);
+  margin-bottom: 6px;
+  padding: 0;
+  border: 2px solid var(--blip-border);
+  background: rgba(0, 0, 0, 0.35);
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.chat-media-bubble--video {
+  cursor: pointer;
+}
+
+.chat-media-thumb {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.chat-media-play {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  color: var(--blip-on-accent);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.chat-media-caption {
+  display: block;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  color: var(--blip-muted);
+  border-top: 2px solid var(--blip-border);
+}
+
+.chat-yt-embed {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  margin: 6px 0;
+  padding: 0;
+  border: 2px solid var(--blip-border);
+  background: #000;
+  cursor: pointer;
+}
+
+.chat-yt-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.chat-yt-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: #fff;
+  text-shadow: 0 2px 8px #000;
+}
+
+.chat-yt-label {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  font-size: 0.65rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 6px;
+}
+
+.chat-quote {
+  border-left: 3px solid var(--blip-accent);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 0.72rem;
+}
+
+.chat-quote-who {
+  display: block;
+  font-weight: 700;
+  color: var(--blip-accent);
+  margin-bottom: 2px;
+}
+
+.chat-quote-body {
+  opacity: 0.85;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 12px 6px;
+  border: 2px solid var(--blip-accent);
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.75rem;
+}
+
+.chat-reply-bar.hidden {
+  display: none;
+}
+
+.chat-reply-preview {
+  flex: 1;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-reply-cancel {
+  border: none;
+  background: transparent;
+  color: var(--blip-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.chat-block-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.chat-reply-btn {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border: 2px solid var(--blip-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--blip-muted);
+  cursor: pointer;
+}
+
+.chat-reply-btn:hover {
+  border-color: var(--blip-accent);
+  color: var(--blip-accent);
+}
+
+body.media-viewer-open {
+  overflow: hidden;
+}
+
+.media-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.media-viewer.hidden {
+  display: none;
+}
+
+.media-viewer-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  z-index: 2;
+}
+
+.media-viewer-btn {
+  font-size: 0.7rem;
+  min-width: 72px;
+}
+
+.media-viewer-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px 0;
+  min-height: 0;
+}
+
+.media-viewer-img,
+.media-viewer-video,
+.media-viewer-yt {
+  max-width: 100%;
+  max-height: 100%;
+  border: 2px solid var(--blip-accent);
+}
+
+.media-viewer-yt {
+  width: min(960px, 100%);
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+
+.media-viewer-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.media-viewer-controls.hidden {
+  display: none;
+}
+
+.media-viewer-ctrl {
+  min-width: 48px;
+  font-family: var(--blip-font, monospace);
+  font-size: 0.85rem;
+  image-rendering: pixelated;
+}
+
+.media-viewer-ctrl--main {
+  min-width: 56px;
+  font-size: 1rem;
+}
+
+.media-viewer-seek {
+  height: 8px;
+  margin: 0 24px 16px;
+  border: 2px solid var(--blip-border);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.media-viewer-seek.hidden {
+  display: none;
+}
+
+.media-viewer-seek-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--blip-accent);
+  transition: width 0.1s linear;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

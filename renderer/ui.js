@@ -99,6 +99,7 @@ import {
   normalizeThemeId,
   normalizeBgId,
 } from './appearance.js';
+import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
 
 function restartClipboardSync() {
   stopClipboardSync();
@@ -321,6 +322,7 @@ function ensureChatView(peerId) {
           id: msg.id,
           timestamp: msg.timestamp,
           attachment: msg.attachment,
+          replyTo: msg.replyTo,
         }),
       () => {
         state.activePeer = null;
@@ -1060,10 +1062,34 @@ function buildAppearanceSection() {
   const bgOpts = BG_META.map(({ id }) => ({ value: id, label: labelBg(id) }));
   const bgSelect = buildThemedSelect();
   fillSettingsDropdown(bgSelect, bgOpts, curBg, async (id) => {
-    state.config = await api.saveConfig({ animatedBgId: id });
+    state.config = await api.saveConfig({ animatedBgId: normalizeBgId(id) });
     applyAppearance(state.config);
+    applyReactiveWallpaperConfig(state.config);
   });
   block.appendChild(buildSettingsField('settings.bg_title', bgSelect));
+
+  const reactiveRow = document.createElement('label');
+  reactiveRow.className = 'settings-tray-toggle-row';
+  const reactiveCb = document.createElement('input');
+  reactiveCb.type = 'checkbox';
+  reactiveCb.checked = !!state.config.reactiveBackground;
+  const reactiveSpan = document.createElement('span');
+  reactiveSpan.dataset.i18n = 'settings.reactive_background';
+  reactiveSpan.textContent = t('settings.reactive_background');
+  reactiveRow.appendChild(reactiveCb);
+  reactiveRow.appendChild(reactiveSpan);
+  reactiveCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ reactiveBackground: reactiveCb.checked });
+    applyAppearance(state.config);
+    applyReactiveWallpaperConfig(state.config);
+  });
+  block.appendChild(reactiveRow);
+
+  const reactiveHint = document.createElement('p');
+  reactiveHint.className = 'settings-motion-hint';
+  reactiveHint.dataset.i18n = 'settings.reactive_background_hint';
+  reactiveHint.textContent = t('settings.reactive_background_hint');
+  block.appendChild(reactiveHint);
 
   const motionRow = document.createElement('label');
   motionRow.className = 'settings-tray-toggle-row';
@@ -3303,6 +3329,8 @@ export function initUI(config, blipApi) {
   setLang(config.language || localStorage.getItem('blip_lang') || 'en');
   applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
+  applyReactiveWallpaperConfig(state.config);
+  initReactiveWallpaper(() => state.config);
   appearanceListenerDispose?.();
   appearanceListenerDispose = listenReducedMotion(
     () => applyAppearance(state.config),

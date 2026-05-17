@@ -27,29 +27,41 @@ export const THEME_GROUPS = {
   ],
 };
 
+/** No grid / checker / mesh tile patterns — thematic animated art. */
 export const ANIMATED_BACKGROUNDS = [
   'none',
   'waves',
   'aurora',
-  'grid',
-  'scanlines',
   'nebula',
   'drift',
   'pulse',
-  'circuit',
-  'shards',
   'tide',
-  'static',
   'rain',
-  'glitch',
   'beacon',
   'hyperwave',
   'plasma',
   'vortex',
-  'pixelstorm',
   'synth',
   'cosmos',
+  'skyline',
+  'bloom',
+  'horizon',
+  'ember',
+  'rift',
+  'depths',
+  'signal',
 ];
+
+/** Migrate removed mesh-style backgrounds to art equivalents. */
+const LEGACY_BG_MAP = {
+  grid: 'skyline',
+  circuit: 'signal',
+  static: 'ember',
+  glitch: 'rift',
+  pixelstorm: 'skyline',
+  shards: 'depths',
+  scanlines: 'horizon',
+};
 
 const DEFAULT_THEME = 'dark-signal';
 const DEFAULT_BG = 'none';
@@ -60,7 +72,8 @@ export function normalizeThemeId(id) {
 }
 
 export function normalizeBgId(id) {
-  return ANIMATED_BACKGROUNDS.includes(id) ? id : DEFAULT_BG;
+  const mapped = LEGACY_BG_MAP[id] || id;
+  return ANIMATED_BACKGROUNDS.includes(mapped) ? mapped : DEFAULT_BG;
 }
 
 export const THEME_META = THEME_GROUPS.light
@@ -88,6 +101,8 @@ export function applyAppearance(config) {
   html.dataset.theme = theme;
   html.dataset.animatedBg = bg;
   delete html.dataset.callWindow;
+  html.dataset.reactiveBg =
+    config?.reactiveBackground === true && bg !== 'none' ? '1' : '0';
   syncReducedMotion(config);
 }
 
@@ -97,6 +112,7 @@ export function applyCallWindowAppearance(config) {
   html.dataset.theme = normalizeThemeId(config?.themeId);
   html.dataset.animatedBg = 'none';
   html.dataset.callWindow = '1';
+  html.dataset.reactiveBg = '0';
   syncReducedMotion(config);
 }
 

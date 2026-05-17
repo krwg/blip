@@ -11,6 +11,21 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 _Nothing yet._
 
+## [0.7.1] — Portrait
+
+### Added
+
+- **In-chat media viewer** — tap photos/videos for fullscreen player with pixel **◀◼▶** controls, **Share**, and **Download** (top right).
+- **YouTube embeds** — links open as preview cards; playback in the in-app viewer.
+- **Quote replies** — ↩ on a message to reply with a quoted strip (1:1 chat).
+- **Reactive wallpaper** — background pulses with mic in voice/calls (Settings → Appearance).
+- **Art wallpapers** — skyline, bloom, horizon, embers, rift, depths, signal (no grid/mesh tiles).
+
+### Changed
+
+- Removed checkered/grid animated backgrounds; legacy IDs map to art scenes.
+- Images no longer show redundant «[IMG]» / «Файл» caption text under the bubble.
+
 ## [0.7.0.7] — Portrait
 
 ### Changed

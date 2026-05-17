@@ -3,6 +3,7 @@ import {
   encodeInlineFileAttachment,
   INLINE_FILE_BYTES,
   validateChatFile,
+  inferAttachmentKind,
 } from './chat-attachments.js';
 
 const CHUNK_RAW_BYTES = 48 * 1024;
@@ -70,8 +71,9 @@ function assembleIncoming(entry) {
   const joined = entry.chunks.join('');
   const blob = base64ToBlob(joined, entry.meta.mime);
   const dataUrl = `data:${entry.meta.mime || 'application/octet-stream'};base64,${joined}`;
+  const kind = inferAttachmentKind(entry.meta.mime, entry.meta.name);
   return {
-    kind: 'file',
+    kind,
     name: entry.meta.name,
     mime: entry.meta.mime,
     size: entry.meta.size,

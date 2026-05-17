@@ -1,7 +1,7 @@
 {
   "displayName": "BLIP",
   "codename": "Portrait",
-  "version": "0.7.1-beta.7",
-  "displayVersion": "0.7.0.7",
+  "version": "0.7.1",
+  "displayVersion": "0.7.1",
   "githubUrl": "https://github.com/krwg/BLIP"
 }

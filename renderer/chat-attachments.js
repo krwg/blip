@@ -24,6 +24,46 @@ export function isImageFile(file) {
   return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(n);
 }
 
+export function isVideoFile(file) {
+  if (!file) return false;
+  if (file.type?.startsWith('video/')) return true;
+  const n = (file.name || '').toLowerCase();
+  return /\.(mp4|webm|ogg|mov|m4v|mkv)$/.test(n);
+}
+
+export function inferAttachmentKind(mime, name) {
+  const m = String(mime || '').toLowerCase();
+  const n = String(name || '').toLowerCase();
+  if (m.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/.test(n)) return 'image';
+  if (m.startsWith('video/') || /\.(mp4|webm|ogg|mov|m4v|mkv)$/.test(n)) return 'video';
+  return 'file';
+}
+
+export function isImageAttachment(att) {
+  return att?.kind === 'image' && !!att.dataUrl;
+}
+
+export function isVideoAttachment(att) {
+  if (att?.kind === 'video' && att.dataUrl) return true;
+  if (att?.kind === 'file' && att.dataUrl) {
+    return inferAttachmentKind(att.mime, att.name) === 'video';
+  }
+  return false;
+}
+
+const PLACEHOLDER_TEXTS = new Set();
+
+export function registerMediaPlaceholder(key) {
+  if (key) PLACEHOLDER_TEXTS.add(key);
+}
+
+export function isMediaPlaceholderText(text, attachment) {
+  if (!text) return !!attachment;
+  if (PLACEHOLDER_TEXTS.has(text)) return true;
+  if (text === '[IMG]' || text === '📷') return true;
+  return false;
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -105,8 +145,9 @@ export async function encodeInlineFileAttachment(file, config) {
   }
 
   const mime = file.type || 'application/octet-stream';
+  const kind = inferAttachmentKind(mime, file.name);
   return {
-    kind: 'file',
+    kind,
     name: file.name || 'file',
     mime,
     size: file.size,

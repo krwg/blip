@@ -1,0 +1,319 @@
+/* Thematic animated wallpapers — no grid / mesh patterns. */
+
+html {
+  --blip-bg-pulse: 0;
+}
+
+html[data-reactive-bg='1'][data-animated-bg]:not([data-animated-bg='none']) body::before {
+  transition:
+    filter 0.12s ease-out,
+    transform 0.18s ease-out,
+    opacity 0.18s ease-out;
+  filter: brightness(calc(0.9 + var(--blip-bg-pulse) * 0.22))
+    saturate(calc(1 + var(--blip-bg-pulse) * 0.45));
+  transform: scale(calc(1.02 + var(--blip-bg-pulse) * 0.035));
+}
+
+/* —— Skyline (LAN city art) —— */
+html[data-animated-bg='skyline'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.58);
+  background:
+    radial-gradient(ellipse 55% 35% at 72% 18%, color-mix(in srgb, var(--blip-accent) 55%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--blip-accent) 12%, transparent) 0%, transparent 42%),
+    linear-gradient(175deg, transparent 58%, color-mix(in srgb, var(--blip-text) 35%, transparent) 58.2%, transparent 58.5%),
+    linear-gradient(182deg, transparent 64%, color-mix(in srgb, var(--blip-text) 28%, transparent) 64.3%, transparent 64.8%),
+    linear-gradient(168deg, transparent 52%, color-mix(in srgb, var(--blip-accent) 22%, transparent) 52.4%, transparent 53%),
+    linear-gradient(190deg, transparent 70%, color-mix(in srgb, var(--blip-text) 40%, transparent) 70.5%, transparent 71%),
+    linear-gradient(0deg, color-mix(in srgb, var(--blip-bg) 85%, transparent), transparent 38%);
+  background-size: 120% 120%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  animation: blip-bg-skyline 28s ease-in-out infinite alternate;
+}
+
+html[data-animated-bg='skyline'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.55);
+  background: radial-gradient(circle at 18% 78%, color-mix(in srgb, var(--blip-accent) 70%, transparent) 0 2px, transparent 3px),
+    radial-gradient(circle at 44% 72%, color-mix(in srgb, var(--blip-accent) 50%, transparent) 0 1px, transparent 2px),
+    radial-gradient(circle at 81% 68%, color-mix(in srgb, var(--blip-danger) 45%, transparent) 0 2px, transparent 3px);
+  background-size: 100% 100%;
+  animation: blip-bg-city-lights 4s ease-in-out infinite alternate;
+}
+
+/* —— Bloom (organic aurora blobs) —— */
+html[data-animated-bg='bloom'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.62);
+  background:
+    radial-gradient(ellipse 70% 55% at 15% 25%, color-mix(in srgb, var(--blip-accent) 50%, transparent), transparent 68%),
+    radial-gradient(ellipse 60% 50% at 85% 35%, color-mix(in srgb, var(--blip-danger) 35%, transparent), transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 85%, color-mix(in srgb, var(--blip-accent) 28%, transparent), transparent 70%);
+  animation: blip-bg-bloom 18s ease-in-out infinite alternate;
+}
+
+html[data-animated-bg='bloom'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.5);
+  background: radial-gradient(circle at 60% 40%, color-mix(in srgb, var(--blip-accent) 40%, transparent), transparent 55%);
+  animation: blip-bg-bloom-2 24s ease-in-out infinite alternate-reverse;
+}
+
+/* —— Horizon (landscape art) —— */
+html[data-animated-bg='horizon'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.6);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--blip-accent) 35%, transparent) 0%,
+    color-mix(in srgb, var(--blip-danger) 22%, transparent) 28%,
+    color-mix(in srgb, var(--blip-accent) 15%, transparent) 48%,
+    transparent 72%
+  );
+  animation: blip-bg-horizon-sky 32s ease-in-out infinite alternate;
+}
+
+html[data-animated-bg='horizon'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.55) * 1.1);
+  background: linear-gradient(180deg, transparent 48%, color-mix(in srgb, var(--blip-text) 55%, transparent) 100%);
+  clip-path: polygon(
+    0 100%,
+    0 72%,
+    8% 58%,
+    18% 64%,
+    32% 48%,
+    48% 56%,
+    62% 42%,
+    78% 52%,
+    92% 38%,
+    100% 46%,
+    100% 100%
+  );
+  animation: blip-bg-horizon-mount 40s ease-in-out infinite alternate;
+}
+
+/* —— Ember (floating particles) —— */
+html[data-animated-bg='ember'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.55);
+  background:
+    radial-gradient(3px 3px at 12% 88%, color-mix(in srgb, var(--blip-danger) 80%, transparent), transparent),
+    radial-gradient(2px 2px at 38% 72%, color-mix(in srgb, var(--blip-accent) 70%, transparent), transparent),
+    radial-gradient(4px 4px at 64% 91%, color-mix(in srgb, var(--blip-danger) 75%, transparent), transparent),
+    radial-gradient(2px 2px at 82% 65%, color-mix(in srgb, var(--blip-accent) 60%, transparent), transparent),
+    radial-gradient(ellipse 100% 80% at 50% 100%, color-mix(in srgb, var(--blip-danger) 25%, transparent), transparent 55%);
+  background-size: 100% 100%;
+  animation: blip-bg-ember-rise 14s ease-in infinite;
+}
+
+/* —— Rift (dimensional tear) —— */
+html[data-animated-bg='rift'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.58);
+  background: linear-gradient(
+    118deg,
+    transparent 38%,
+    color-mix(in srgb, var(--blip-accent) 55%, transparent) 46%,
+    color-mix(in srgb, var(--blip-danger) 45%, transparent) 50%,
+    color-mix(in srgb, var(--blip-accent) 50%, transparent) 54%,
+    transparent 62%
+  );
+  background-size: 220% 220%;
+  animation: blip-bg-rift 11s ease-in-out infinite;
+}
+
+html[data-animated-bg='rift'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.65);
+  background: radial-gradient(ellipse 40% 90% at 50% 50%, color-mix(in srgb, var(--blip-accent) 35%, transparent), transparent 70%);
+  filter: blur(18px);
+  animation: blip-bg-rift-glow 7s ease-in-out infinite alternate;
+}
+
+/* —— Depths (underwater caustics) —— */
+html[data-animated-bg='depths'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.56);
+  background:
+    radial-gradient(ellipse 45% 35% at 30% 40%, color-mix(in srgb, var(--blip-accent) 40%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 70% 60%, color-mix(in srgb, var(--blip-accent) 32%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in srgb, var(--blip-accent) 18%, transparent), transparent 55%, color-mix(in srgb, var(--blip-bg) 40%, transparent));
+  animation: blip-bg-depths 16s ease-in-out infinite alternate;
+}
+
+html[data-animated-bg='depths'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.45) * 0.9);
+  background: radial-gradient(ellipse 80% 30% at 50% 0%, color-mix(in srgb, var(--blip-accent) 25%, transparent), transparent 70%);
+  animation: blip-bg-depths-ray 22s ease-in-out infinite;
+}
+
+/* —— Signal (radio rings, not a grid) —— */
+html[data-animated-bg='signal'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.52);
+  background:
+    radial-gradient(circle at 50% 55%, transparent 18%, color-mix(in srgb, var(--blip-accent) 28%, transparent) 19%, transparent 22%),
+    radial-gradient(circle at 50% 55%, transparent 32%, color-mix(in srgb, var(--blip-accent) 22%, transparent) 33%, transparent 36%),
+    radial-gradient(circle at 50% 55%, transparent 48%, color-mix(in srgb, var(--blip-accent) 16%, transparent) 49%, transparent 52%),
+    radial-gradient(circle at 50% 55%, color-mix(in srgb, var(--blip-accent) 45%, transparent) 0%, transparent 12%);
+  animation: blip-bg-signal 5s ease-out infinite;
+}
+
+html[data-animated-bg='signal'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.4);
+  background: conic-gradient(
+    from 0deg at 50% 55%,
+    transparent 0deg,
+    color-mix(in srgb, var(--blip-accent) 20%, transparent) 24deg,
+    transparent 48deg
+  );
+  animation: blip-bg-signal-sweep 12s linear infinite;
+}
+
+/* Hyperwave: drop diagonal line mesh on ::after — soft glow only */
+html[data-animated-bg='hyperwave'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.55);
+  background: radial-gradient(ellipse 90% 70% at 50% 80%, color-mix(in srgb, var(--blip-accent) 40%, transparent), transparent 65%);
+  animation: blip-bg-hyperwave-glow 10s ease-in-out infinite alternate;
+}
+
+@keyframes blip-bg-skyline {
+  0% {
+    background-position: 0% 40%, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    background-position: 8% 35%, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+    filter: hue-rotate(12deg);
+  }
+}
+
+@keyframes blip-bg-city-lights {
+  0%,
+  100% {
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.4);
+  }
+  50% {
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.75);
+  }
+}
+
+@keyframes blip-bg-bloom {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.08) translate(-3%, 2%);
+  }
+}
+
+@keyframes blip-bg-bloom-2 {
+  0% {
+    transform: translate(5%, -4%) scale(0.95);
+  }
+  100% {
+    transform: translate(-4%, 3%) scale(1.05);
+  }
+}
+
+@keyframes blip-bg-horizon-sky {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(20deg);
+  }
+}
+
+@keyframes blip-bg-horizon-mount {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-2%);
+  }
+}
+
+@keyframes blip-bg-ember-rise {
+  0% {
+    background-position:
+      12% 100%,
+      38% 100%,
+      64% 100%,
+      82% 100%,
+      50% 100%;
+  }
+  100% {
+    background-position:
+      14% 0%,
+      40% 8%,
+      66% 4%,
+      84% 12%,
+      50% 100%;
+  }
+}
+
+@keyframes blip-bg-rift {
+  0%,
+  100% {
+    background-position: 30% 50%;
+    transform: skewY(-2deg);
+  }
+  50% {
+    background-position: 70% 50%;
+    transform: skewY(2deg);
+  }
+}
+
+@keyframes blip-bg-rift-glow {
+  0%,
+  100% {
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.45);
+  }
+  50% {
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.8);
+  }
+}
+
+@keyframes blip-bg-depths {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.06) translate(2%, -1%);
+  }
+}
+
+@keyframes blip-bg-depths-ray {
+  0% {
+    transform: translateX(-8%) rotate(-2deg);
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateX(8%) rotate(2deg);
+    opacity: 0.65;
+  }
+}
+
+@keyframes blip-bg-signal {
+  0% {
+    transform: scale(0.92);
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.7);
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: var(--blip-bg-layer-opacity, 0.52);
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.35);
+  }
+}
+
+@keyframes blip-bg-signal-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blip-bg-hyperwave-glow {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}

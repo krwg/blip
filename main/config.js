@@ -13,6 +13,8 @@ const DEFAULT_CONFIG = {
   animatedBgId: 'none',
   /** User override: pause animated wallpapers (lighter GPU). */
   reduceMotion: false,
+  /** Pulse animated wallpaper from mic level (voice / 1:1 call). */
+  reactiveBackground: false,
   /** Default emoji for the chat reaction (+) button. */
   defaultReactionEmoji: '➕',
   /** When true, the main window close button hides to tray instead of exiting (Windows default on). */

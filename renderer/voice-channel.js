@@ -20,6 +20,7 @@ import {
 import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream } from './audio-capture.js';
+import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 
 const ICE = [];
 
@@ -773,6 +774,7 @@ export async function joinVoiceChannel(groupId, channelId, api, config) {
   }
 
   startHeartbeat(groupId, channelId);
+  dispatchReactiveAudio({ active: true, stream: localStream });
   stageRefresh?.();
 }
 
@@ -835,6 +837,7 @@ export async function leaveVoiceChannel() {
   activeGroupId = null;
   activeChannelId = null;
   sounds.stopOutgoingRing();
+  dispatchReactiveAudio({ active: false });
   stageRefresh?.();
 }
 

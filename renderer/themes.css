@@ -317,27 +317,6 @@ html[data-animated-bg='aurora'] body::before {
   animation: blip-bg-aurora 20s ease-in-out infinite alternate;
 }
 
-html[data-animated-bg='grid'] body::before {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.85);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--blip-accent) 22%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--blip-accent) 22%, transparent) 1px, transparent 1px);
-  background-size: 28px 28px;
-  animation: blip-bg-grid 10s linear infinite;
-}
-
-html[data-animated-bg='scanlines'] body::before {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.6);
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    color-mix(in srgb, var(--blip-text) 6%, transparent) 2px,
-    color-mix(in srgb, var(--blip-text) 6%, transparent) 4px
-  );
-  animation: blip-bg-scan 9s linear infinite;
-}
-
 html[data-animated-bg='nebula'] body::before {
   opacity: var(--blip-bg-layer-opacity, 0.5);
   background:
@@ -368,27 +347,6 @@ html[data-animated-bg='pulse'] body::before {
   animation: blip-bg-pulse 5s ease-in-out infinite;
 }
 
-html[data-animated-bg='circuit'] body::before {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.9);
-  background-image:
-    linear-gradient(90deg, transparent 48%, color-mix(in srgb, var(--blip-accent) 35%, transparent) 50%, transparent 52%),
-    linear-gradient(0deg, transparent 48%, color-mix(in srgb, var(--blip-accent) 28%, transparent) 50%, transparent 52%);
-  background-size: 64px 64px;
-  animation: blip-bg-circuit 16s linear infinite;
-}
-
-html[data-animated-bg='shards'] body::before {
-  opacity: var(--blip-bg-layer-opacity, 0.42);
-  background: repeating-linear-gradient(
-    -12deg,
-    transparent,
-    transparent 18px,
-    color-mix(in srgb, var(--blip-accent) 12%, transparent) 18px,
-    color-mix(in srgb, var(--blip-accent) 12%, transparent) 20px
-  );
-  animation: blip-bg-shards 22s linear infinite;
-}
-
 html[data-animated-bg='tide'] body::before {
   opacity: var(--blip-bg-layer-opacity, 0.5);
   background: linear-gradient(
@@ -399,15 +357,6 @@ html[data-animated-bg='tide'] body::before {
   );
   background-size: 100% 220%;
   animation: blip-bg-tide 11s ease-in-out infinite alternate;
-}
-
-html[data-animated-bg='static'] body::before {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.75);
-  background-image:
-    linear-gradient(90deg, color-mix(in srgb, var(--blip-accent) 8%, transparent) 1px, transparent 1px),
-    linear-gradient(color-mix(in srgb, var(--blip-accent) 8%, transparent) 1px, transparent 1px);
-  background-size: 4px 4px;
-  animation: blip-bg-static 8s steps(8) infinite;
 }
 
 html[data-animated-bg='rain'] body::before {
@@ -421,15 +370,6 @@ html[data-animated-bg='rain'] body::before {
   background-size: 3px 120px;
   background-repeat: repeat;
   animation: blip-bg-rain 0.6s linear infinite;
-}
-
-html[data-animated-bg='glitch'] body::before {
-  opacity: var(--blip-bg-layer-opacity, 0.42);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--blip-danger) 15%, transparent) 2px, transparent 2px),
-    linear-gradient(color-mix(in srgb, var(--blip-accent) 12%, transparent) 2px, transparent 2px);
-  background-size: 16px 16px;
-  animation: blip-bg-glitch 4s steps(4) infinite;
 }
 
 html[data-animated-bg='beacon'] body::before {
@@ -451,18 +391,6 @@ html[data-animated-bg='hyperwave'] body::before {
   animation: blip-bg-hyperwave 9s ease-in-out infinite;
 }
 
-html[data-animated-bg='hyperwave'] body::after {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.7);
-  background: repeating-linear-gradient(
-    -18deg,
-    transparent,
-    transparent 40px,
-    color-mix(in srgb, var(--blip-accent) 10%, transparent) 40px,
-    color-mix(in srgb, var(--blip-accent) 10%, transparent) 42px
-  );
-  animation: blip-bg-hyperwave-2 14s linear infinite;
-}
-
 html[data-animated-bg='plasma'] body::before {
   opacity: var(--blip-bg-layer-opacity, 0.58);
   background:
@@ -480,21 +408,6 @@ html[data-animated-bg='vortex'] body::before {
     transparent 12deg 24deg
   );
   animation: blip-bg-vortex 28s linear infinite;
-}
-
-html[data-animated-bg='pixelstorm'] body::before {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.9);
-  background-image:
-    linear-gradient(90deg, color-mix(in srgb, var(--blip-accent) 35%, transparent) 2px, transparent 2px),
-    linear-gradient(color-mix(in srgb, var(--blip-accent) 25%, transparent) 2px, transparent 2px);
-  background-size: 12px 12px;
-  animation: blip-bg-pixelstorm 6s steps(12) infinite;
-}
-
-html[data-animated-bg='pixelstorm'] body::after {
-  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.45);
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--blip-accent) 50%, transparent), transparent 65%);
-  animation: blip-bg-pulse 4s ease-in-out infinite;
 }
 
 html[data-animated-bg='synth'] body::before {
