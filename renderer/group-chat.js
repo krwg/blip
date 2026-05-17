@@ -122,13 +122,15 @@ export function createGroupChatView(
     name.addEventListener('contextmenu', openMenu);
   }
 
-  const callBtn = document.createElement('button');
-  callBtn.type = 'button';
-  callBtn.className = 'btn btn-accent';
-  callBtn.dataset.i18n = 'group.call';
-  callBtn.textContent = t('group.call');
-  callBtn.addEventListener('click', () => onGroupCall?.(group.id));
-  header.appendChild(callBtn);
+  if (onGroupCall) {
+    const callBtn = document.createElement('button');
+    callBtn.type = 'button';
+    callBtn.className = 'btn btn-accent';
+    callBtn.dataset.i18n = 'group.call';
+    callBtn.textContent = t('group.call');
+    callBtn.addEventListener('click', () => onGroupCall(group.id));
+    header.appendChild(callBtn);
+  }
 
   const ongoingBar = document.createElement('div');
   ongoingBar.className = 'group-call-ongoing glass hidden';

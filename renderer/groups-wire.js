@@ -23,13 +23,20 @@ import { sounds } from './audio.js';
 import { openConfirmDialog } from './confirm-dialog.js';
 import { createMessageId } from './message-id.js';
 import {
-  joinGroupCall,
-  leaveGroupCall,
-  handleGroupCallStart,
-  handleGroupCallEnd,
-  handleGroupCallState,
-  isInGroupCall,
-} from './group-call-client.js';
+  joinVoiceChannel,
+  leaveVoiceChannel,
+  isInVoiceChannel,
+  getActiveVoiceChannel,
+  handleVoiceChRoster,
+  handleVoiceChSignal,
+  onGroupHostChanged,
+} from './voice-channel.js';
+import {
+  addPendingGroupInvite,
+  removePendingGroupInvite,
+  hasPendingGroupInvite,
+} from './group-invites.js';
+import { clearAllVoiceForGroup } from './voice-channel-roster.js';
 
 function onlineMemberIds(statePeers) {
   return new Set(
@@ -96,7 +103,10 @@ export async function leaveGroup(api, config, groupId, statePeers) {
   const myId = Number(config.blipId);
   if (!isGroupMember(group, myId)) return { ok: false, error: 'not_member' };
 
-  if (isInGroupCall()) await leaveGroupCall();
+  if (isInVoiceChannel()) {
+    const active = getActiveVoiceChannel();
+    if (!active || active.groupId === groupId) await leaveVoiceChannel();
+  }
 
   const wasHost = amHost(group, myId);
   const online = onlineMemberIds(statePeers);
@@ -139,7 +149,10 @@ export async function dissolveGroup(api, config, groupId) {
   const myId = Number(config.blipId);
   if (!amHost(group, myId)) return { ok: false, error: 'not_host' };
 
-  if (isInGroupCall()) await leaveGroupCall();
+  if (isInVoiceChannel()) {
+    const active = getActiveVoiceChannel();
+    if (!active || active.groupId === groupId) await leaveVoiceChannel();
+  }
 
   for (const m of group.members) {
     if (Number(m) === myId) continue;
@@ -165,6 +178,10 @@ export async function createGroupFromUi(api, config, memberIds, name, seedPeerId
     members,
     messages: [],
     creatorId: myId,
+    channels: [
+      { id: 'text-general', name: 'general', type: 'text' },
+      { id: 'voice-lounge', name: 'voice', type: 'voice' },
+    ],
   };
   saveGroup(group);
 
@@ -251,49 +268,18 @@ export async function handleGroupTcpMessage(msg, ctx) {
 
   if (type === 'group-invite') {
     if (isInviteDeclined(msg.groupId)) return true;
-    if (!config.doNotDisturb) sounds.groupInvite();
-    const hostId = resolveGroupHost(msg);
-    const ok = await openConfirmDialog({
-      title: t('group.invite_title'),
-      body: t('group.invite_body')
-        .replace('{name}', msg.name || t('group.unnamed'))
-        .replace('{host}', String(hostId)),
-      confirmLabel: t('group.invite_join'),
-      cancelLabel: t('group.invite_decline'),
-    });
-    if (ok) {
-      clearDeclinedInvite(msg.groupId);
-      const group = {
-        id: msg.groupId,
-        name: msg.name || t('group.unnamed'),
-        hostId,
-        members: normalizeMemberIds(msg.members || []),
-        messages: [],
-      };
-      saveGroup(group);
-      await safeSendTcp(api, {
-        type: 'group-invite-ack',
-        to: hostId,
-        groupId: msg.groupId,
-        host: hostId,
-        accept: true,
+    if (isGroupMember(getGroup(msg.groupId), myId)) return true;
+    if (!hasPendingGroupInvite(msg.groupId)) {
+      addPendingGroupInvite(msg);
+      if (!config.doNotDisturb) sounds.groupInvite();
+      showAppToast({
+        title: t('group.invite_toast'),
+        body: t('group.invite_toast_body')
+          .replace('{name}', msg.name || t('group.unnamed'))
+          .replace('{host}', String(resolveGroupHost(msg))),
+        durationMs: 6000,
       });
-      showAppToast({ title: t('group.joined'), body: group.name, durationMs: 4000 });
-    } else {
-      declineGroupInvite(msg.groupId);
-      const ghost = getGroup(msg.groupId);
-      if (ghost && isGroupMember(ghost, myId)) {
-        removeMemberFromGroup(msg.groupId, myId);
-      } else if (ghost) {
-        deleteGroup(msg.groupId);
-      }
-      await safeSendTcp(api, {
-        type: 'group-invite-ack',
-        to: hostId,
-        groupId: msg.groupId,
-        host: hostId,
-        accept: false,
-      });
+      ctx.bumpInviteUnread?.();
     }
     return true;
   }
@@ -320,6 +306,7 @@ export async function handleGroupTcpMessage(msg, ctx) {
     if (msg.members) group.members = normalizeMemberIds(msg.members);
     saveGroup(group);
     getGroupChatView(msg.groupId)?.updateGroup?.(group);
+    void onGroupHostChanged(msg.groupId);
     return true;
   }
 
@@ -391,34 +378,82 @@ export async function handleGroupTcpMessage(msg, ctx) {
   }
 
   if (type === 'group-disband') {
+    clearAllVoiceForGroup(msg.groupId);
     deleteGroup(msg.groupId);
     ctx.onGroupRemoved?.(msg.groupId);
     showAppToast({ title: t('group.disbanded'), durationMs: 4000 });
     return true;
   }
 
-  if (type === 'group-call-state') {
-    await handleGroupCallState(msg, callApi);
+  if (type === 'voice-ch-roster') {
+    await handleVoiceChRoster(msg, callApi, config);
     return true;
   }
 
-  if (type === 'group-call-start') {
-    await handleGroupCallStart(msg, callApi);
-    return true;
-  }
-
-  if (type === 'group-call-end') {
-    await handleGroupCallEnd(msg);
+  if (type === 'voice-ch-signal') {
+    await handleVoiceChSignal(msg, callApi, config);
     return true;
   }
 
   return false;
 }
 
+export async function acceptGroupInvite(api, config, invite) {
+  const hostId = Number(invite.hostId ?? invite.from);
+  const groupId = invite.groupId;
+  clearDeclinedInvite(groupId);
+  const group = {
+    id: groupId,
+    name: invite.name || t('group.unnamed'),
+    hostId,
+    members: normalizeMemberIds(invite.members || []),
+    messages: [],
+    channels: [
+      { id: 'text-general', name: 'general', type: 'text' },
+      { id: 'voice-lounge', name: 'voice', type: 'voice' },
+    ],
+  };
+  saveGroup(group);
+  removePendingGroupInvite(groupId);
+  await safeSendTcp(api, {
+    type: 'group-invite-ack',
+    to: hostId,
+    groupId,
+    host: hostId,
+    accept: true,
+  });
+  showAppToast({ title: t('group.joined'), body: group.name, durationMs: 4000 });
+  return group;
+}
+
+export async function declineGroupInviteFlow(api, config, invite) {
+  const hostId = Number(invite.hostId ?? invite.from);
+  const groupId = invite.groupId;
+  const myId = Number(config.blipId);
+  declineGroupInvite(groupId);
+  removePendingGroupInvite(groupId);
+  const ghost = getGroup(groupId);
+  if (ghost && isGroupMember(ghost, myId)) {
+    removeMemberFromGroup(groupId, myId);
+  } else if (ghost) {
+    deleteGroup(groupId);
+  }
+  await safeSendTcp(api, {
+    type: 'group-invite-ack',
+    to: hostId,
+    groupId,
+    host: hostId,
+    accept: false,
+  });
+}
+
 export {
-  isInGroupCall,
-  joinGroupCall,
-  leaveGroupCall,
-  getOngoingGroupCall,
-  getActiveGroupCallId,
-} from './group-call-client.js';
+  joinVoiceChannel,
+  leaveVoiceChannel,
+  isInVoiceChannel,
+  getActiveVoiceChannel,
+  toggleVoiceMute,
+  toggleVoiceDeafen,
+  isVoiceMuted,
+  isVoiceDeafened,
+} from './voice-channel.js';

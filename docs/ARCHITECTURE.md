@@ -18,7 +18,6 @@ High-level map of how pieces fit together. For build and contribution workflow s
 │  renderer/group-call-window.html + group-call-window-main.js     │
 │  renderer/group-call-client.js — main-window IPC bridge          │
 │  renderer/group-call-roster.js — ongoing voice state (main UI)   │
-│  renderer/peer-avatars.js · avatar-sync.js — LAN profile photos  │
 │  main/global-shortcuts.js — OS hotkeys when tray-hidden           │
 └─────────────────────────────────────────────────────────────────┘
 
@@ -59,7 +58,6 @@ Environment overrides: `BLIP_UDP_PORT`, `BLIP_TCP_PORT`. Separate user data dirs
 | `call-offer` / `call-answer` / `call-candidate` / `call-reject` / `call-hangup` | Peer ↔ peer | WebRTC signalling |
 | `call-state` | Peer ↔ peer | Mute / deafen / screen-share flags |
 | `call-renegotiate` / `call-renegotiate-answer` | Peer ↔ peer | Mid-call SDP (e.g. screen share on voice calls) |
-| `avatar-sync` | Peer ↔ peer | Optional JPEG `dataUrl` for profile photo (or `null` to clear) |
 | `group-invite` / `group-invite-ack` / `group-msg` / `group-host` / `group-sync` / `group-leave` / `group-disband` | Mesh | Group membership and chat relay |
 | `group-call-start` / `group-call-state` / `group-call-signal` / `group-call-end` | Mesh | Group voice mesh (signals peer-to-peer; state broadcast) |
 | `file-offer` / `file-chunk` / `file-done` / `file-abort` | Peer ↔ peer | Chunked large files |
@@ -72,9 +70,8 @@ Environment overrides: `BLIP_UDP_PORT`, `BLIP_TCP_PORT`. Separate user data dirs
 | User config (`blipId`, name, language, `presenceStatus`, audio devices, `globalShortcutsEnabled`, …) | Electron `userData` → `blip-config.json`. |
 | Chat history | Renderer `localStorage` key `blip_chat_v1`. |
 | Favorite peer IDs | Renderer `localStorage` key `blip_favorites_v1`. |
-| Peer avatar cache | Renderer `localStorage` key `blip_peer_avatars_v1` (`peer-avatars.js`). |
-| Custom avatar (self) | Renderer `localStorage` key `blip_avatar_custom_v1` (`avatar.js`). |
-| Release metadata | `app-metadata.json` (version **0.6.0**, codename **Portrait**, repo URL). |
+| Avatar seeds (per BLIP ID) | Renderer `localStorage` key `blip_avatar_seed_v1` (`avatar.js`). |
+| Release metadata | `app-metadata.json` (version **0.6.1**, codename **Portrait**, repo URL). |
 
 ## Security posture (today)
 
@@ -145,15 +142,13 @@ Images use `kind: 'image'` (JPEG resize). Group `group-msg` relays inline attach
 
 Config `clipboardSyncMode`: `off` | `active` (open 1:1 chat) | `trusted`. Renderer `clipboard-sync.js` sends `clipboard-push` (text, max 32 KB). Main forwards like other TCP types.
 
-## Peer avatars (0.6.0 — Portrait)
+## Avatars
 
-| Piece | Role |
-|--------|------|
-| `avatar.js` | Local upload/regenerate; `createAvatarElement` shows self custom + cached peer photos. |
-| `peer-avatars.js` | In-memory + `localStorage` cache per `blipId`. |
-| `avatar-sync.js` | `broadcastAvatarToPeers` / `handleAvatarSyncMessage`; TCP `avatar-sync`. |
+`renderer/avatar.js` draws symmetric 8×8 pixel art from a per-`blipId` seed (`blip_avatar_seed_v1`). **Regenerate** picks a new seed locally. No photo upload or LAN sync (removed in 0.6.1).
 
-On peer online or avatar change, main renderer pushes own JPEG data URL to that peer. Peers dispatch `blip-peer-avatar-changed` to refresh lists and chat headers.
+## Call window IPC (0.6.1)
+
+Secondary windows (`call-window.html`, `group-call-window.html`) call `reportCallWindowReady` / `reportGroupCallWindowReady` after boot. Main queues `call-outgoing`, `incoming-call`, `group-call-join`, and `group-call-tcp` until ready, then flushes.
 
 ## Presence text (0.4.8)
 

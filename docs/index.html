@@ -6,7 +6,7 @@
     <title>BLIP — GitHub</title>
     <meta
       name="description"
-      content="BLIP 0.6.0 Portrait — P2P LAN messenger: chat, group voice, peer avatars. Electron + Vite, WebRTC. krwg/BLIP."
+      content="BLIP 0.6.1 Portrait — P2P LAN messenger: chat, group voice, pixel avatars. Electron + Vite, WebRTC. krwg/BLIP."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -306,7 +306,7 @@
 
     <main>
       <section class="hero">
-        <div class="hero-badge" data-i18n="badge">v0.6.0 Portrait · Open source · LAN · GPLv3</div>
+        <div class="hero-badge" data-i18n="badge">v0.6.1 Portrait · Open source · LAN · GPLv3</div>
         <h1 class="hero-title" data-i18n="title">Ты в сети. Ты сигнал.</h1>
         <p class="hero-sub" data-i18n="sub">
           Десктоп-мессенджер для локальной сети: чат и звонки без облака и без серверов. UDP + TCP discovery, WebRTC.
@@ -361,7 +361,7 @@
         </article>
         <article class="feature">
           <h3 data-i18n="f3h">Portrait</h3>
-          <p data-i18n="f3p">Аватары по LAN, полный RU/EN, автозапуск Windows, поиск в чате Ctrl+F, файлы до 100 ГБ, буфер обмена по сети.</p>
+          <p data-i18n="f3p">Пиксельные аватары 8×8, полный RU/EN, автозапуск Windows, поиск Ctrl+F, файлы до 100 ГБ, буфер обмена по LAN.</p>
         </article>
         <article class="feature">
           <h3 data-i18n="f4h">Стек</h3>
@@ -383,7 +383,7 @@
       (function () {
         var STR = {
           ru: {
-            badge: 'v0.6.0 Portrait · Open source · LAN · GPLv3',
+            badge: 'v0.6.1 Portrait · Open source · LAN · GPLv3',
             title: 'Ты в сети. Ты сигнал.',
             sub:
               'Десктоп-мессенджер для LAN: чат, группы, отдельное окно группового звонка, синхронизация аватаров. Без облака — UDP + TCP + WebRTC. BLIP ID 1–64.',
@@ -399,7 +399,7 @@
               'Отдельные окна 1:1 и группового звонка; WebRTC по TCP; chiptune UI (СИГНАЛ / ПУЛЬС, MESH / СЕТКА).',
             f3h: 'Portrait',
             f3p:
-              'Аватары по LAN, полный RU/EN, автозапуск Windows, поиск в чате Ctrl+F, файлы до 100 ГБ, буфер обмена по сети.',
+              'Пиксельные аватары 8×8, полный RU/EN, автозапуск Windows, поиск Ctrl+F, файлы до 100 ГБ, буфер обмена по LAN.',
             f4h: 'Стек',
             f4p: 'Electron 35, Vite 6, vanilla JS. Windows — основная цель сборки NSIS/portable.',
             foot1: 'Код:',
@@ -410,10 +410,10 @@
             navIssues: 'Issues',
           },
           en: {
-            badge: 'v0.6.0 Portrait · Open source · LAN · GPLv3',
+            badge: 'v0.6.1 Portrait · Open source · LAN · GPLv3',
             title: "You're on the grid. You're the signal.",
             sub:
-              'Desktop LAN messenger: chat, groups, dedicated group-call window, peer avatar sync. No cloud — UDP + TCP + WebRTC. BLIP IDs 1–64.',
+              'Desktop LAN messenger: chat, groups, dedicated group-call window, 8×8 avatars. No cloud — UDP + TCP + WebRTC. BLIP IDs 1–64.',
             star: 'Star on GitHub',
             releases: 'Releases',
             joke:
@@ -422,10 +422,11 @@
             f1h: 'P2P LAN',
             f1p: 'No cloud accounts: discover peers via UDP broadcast + mDNS; messages over TCP peer-to-peer.',
             f2h: 'Calls',
-            f2p: 'WebRTC calls plus chiptune UI sounds — SIGNAL/PULSE FX packs, MESH/GRID call melodies, preview in Settings.',
-            f3h: 'Mesh messages',
+            f2p:
+              'Separate 1:1 and group call windows; WebRTC over TCP; chiptune UI (SIGNAL/PULSE, MESH/GRID melodies).',
+            f3h: 'Portrait',
             f3p:
-              'Files up to 16 MB, custom status text, receipts, reactions, LAN images, groups — still no cloud.',
+              '8×8 pixel avatars, full EN/RU UI, Windows autostart, Ctrl+F chat search, files up to 100 GB, optional clipboard sync.',
             f4h: 'Stack',
             f4p: 'Electron 35, Vite 6, vanilla JS. Windows is the primary NSIS/portable build target.',
             foot1: 'Code:',

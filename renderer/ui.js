@@ -1,6 +1,6 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
 import { createIdGrid } from './grid.js';
-import { createChatView, getMessages, applyReceiptToMessage } from './chat.js';
+import { createChatView, getMessages, getDefaultReactionEmoji } from './chat.js';
 import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
 import {
   getGroup,
@@ -11,32 +11,28 @@ import {
   purgeGroupsFor,
 } from './groups.js';
 import { openGroupCreateDialog } from './group-create-dialog.js';
-import { createGroupChatView } from './group-chat.js';
+import { createGroupCommunityView } from './group-community-view.js';
 import {
   createGroupFromUi,
   handleGroupTcpMessage,
   migrateGroupsHostOnPeerOffline,
   sendGroupChatMessage,
-  joinGroupCall,
   leaveGroup,
-  getOngoingGroupCall,
+  acceptGroupInvite,
+  declineGroupInviteFlow,
 } from './groups-wire.js';
+import { getPendingGroupInvites } from './group-invites.js';
+import {
+  leaveVoiceChannel,
+  joinVoiceChannel,
+  getActiveVoiceChannel,
+} from './voice-channel.js';
+import { getVoiceChannels } from './groups.js';
+import { getVoiceChannelRoster } from './voice-channel-roster.js';
 import { logPeerEvent, getNetworkLogEntries, clearNetworkLog } from './network-log.js';
 import { createMessageId } from './message-id.js';
 import { showSignalLost } from './call.js';
-import {
-  createAvatarElement,
-  encodeAvatarFileToDataUrl,
-  clearCustomAvatar,
-  hasCustomAvatar,
-  setCustomAvatarDataUrl,
-  regenerateAvatar,
-} from './avatar.js';
-import {
-  broadcastAvatarToPeers,
-  handleAvatarSyncMessage,
-  sendAvatarToPeer,
-} from './avatar-sync.js';
+import { createAvatarElement, regenerateAvatar } from './avatar.js';
 import {
   sounds,
   setSoundPrefs,
@@ -72,6 +68,7 @@ import {
   normalizeFullscreenQuality,
 } from './call-media.js';
 import { buildThemedSelect, fillSettingsDropdown, buildSettingsField } from './settings-ui.js';
+import { buildMicTestPanel } from './mic-test-panel.js';
 import {
   startClipboardSync,
   stopClipboardSync,
@@ -87,8 +84,6 @@ import { openConfirmDialog } from './confirm-dialog.js';
 import {
   initPeerTrust,
   applyTrustFromConfig,
-  isTrusted,
-  trustPeer,
   isBlocked,
   blockPeer,
   unblockPeer,
@@ -148,8 +143,15 @@ let meshPulseTimer = null;
 
 /** @type {Map<number, number>} */
 const unreadByPeer = new Map();
+let unreadInviteCount = 0;
 /** @type {Set<number>} */
 const peersTyping = new Set();
+
+/** UI label from app-metadata (`displayVersion` for test builds like 0.7.0.1). */
+function formatAppVersion(meta) {
+  if (!meta) return '—';
+  return meta.displayVersion || meta.version || '—';
+}
 
 async function openCallOutgoing(peerId, video = false) {
   if (!window.blip?.openCallOutgoing) return;
@@ -246,20 +248,19 @@ function ensureGroupChatView(groupId) {
   if (!state.groupChatViews.has(groupId)) {
     const group = getGroup(groupId);
     if (!group) return null;
-    const view = createGroupChatView(
+    const view = createGroupCommunityView(
       group,
       state.config,
       (gid, msg) => sendGroupChatMessage(api, state.config, gid, msg),
       () => {
         state.activeGroup = null;
+        void leaveVoiceChannel();
         renderView('chat');
       },
-      (gid) => joinGroupCall(gid, api),
       (e) => {
         const fresh = getGroup(groupId);
         if (fresh) showGroupContextMenu(e, fresh);
       },
-      (gid) => joinGroupCall(gid, api, { skipInvite: true }),
       async (gid, file, onUiProgress) => {
         const g = getGroup(gid);
         if (!g) return;
@@ -286,7 +287,8 @@ function ensureGroupChatView(groupId) {
             });
           },
         });
-      }
+      },
+      api
     );
     state.groupChatViews.set(groupId, view);
   }
@@ -329,13 +331,6 @@ function ensureChatView(peerId) {
           type: 'typing',
           to,
           active,
-        }),
-      (to, payload) =>
-        api.sendTcpMessage({
-          type: 'receipt',
-          to,
-          messageId: payload.messageId,
-          receipt: payload.receipt,
         }),
       (to, payload) =>
         api.sendTcpMessage({
@@ -394,9 +389,24 @@ function ensureChatView(peerId) {
 }
 
 function getUnreadTotal() {
-  let n = 0;
+  let n = unreadInviteCount;
   for (const c of unreadByPeer.values()) n += c;
+  for (const c of unreadByGroup.values()) n += c;
   return n;
+}
+
+function bumpInviteUnread() {
+  unreadInviteCount += 1;
+  updateNavUnreadBadge();
+  if (state.view === 'chat' && !state.activePeer && !state.activeGroup && mainContent) {
+    renderView('chat');
+  }
+}
+
+function clearInviteUnread() {
+  if (unreadInviteCount <= 0) return;
+  unreadInviteCount = 0;
+  updateNavUnreadBadge();
 }
 
 function updateNavUnreadBadge() {
@@ -699,6 +709,8 @@ function peerForContextMenu(peerOrId) {
 }
 
 function closeGroupChatUi(groupId) {
+  const active = getActiveVoiceChannel();
+  if (active?.groupId === groupId) void leaveVoiceChannel();
   state.groupChatViews.get(groupId)?.destroy?.();
   state.groupChatViews.delete(groupId);
   if (state.activeGroup === groupId) {
@@ -730,7 +742,11 @@ function showGroupContextMenu(e, group) {
   const callItem = document.createElement('button');
   callItem.type = 'button';
   callItem.textContent = t('group.call');
-  bindItem(callItem, () => void joinGroupCall(group.id, api));
+  bindItem(callItem, () => {
+    openGroupChat(group.id);
+    const vch = getVoiceChannels(group)[0];
+    if (vch) void joinVoiceChannel(group.id, vch.id, api, state.config);
+  });
 
   const leaveItem = document.createElement('button');
   leaveItem.type = 'button';
@@ -914,74 +930,18 @@ function buildAvatarSettingsSection() {
   const col = document.createElement('div');
   col.className = 'settings-avatar-actions';
 
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.id = 'blip-avatar-file';
-  fileInput.accept = 'image/*';
-  fileInput.className = 'settings-avatar-file-input';
-
-  const uploadLabel = document.createElement('label');
-  uploadLabel.setAttribute('for', 'blip-avatar-file');
-  uploadLabel.className = 'btn btn-accent settings-avatar-upload-label';
-  uploadLabel.dataset.i18n = 'settings.avatar_upload';
-  uploadLabel.textContent = t('settings.avatar_upload');
-
   const regenBtn = document.createElement('button');
   regenBtn.type = 'button';
-  regenBtn.className = 'btn btn-lang';
+  regenBtn.className = 'btn btn-accent';
   regenBtn.dataset.i18n = 'settings.avatar_regenerate';
   regenBtn.textContent = t('settings.avatar_regenerate');
   regenBtn.addEventListener('click', () => {
     regenerateAvatar(state.config.blipId);
     refreshPreview();
-    removeBtn.disabled = !hasCustomAvatar();
     window.dispatchEvent(new CustomEvent('blip-avatar-changed'));
-    void broadcastAvatarToPeers(api, state.peers);
   });
 
-  const removeBtn = document.createElement('button');
-  removeBtn.type = 'button';
-  removeBtn.className = 'btn btn-lang';
-  removeBtn.dataset.i18n = 'settings.avatar_remove';
-  removeBtn.textContent = t('settings.avatar_remove');
-  removeBtn.disabled = !hasCustomAvatar();
-  removeBtn.addEventListener('click', () => {
-    clearCustomAvatar();
-    refreshPreview();
-    removeBtn.disabled = !hasCustomAvatar();
-    window.dispatchEvent(new CustomEvent('blip-avatar-changed'));
-    void broadcastAvatarToPeers(api, state.peers);
-  });
-
-  fileInput.addEventListener('change', async () => {
-    const f = fileInput.files?.[0];
-    fileInput.value = '';
-    if (!f) return;
-    try {
-      const url = await encodeAvatarFileToDataUrl(f);
-      setCustomAvatarDataUrl(url);
-      refreshPreview();
-      removeBtn.disabled = false;
-      window.dispatchEvent(new CustomEvent('blip-avatar-changed'));
-      void broadcastAvatarToPeers(api, state.peers);
-    } catch (e) {
-      const msg = e?.message;
-      const key =
-        msg === 'file_too_big'
-          ? 'settings.avatar_error_size'
-          : msg === 'bad_mime'
-            ? 'settings.avatar_error_mime'
-            : msg === 'too_large'
-              ? 'settings.avatar_error_output'
-              : 'settings.avatar_error_decode';
-      showError(t(key), '');
-    }
-  });
-
-  col.appendChild(uploadLabel);
-  col.appendChild(fileInput);
   col.appendChild(regenBtn);
-  col.appendChild(removeBtn);
   row.appendChild(col);
   block.appendChild(row);
 
@@ -1105,6 +1065,36 @@ function buildAppearanceSection() {
   });
   block.appendChild(buildSettingsField('settings.bg_title', bgSelect));
 
+  const motionRow = document.createElement('label');
+  motionRow.className = 'settings-tray-toggle-row';
+  const motionCb = document.createElement('input');
+  motionCb.type = 'checkbox';
+  motionCb.checked = !!state.config.reduceMotion;
+  const motionSpan = document.createElement('span');
+  motionSpan.dataset.i18n = 'settings.reduce_motion';
+  motionSpan.textContent = t('settings.reduce_motion');
+  motionRow.appendChild(motionCb);
+  motionRow.appendChild(motionSpan);
+  motionCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ reduceMotion: motionCb.checked });
+    applyAppearance(state.config);
+  });
+  block.appendChild(motionRow);
+
+  const reactionInput = document.createElement('input');
+  reactionInput.type = 'text';
+  reactionInput.className = 'settings-text-input';
+  reactionInput.maxLength = 8;
+  reactionInput.value = getDefaultReactionEmoji(state.config);
+  reactionInput.placeholder = '➕';
+  reactionInput.addEventListener('change', async () => {
+    const emoji = reactionInput.value.trim() || '➕';
+    state.config = await api.saveConfig({ defaultReactionEmoji: emoji });
+    reactionInput.value = getDefaultReactionEmoji(state.config);
+    for (const chat of state.chatViews.values()) chat.renderMessages?.();
+  });
+  block.appendChild(buildSettingsField('settings.default_reaction', reactionInput));
+
   const motion = document.createElement('p');
   motion.className = 'settings-motion-hint';
   motion.dataset.i18n = 'settings.motion_hint';
@@ -1131,15 +1121,33 @@ function parseSemver(v) {
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
-function isSemverNewer(a, b) {
-  const pa = parseSemver(a);
-  const pb = parseSemver(b);
-  if (!pa || !pb) return false;
+function compareAppVersions(a, b) {
+  const strip = (v) => String(v || '').replace(/^v/i, '').trim();
+  const pa = strip(a).split('-');
+  const pb = strip(b).split('-');
+  const na = pa[0].split('.').map((n) => Number(n) || 0);
+  const nb = pb[0].split('.').map((n) => Number(n) || 0);
   for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return true;
-    if (pa[i] < pb[i]) return false;
+    if (na[i] > nb[i]) return 1;
+    if (na[i] < nb[i]) return -1;
   }
-  return false;
+  const preA = pa[1] || '';
+  const preB = pb[1] || '';
+  if (!preA && preB) return 1;
+  if (preA && !preB) return -1;
+  if (preA > preB) return 1;
+  if (preA < preB) return -1;
+  return 0;
+}
+
+function isVersionNewer(a, b) {
+  return compareAppVersions(a, b) > 0;
+}
+
+function filterReleasesForChannel(releases, receiveBeta) {
+  if (!releases?.length) return [];
+  if (receiveBeta) return releases;
+  return releases.filter((r) => !r.prerelease);
 }
 
 function showUpdateStatusToast(payload) {
@@ -1208,9 +1216,10 @@ async function checkUpdatesViaGithub(currentVersion) {
     showUpdateStatusToast({ state: 'error', message: t('settings.updates_releases_error') });
     return;
   }
-  const latest = result.releases.find((r) => r.tag && !r.prerelease) || result.releases[0];
+  const channel = filterReleasesForChannel(result.releases, !!state.config?.receiveBetaUpdates);
+  const latest = channel[0];
   const tag = latest?.tag?.replace(/^v/i, '') || '';
-  if (isSemverNewer(tag, currentVersion)) {
+  if (isVersionNewer(tag, currentVersion)) {
     showUpdateStatusToast({ state: 'available', version: tag });
   } else {
     showUpdateStatusToast({ state: 'none' });
@@ -1320,6 +1329,7 @@ function getSettingsSectionIds() {
     'network',
     'system',
     'updates',
+    'developer',
     'about',
   ];
   if (typeof window !== 'undefined' && window.blip?.platform !== 'win32') {
@@ -1867,6 +1877,12 @@ function buildSettingsCallPanel() {
   hint.textContent = t('settings.call_hint');
   frag.appendChild(hint);
 
+  const micTest = buildMicTestPanel(state.config, async (patch) => {
+    state.config = await api.saveConfig(patch);
+    return state.config;
+  });
+  frag.appendChild(micTest.el);
+
   const qualitySelect = buildThemedSelect('blip-select settings-call-select');
   const qOpts = STREAM_QUALITY_IDS.map((id) => ({
     value: id,
@@ -2343,6 +2359,44 @@ function buildSettingsShortcutsPanel() {
   return frag;
 }
 
+function buildSettingsDeveloperPanel() {
+  const frag = document.createElement('div');
+  frag.className = 'settings-panel';
+
+  const h = document.createElement('h2');
+  h.className = 'settings-panel-title';
+  h.dataset.i18n = 'settings.section_developer';
+  h.textContent = t('settings.section_developer');
+  frag.appendChild(h);
+
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.dataset.i18n = 'settings.dev_hint';
+  hint.textContent = t('settings.dev_hint');
+  frag.appendChild(hint);
+
+  const betaRow = document.createElement('label');
+  betaRow.className = 'settings-tray-toggle-row';
+  const betaCb = document.createElement('input');
+  betaCb.type = 'checkbox';
+  betaCb.checked = !!state.config?.receiveBetaUpdates;
+  const betaSpan = document.createElement('span');
+  betaSpan.dataset.i18n = 'settings.dev_beta_updates';
+  betaSpan.textContent = t('settings.dev_beta_updates');
+  betaRow.appendChild(betaCb);
+  betaRow.appendChild(betaSpan);
+  betaCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ receiveBetaUpdates: betaCb.checked });
+    showAppToast({
+      title: betaCb.checked ? t('settings.dev_beta_on') : t('settings.dev_beta_off'),
+      durationMs: 4000,
+    });
+  });
+  frag.appendChild(betaRow);
+
+  return frag;
+}
+
 function buildSettingsAboutPanel() {
   const frag = document.createElement('div');
   frag.className = 'settings-panel';
@@ -2369,7 +2423,7 @@ function buildSettingsAboutPanel() {
     const name = meta?.displayName || 'BLIP';
     const code = meta?.codename ? ` · ${meta.codename}` : '';
     aboutLine.textContent = `${name}${code}`;
-    aboutVersion.textContent = `v${meta?.version ?? '—'}`;
+    aboutVersion.textContent = `v${formatAppVersion(meta)}`;
     if (meta?.githubUrl) {
       githubBtn.addEventListener('click', () => window.blip.openExternal?.(meta.githubUrl));
     } else {
@@ -2479,6 +2533,33 @@ function buildSettingsUpdatesPanel() {
   h.textContent = t('settings.section_updates');
   frag.appendChild(h);
 
+  const autoTitle = document.createElement('h3');
+  autoTitle.className = 'section-subtitle';
+  autoTitle.dataset.i18n = 'settings.updates_auto_title';
+  autoTitle.textContent = t('settings.updates_auto_title');
+  frag.appendChild(autoTitle);
+
+  const autoHint = document.createElement('p');
+  autoHint.className = 'hint';
+  autoHint.dataset.i18n = 'settings.updates_auto_hint';
+  autoHint.textContent = t('settings.updates_auto_hint');
+  frag.appendChild(autoHint);
+
+  const autoDlRow = document.createElement('label');
+  autoDlRow.className = 'settings-tray-toggle-row';
+  const autoDlCb = document.createElement('input');
+  autoDlCb.type = 'checkbox';
+  autoDlCb.checked = state.config.autoDownloadUpdates !== false;
+  const autoDlSpan = document.createElement('span');
+  autoDlSpan.dataset.i18n = 'settings.updates_auto_download';
+  autoDlSpan.textContent = t('settings.updates_auto_download');
+  autoDlRow.appendChild(autoDlCb);
+  autoDlRow.appendChild(autoDlSpan);
+  autoDlCb.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ autoDownloadUpdates: autoDlCb.checked });
+  });
+  frag.appendChild(autoDlRow);
+
   const verLine = document.createElement('p');
   verLine.className = 'settings-about-version';
   frag.appendChild(verLine);
@@ -2572,7 +2653,8 @@ function buildSettingsUpdatesPanel() {
       releasesFeed.appendChild(err);
       return;
     }
-    for (const r of result.releases) {
+    const feed = filterReleasesForChannel(result.releases, !!state.config?.receiveBetaUpdates);
+    for (const r of feed) {
       const card = document.createElement('article');
       card.className = 'settings-release-card glass';
 
@@ -2629,7 +2711,7 @@ function buildSettingsUpdatesPanel() {
   });
 
   window.blip.getAppMetadata?.().then((meta) => {
-    verLine.textContent = `v${meta?.version ?? '—'}`;
+    verLine.textContent = `v${formatAppVersion(meta)}`;
     if (!meta?.isPackaged) {
       statusLine.dataset.i18n = 'settings.updates_dev_only';
       statusLine.textContent = t('settings.updates_dev_only');
@@ -2694,6 +2776,8 @@ function renderSettingsMainPanel() {
       return buildSettingsSystemPanel();
     case 'updates':
       return buildSettingsUpdatesPanel();
+    case 'developer':
+      return buildSettingsDeveloperPanel();
     case 'about':
       return buildSettingsAboutPanel();
     default:
@@ -2887,22 +2971,13 @@ async function openChat(peerId) {
     return;
   }
 
-  if (!isTrusted(id)) {
-    const ok = await openConfirmDialog({
-      title: t('peers.trust_title'),
-      body: t('peers.trust_body').replace('{id}', String(id)),
-      confirmLabel: t('peers.trust_confirm'),
-    });
-    if (!ok) return;
-    trustPeer(id);
-  }
-
   state.activePeer = id;
   state.activeGroup = null;
   state.view = 'chat';
   clearUnread(id);
   const chat = ensureChatView(id);
   chat.markRead?.();
+  chat.scrollToBottom?.();
   if (mainContent?.isConnected) {
     renderView('chat');
   } else {
@@ -2911,6 +2986,7 @@ async function openChat(peerId) {
 }
 
 function renderChatHubView() {
+  clearInviteUnread();
   const wrap = document.createElement('div');
   wrap.className = 'view chat-hub-view';
 
@@ -2921,6 +2997,66 @@ function renderChatHubView() {
 
   const list = document.createElement('div');
   list.className = 'chat-hub-list';
+
+  const pendingInvites = getPendingGroupInvites();
+  if (pendingInvites.length) {
+    const invSection = document.createElement('div');
+    invSection.className = 'chat-hub-invites-section';
+    const invTitle = document.createElement('h3');
+    invTitle.className = 'chat-hub-invites-title';
+    invTitle.dataset.i18n = 'group.invite_section';
+    invTitle.textContent = t('group.invite_section');
+    invSection.appendChild(invTitle);
+
+    pendingInvites.forEach((inv) => {
+      const card = document.createElement('div');
+      card.className = 'chat-hub-invite glass';
+      const body = document.createElement('div');
+      body.className = 'chat-hub-invite-body';
+      const line1 = document.createElement('span');
+      line1.className = 'chat-hub-invite-name';
+      line1.textContent = t('group.invite_card_title')
+        .replace('{name}', inv.name || t('group.unnamed'))
+        .replace('{host}', String(inv.hostId ?? inv.from));
+      const line2 = document.createElement('span');
+      line2.className = 'chat-hub-invite-meta';
+      line2.textContent = t('group.invite_card_meta').replace(
+        '{n}',
+        String(inv.members?.length || 0)
+      );
+      body.appendChild(line1);
+      body.appendChild(line2);
+      const actions = document.createElement('div');
+      actions.className = 'chat-hub-invite-actions';
+      const joinBtn = document.createElement('button');
+      joinBtn.type = 'button';
+      joinBtn.className = 'btn btn-accent';
+      joinBtn.textContent = t('group.invite_card_join');
+      const declineBtn = document.createElement('button');
+      declineBtn.type = 'button';
+      declineBtn.className = 'btn btn-lang';
+      declineBtn.textContent = t('group.invite_card_decline');
+      joinBtn.addEventListener('click', async () => {
+        try {
+          const g = await acceptGroupInvite(api, state.config, inv);
+          clearInviteUnread();
+          openGroupChat(g.id);
+        } catch (err) {
+          console.error('[group invite] accept', err);
+        }
+      });
+      declineBtn.addEventListener('click', async () => {
+        await declineGroupInviteFlow(api, state.config, inv);
+        if (state.view === 'chat' && !state.activePeer && !state.activeGroup) renderView('chat');
+      });
+      actions.appendChild(joinBtn);
+      actions.appendChild(declineBtn);
+      card.appendChild(body);
+      card.appendChild(actions);
+      invSection.appendChild(card);
+    });
+    list.appendChild(invSection);
+  }
 
   getGroupsFor(state.config.blipId).forEach((group) => {
     const item = document.createElement('button');
@@ -2948,8 +3084,12 @@ function renderChatHubView() {
     badge.className = 'chat-hub-group-tag';
     badge.textContent = t('group.badge_grp');
     item.appendChild(badge);
-    const voice = getOngoingGroupCall(group.id);
-    if (voice.active && voice.count > 0) {
+    let voiceCount = 0;
+    for (const ch of getVoiceChannels(group)) {
+      const snap = getVoiceChannelRoster(group.id, ch.id);
+      if (snap.count > voiceCount) voiceCount = snap.count;
+    }
+    if (voiceCount > 0) {
       const live = document.createElement('span');
       live.className = 'chat-hub-voice-live';
       live.title = t('group.call_ongoing_hub');
@@ -3164,7 +3304,10 @@ export function initUI(config, blipApi) {
   applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
   appearanceListenerDispose?.();
-  appearanceListenerDispose = listenReducedMotion(() => {});
+  appearanceListenerDispose = listenReducedMotion(
+    () => applyAppearance(state.config),
+    () => state.config
+  );
 
   rootEl = document.getElementById('app');
   if (!rootEl) {
@@ -3223,7 +3366,7 @@ export function initUI(config, blipApi) {
     void runStartupUpdateCheck();
   }, 1200);
 
-  window.addEventListener('blip-peer-trust-changed', () => {
+  window.addEventListener('blip-peer-block-changed', () => {
     if (state.view === 'peers') renderView('peers');
     if (state.view === 'chat' && !state.activePeer) renderView('chat');
   });
@@ -3242,12 +3385,19 @@ export function initUI(config, blipApi) {
     if (state.view === 'chat' && !state.activePeer) renderView('chat');
   });
 
-  window.addEventListener('blip-group-call-state', () => {
+  window.addEventListener('blip-group-invites-changed', () => {
+    if (state.view === 'chat' && !state.activePeer && !state.activeGroup && mainContent) {
+      renderView('chat');
+    }
+    updateNavUnreadBadge();
+  });
+
+  window.addEventListener('blip-voice-channel-state', () => {
     if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
       renderView('chat');
     }
     if (state.activeGroup) {
-      state.groupChatViews.get(state.activeGroup)?.refreshOngoingCall?.();
+      state.groupChatViews.get(state.activeGroup)?.refreshChannels?.();
     }
   });
 
@@ -3277,22 +3427,6 @@ export function initUI(config, blipApi) {
     }
   });
 
-  window.addEventListener('blip-peer-avatar-changed', () => {
-    if (!mainContent?.isConnected) return;
-    if (state.view === 'peers') renderView('peers');
-    else if (state.view === 'chat' && !state.activePeer && !state.activeGroup) renderView('chat');
-    if (state.view === 'chat' && state.activePeer != null) {
-      state.chatViews.get(state.activePeer)?.refreshHeaderAvatar?.();
-    }
-    if (state.view === 'chat' && state.activeGroup) {
-      const g = getGroup(state.activeGroup);
-      if (g) ensureGroupChatView(state.activeGroup)?.updateGroup?.(g);
-    }
-  });
-
-  window.blip?.onGroupCallActive?.(() => {
-    if (state.view === 'chat' && !state.activePeer && mainContent) renderView('chat');
-  });
 
   render();
 }
@@ -3307,7 +3441,6 @@ export function updatePeers({ peers, occupiedIds }) {
     if (p.online && !prevOnline.has(p.blipId)) {
       logPeerEvent(p.blipId, 'online');
       if (!state.config?.doNotDisturb) sounds.peerOnline();
-      void sendAvatarToPeer(api, p.blipId);
     } else if (!p.online && prevOnline.has(p.blipId)) {
       logPeerEvent(p.blipId, 'offline');
       if (!state.config?.doNotDisturb) sounds.peerOffline();
@@ -3353,12 +3486,6 @@ function handleTypingTcp(msg) {
 }
 
 export function handleTcpMessage(msg) {
-  if (msg.type === 'avatar-sync') {
-    if (isBlocked(Number(msg.from))) return;
-    handleAvatarSyncMessage(msg);
-    return;
-  }
-
   if (msg.type === 'clipboard-push') {
     if (isBlocked(Number(msg.from))) return;
     void handleClipboardPush(msg, {
@@ -3420,7 +3547,11 @@ export function handleTcpMessage(msg) {
     return;
   }
 
-  if (msg.type?.startsWith?.('group-')) {
+  if (
+    msg.type === 'voice-ch-roster' ||
+    msg.type === 'voice-ch-signal' ||
+    msg.type?.startsWith?.('group-')
+  ) {
     void handleGroupTcpMessage(msg, {
       api,
       config: state.config,
@@ -3430,10 +3561,12 @@ export function handleTcpMessage(msg) {
       bumpGroupUnread: (groupId) => {
         if (state.view === 'chat' && state.activeGroup === groupId) return;
         unreadByGroup.set(groupId, (unreadByGroup.get(groupId) || 0) + 1);
+        updateNavUnreadBadge();
         if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
           renderView('chat');
         }
       },
+      bumpInviteUnread,
       onGroupRemoved: (groupId) => {
         closeGroupChatUi(groupId);
         unreadByGroup.delete(groupId);
@@ -3457,13 +3590,6 @@ export function handleTcpMessage(msg) {
 
   const peerId = Number(msg.from === state.config.blipId ? msg.to : msg.from);
   if (!Number.isFinite(peerId) || isBlocked(peerId)) return;
-
-  if (msg.type === 'receipt') {
-    if (applyReceiptToMessage(peerId, msg.messageId, msg.receipt)) {
-      state.chatViews.get(peerId)?.renderMessages?.();
-    }
-    return;
-  }
 
   if (msg.type === 'reaction') {
     state.chatViews.get(peerId)?.handleReaction?.(msg);

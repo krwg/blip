@@ -17,7 +17,13 @@ const api = {
   getConfig: () => window.blip.getConfig(),
   saveConfig: (data) => window.blip.saveConfig(data),
   sendTcpMessage: (payload) => window.blip.sendTcpMessage(payload),
+  fetchGroup: (groupId) => window.blip.getGroupForCall(groupId),
 };
+
+async function callApi() {
+  const config = await api.getConfig();
+  return { ...api, config };
+}
 
 function applyChrome(cfg) {
   setLang(cfg.language || localStorage.getItem('blip_lang') || 'en');
@@ -32,17 +38,16 @@ function applyChrome(cfg) {
 }
 
 async function routeGroupTcp(msg) {
-  const cfg = await api.getConfig();
-  const callApi = { ...api, config: cfg };
+  const callApiRef = await callApi();
   switch (msg.type) {
     case 'group-call-signal':
-      await handleGroupCallSignal(msg, callApi);
+      await handleGroupCallSignal(msg, callApiRef);
       break;
     case 'group-call-state':
-      await handleGroupCallState(msg, callApi);
+      await handleGroupCallState(msg, callApiRef);
       break;
     case 'group-call-start':
-      await handleGroupCallStart(msg, callApi);
+      await handleGroupCallStart(msg, callApiRef);
       break;
     case 'group-call-end':
       await handleGroupCallEnd(msg);
@@ -63,7 +68,7 @@ async function boot() {
   applyChrome(config);
   appearanceRm?.();
   appearanceRm = listenReducedMotion(() => {});
-  initGroupCallWindow(api);
+  initGroupCallWindow(api, config);
 
   document.getElementById('group-call-win-min')?.addEventListener('click', () => {
     window.blip.groupCallWindowMinimize?.();
@@ -79,23 +84,28 @@ async function boot() {
   window.blip.onConfigUpdated?.((cfg) => applyChrome(cfg));
 
   window.blip.onGroupCallJoin?.((payload) => {
-    if (payload?.groupId) {
-      void joinGroupCall(payload.groupId, api, { skipInvite: !!payload.skipInvite });
-    }
+    if (!payload?.groupId) return;
+    void (async () => {
+      const callApiRef = await callApi();
+      await joinGroupCall(payload.groupId, callApiRef, { skipInvite: !!payload.skipInvite });
+    })();
   });
 
   window.blip.onGroupCallIncoming?.((payload) => {
     if (!payload?.groupId) return;
-    void handleGroupCallStart(
-      {
-        type: 'group-call-start',
-        groupId: payload.groupId,
-        from: payload.from,
-        members: payload.members,
-        host: payload.host,
-      },
-      api
-    );
+    void (async () => {
+      const callApiRef = await callApi();
+      await handleGroupCallStart(
+        {
+          type: 'group-call-start',
+          groupId: payload.groupId,
+          from: payload.from,
+          members: payload.members,
+          host: payload.host,
+        },
+        callApiRef
+      );
+    })();
   });
 
   window.blip.onGroupCallTcp?.((msg) => {
@@ -109,6 +119,13 @@ async function boot() {
   window.blip.onGlobalHangup?.(() => {
     void leaveGroupCall();
   });
+
+  window.__blipGroupCallReady = true;
+  window.blip.reportGroupCallWindowReady?.();
 }
 
-boot().catch((e) => console.error(e));
+boot().catch((e) => {
+  console.error(e);
+  window.__blipGroupCallReady = true;
+  window.blip?.reportGroupCallWindowReady?.();
+});

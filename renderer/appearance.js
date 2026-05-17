@@ -6,8 +6,25 @@
 import { t } from './i18n.js';
 
 export const THEME_GROUPS = {
-  light: ['light-paper', 'light-fog', 'light-sand', 'light-glacier', 'light-meadow'],
-  dark: ['dark-signal', 'dark-void', 'dark-violet', 'dark-forest', 'dark-ember'],
+  light: [
+    'light-paper',
+    'light-fog',
+    'light-sand',
+    'light-glacier',
+    'light-meadow',
+    'light-circuit',
+    'light-rose',
+  ],
+  dark: [
+    'dark-signal',
+    'dark-void',
+    'dark-violet',
+    'dark-forest',
+    'dark-ember',
+    'dark-midnight',
+    'dark-cyan',
+    'dark-crimson',
+  ],
 };
 
 export const ANIMATED_BACKGROUNDS = [
@@ -22,6 +39,16 @@ export const ANIMATED_BACKGROUNDS = [
   'circuit',
   'shards',
   'tide',
+  'static',
+  'rain',
+  'glitch',
+  'beacon',
+  'hyperwave',
+  'plasma',
+  'vortex',
+  'pixelstorm',
+  'synth',
+  'cosmos',
 ];
 
 const DEFAULT_THEME = 'dark-signal';
@@ -61,7 +88,7 @@ export function applyAppearance(config) {
   html.dataset.theme = theme;
   html.dataset.animatedBg = bg;
   delete html.dataset.callWindow;
-  syncReducedMotion();
+  syncReducedMotion(config);
 }
 
 /** Call window: theme colors only — no animated wallpaper over video. */
@@ -70,20 +97,22 @@ export function applyCallWindowAppearance(config) {
   html.dataset.theme = normalizeThemeId(config?.themeId);
   html.dataset.animatedBg = 'none';
   html.dataset.callWindow = '1';
-  syncReducedMotion();
+  syncReducedMotion(config);
 }
 
-export function syncReducedMotion() {
+export function syncReducedMotion(config) {
   const html = document.documentElement;
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const reduce =
+    config?.reduceMotion === true ||
+    !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   html.dataset.reducedMotion = reduce ? '1' : '0';
 }
 
-export function listenReducedMotion(cb) {
+export function listenReducedMotion(cb, getConfig) {
   const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (!mq) return () => {};
   const fn = () => {
-    syncReducedMotion();
+    syncReducedMotion(getConfig?.());
     cb?.();
   };
   mq.addEventListener('change', fn);

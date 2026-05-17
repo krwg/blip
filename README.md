@@ -58,7 +58,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | | |
 |---|---|
 | **What** | Desktop app: text, voice, and video over LAN / Hamachi / Radmin VPN |
-| **Release** | **0.6.0 — Portrait** (see [`CHANGELOG.md`](CHANGELOG.md)) |
+| **Release** | **0.6.1 — Portrait** (see [`CHANGELOG.md`](CHANGELOG.md)) |
 | **Identity** | BLIP ID **1–64** (8×8 grid, Minecraft-style chunk metaphor) |
 | **Servers** | None — UDP broadcast, TCP, and WebRTC peer-to-peer only |
 | **Sign-up** | None |
@@ -78,7 +78,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | **Screen share** | 720p+ capture, theater layout, fullscreen (**F**), stream/fullscreen quality in Settings |
 | **Mesh Pulse** | Live LAN heartbeat — auto ping every minute, latency under each peer |
 | **Trust & block** | First-chat confirm; local block list; **Settings → Privacy** |
-| **Avatars** | Upload, regenerate, or 8×8 generated from ID; **custom photos sync to peers** over LAN (`avatar-sync`) |
+| **Avatars** | 8×8 auto-generated from BLIP ID; regenerate in Settings |
 | **Themes** | Light/dark palettes + animated backgrounds (EN/RU names) |
 | **Sound** | Chiptune Web Audio — **SIGNAL** / **PULSE** FX packs, **MESH** / **GRID** call melodies; preview in **Settings → Sound**; DND mutes all |
 | **Files** | P2P send in chat (1–100 GB limit in Settings, chunked); drag & drop; group inline ≤768 KB + chunked to all members |
@@ -268,11 +268,11 @@ blip/
 ├── main/              # Electron: discovery, TCP, tray, window routing
 ├── renderer/          # UI, chat, call, group-call, i18n, styles
 │   ├── call-window.html / group-call-window.html  # separate BrowserWindows
-│   ├── group-call-roster.js · peer-avatars.js · avatar-sync.js
+│   ├── group-call-roster.js · group-call-client.js
 │   └── assets/fonts/  # Minecraft woff2/ttf
 ├── docs/              # ARCHITECTURE.md + GitHub Pages landing
 ├── build/             # icon.ico, icon.png (generated)
-├── app-metadata.json  # version 0.6.0, codename Portrait
+├── app-metadata.json  # version 0.6.1, codename Portrait
 ├── preload.cjs        # IPC bridge
 ├── scripts/           # electron-dev, copy-fonts, build-icons, sync metadata
 ├── icon.svg           # source app icon
@@ -331,7 +331,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | | |
 |---|---|
 | **Что это** | Desktop-приложение: текст, голос и видео по LAN / Hamachi / Radmin VPN |
-| **Релиз** | **0.6.0 — Portrait** (см. [`CHANGELOG.md`](CHANGELOG.md)) |
+| **Релиз** | **0.6.1 — Portrait** (см. [`CHANGELOG.md`](CHANGELOG.md)) |
 | **Идентификация** | BLIP ID **1–64** (сетка 8×8) |
 | **Серверы** | Нет — только UDP broadcast, TCP и WebRTC между пирами |
 | **Регистрация** | Нет |
@@ -351,7 +351,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | **Демонстрация экрана** | Захват 720p+, theater, полный экран (**F**), качество потока/экрана в настройках |
 | **Mesh Pulse** | Живой пульс LAN: автопинг раз в минуту, задержка под каждым абонентом |
 | **Доверие и блок** | Подтверждение первого чата; локальный блок; **Настройки → Конфиденциальность** |
-| **Аватары** | Загрузка, пересоздание или 8×8 от ID; **фото синхронизируется с абонентами** по LAN |
+| **Аватары** | Авто-генерация 8×8 от BLIP ID; кнопка «Новый аватар» в настройках |
 | **Темы** | Светлые/тёмные палитры и анимированные фоны (названия EN/RU) |
 | **Звук** | Chiptune (Web Audio): наборы **СИГНАЛ** / **ПУЛЬС**, мелодии **MESH** / **СЕТКА**; прослушивание в **Настройки → Звук**; DND отключает |
 | **Файлы** | P2P в чате (лимит 1–100 ГБ в настройках, чанки); drag & drop; в группе ≤768 КБ inline + чанки всем |
@@ -511,10 +511,10 @@ blip/
 ├── main/              # Electron: discovery, TCP, tray, маршрутизация окон
 ├── renderer/          # UI, chat, call, group-call, i18n, styles
 │   ├── call-window.html / group-call-window.html
-│   ├── group-call-roster.js · peer-avatars.js · avatar-sync.js
+│   ├── group-call-roster.js · group-call-client.js
 │   └── assets/fonts/
 ├── docs/              # ARCHITECTURE.md + лендинг Pages
-├── app-metadata.json  # 0.6.0 Portrait
+├── app-metadata.json  # 0.6.1 Portrait
 ├── build/ · preload.cjs · scripts/ · icon.svg · dist/
 ```
 

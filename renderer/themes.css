@@ -160,6 +160,38 @@ html[data-theme='dark-forest'] {
   --blip-bg-layer-opacity: 0.48;
 }
 
+html[data-theme='light-circuit'] {
+  --blip-bg: #e8eef4;
+  --blip-text: #0a1628;
+  --blip-muted: #4a6080;
+  --blip-accent: #0066ff;
+  --blip-on-accent: #e8f0ff;
+  --blip-danger: #cc2244;
+  --blip-glass: rgba(232, 240, 252, 0.82);
+  --blip-glass-border: #0066ff;
+  --blip-chat-incoming: rgba(210, 224, 248, 0.95);
+  --blip-toast-bg: rgba(220, 232, 252, 0.96);
+  --blip-input-bg: rgba(255, 255, 255, 0.65);
+  --blip-caret: #0066ff;
+  --blip-bg-layer-opacity: 0.42;
+}
+
+html[data-theme='light-rose'] {
+  --blip-bg: #faf0f2;
+  --blip-text: #2a1020;
+  --blip-muted: #7a5060;
+  --blip-accent: #ff4488;
+  --blip-on-accent: #fff0f5;
+  --blip-danger: #cc1133;
+  --blip-glass: rgba(255, 240, 246, 0.85);
+  --blip-glass-border: #ff4488;
+  --blip-chat-incoming: rgba(252, 228, 238, 0.95);
+  --blip-toast-bg: rgba(255, 236, 244, 0.96);
+  --blip-input-bg: rgba(255, 255, 255, 0.7);
+  --blip-caret: #ff4488;
+  --blip-bg-layer-opacity: 0.4;
+}
+
 html[data-theme='dark-ember'] {
   --blip-bg: #100806;
   --blip-text: #fde8d8;
@@ -176,11 +208,60 @@ html[data-theme='dark-ember'] {
   --blip-bg-layer-opacity: 0.5;
 }
 
+html[data-theme='dark-midnight'] {
+  --blip-bg: #04060c;
+  --blip-text: #d8e4ff;
+  --blip-muted: #4a5878;
+  --blip-accent: #6eb4ff;
+  --blip-on-accent: #040818;
+  --blip-danger: #ff5577;
+  --blip-glass: rgba(12, 18, 32, 0.78);
+  --blip-glass-border: #6eb4ff;
+  --blip-chat-incoming: rgba(8, 14, 28, 0.94);
+  --blip-toast-bg: rgba(10, 16, 30, 0.95);
+  --blip-input-bg: rgba(0, 0, 0, 0.4);
+  --blip-caret: #6eb4ff;
+  --blip-bg-layer-opacity: 0.52;
+}
+
+html[data-theme='dark-cyan'] {
+  --blip-bg: #021418;
+  --blip-text: #c8fff8;
+  --blip-muted: #3a6868;
+  --blip-accent: #00ffc8;
+  --blip-on-accent: #021210;
+  --blip-danger: #ff4466;
+  --blip-glass: rgba(4, 28, 32, 0.75);
+  --blip-glass-border: #00ffc8;
+  --blip-chat-incoming: rgba(2, 22, 26, 0.94);
+  --blip-toast-bg: rgba(2, 20, 24, 0.95);
+  --blip-input-bg: rgba(0, 0, 0, 0.35);
+  --blip-caret: #00ffc8;
+  --blip-bg-layer-opacity: 0.48;
+}
+
+html[data-theme='dark-crimson'] {
+  --blip-bg: #120408;
+  --blip-text: #ffe8f0;
+  --blip-muted: #6a3848;
+  --blip-accent: #ff3366;
+  --blip-on-accent: #1a040c;
+  --blip-danger: #ff6688;
+  --blip-glass: rgba(32, 8, 16, 0.78);
+  --blip-glass-border: #ff3366;
+  --blip-chat-incoming: rgba(24, 6, 12, 0.94);
+  --blip-toast-bg: rgba(20, 4, 10, 0.95);
+  --blip-input-bg: rgba(0, 0, 0, 0.38);
+  --blip-caret: #ff3366;
+  --blip-bg-layer-opacity: 0.5;
+}
+
 body {
   position: relative;
 }
 
-body::before {
+body::before,
+body::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -320,6 +401,195 @@ html[data-animated-bg='tide'] body::before {
   animation: blip-bg-tide 11s ease-in-out infinite alternate;
 }
 
+html[data-animated-bg='static'] body::before {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.75);
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--blip-accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--blip-accent) 8%, transparent) 1px, transparent 1px);
+  background-size: 4px 4px;
+  animation: blip-bg-static 8s steps(8) infinite;
+}
+
+html[data-animated-bg='rain'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.45);
+  background-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--blip-accent) 35%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 3px 120px;
+  background-repeat: repeat;
+  animation: blip-bg-rain 0.6s linear infinite;
+}
+
+html[data-animated-bg='glitch'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.42);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--blip-danger) 15%, transparent) 2px, transparent 2px),
+    linear-gradient(color-mix(in srgb, var(--blip-accent) 12%, transparent) 2px, transparent 2px);
+  background-size: 16px 16px;
+  animation: blip-bg-glitch 4s steps(4) infinite;
+}
+
+html[data-animated-bg='beacon'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.5);
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--blip-accent) 40%, transparent) 0%,
+    transparent 55%
+  );
+  animation: blip-bg-beacon 3s ease-in-out infinite;
+}
+
+html[data-animated-bg='hyperwave'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.62);
+  background:
+    linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--blip-accent) 55%, transparent) 50%, transparent 70%),
+    radial-gradient(ellipse 120% 80% at 50% 100%, color-mix(in srgb, var(--blip-accent) 35%, transparent), transparent 60%);
+  background-size: 240% 240%, 100% 100%;
+  animation: blip-bg-hyperwave 9s ease-in-out infinite;
+}
+
+html[data-animated-bg='hyperwave'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.7);
+  background: repeating-linear-gradient(
+    -18deg,
+    transparent,
+    transparent 40px,
+    color-mix(in srgb, var(--blip-accent) 10%, transparent) 40px,
+    color-mix(in srgb, var(--blip-accent) 10%, transparent) 42px
+  );
+  animation: blip-bg-hyperwave-2 14s linear infinite;
+}
+
+html[data-animated-bg='plasma'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.58);
+  background:
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--blip-danger) 40%, transparent), transparent 45%),
+    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--blip-accent) 45%, transparent), transparent 50%),
+    conic-gradient(from 0deg at 50% 50%, color-mix(in srgb, var(--blip-accent) 20%, transparent), transparent 40%, color-mix(in srgb, var(--blip-danger) 18%, transparent) 70%, transparent);
+  animation: blip-bg-plasma 16s ease-in-out infinite alternate;
+}
+
+html[data-animated-bg='vortex'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.55);
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    color-mix(in srgb, var(--blip-accent) 22%, transparent) 0deg 12deg,
+    transparent 12deg 24deg
+  );
+  animation: blip-bg-vortex 28s linear infinite;
+}
+
+html[data-animated-bg='pixelstorm'] body::before {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.9);
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--blip-accent) 35%, transparent) 2px, transparent 2px),
+    linear-gradient(color-mix(in srgb, var(--blip-accent) 25%, transparent) 2px, transparent 2px);
+  background-size: 12px 12px;
+  animation: blip-bg-pixelstorm 6s steps(12) infinite;
+}
+
+html[data-animated-bg='pixelstorm'] body::after {
+  opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.45);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--blip-accent) 50%, transparent), transparent 65%);
+  animation: blip-bg-pulse 4s ease-in-out infinite;
+}
+
+html[data-animated-bg='synth'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.6);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--blip-accent) 8%, transparent),
+    color-mix(in srgb, var(--blip-accent) 45%, transparent) 25%,
+    color-mix(in srgb, var(--blip-danger) 35%, transparent) 50%,
+    color-mix(in srgb, var(--blip-accent) 45%, transparent) 75%,
+    color-mix(in srgb, var(--blip-accent) 8%, transparent)
+  );
+  background-size: 200% 100%;
+  animation: blip-bg-synth 7s linear infinite;
+}
+
+html[data-animated-bg='cosmos'] body::before {
+  opacity: var(--blip-bg-layer-opacity, 0.65);
+  background:
+    radial-gradient(1px 1px at 10% 20%, color-mix(in srgb, var(--blip-text) 80%, transparent), transparent),
+    radial-gradient(1px 1px at 70% 40%, color-mix(in srgb, var(--blip-accent) 90%, transparent), transparent),
+    radial-gradient(1px 1px at 40% 80%, color-mix(in srgb, var(--blip-text) 70%, transparent), transparent),
+    radial-gradient(ellipse 90% 60% at 50% 50%, color-mix(in srgb, var(--blip-accent) 28%, transparent), transparent 70%);
+  background-size: 180% 180%, 200% 200%, 160% 160%, 100% 100%;
+  animation: blip-bg-cosmos 22s ease-in-out infinite alternate;
+}
+
+@keyframes blip-bg-hyperwave {
+  0%,
+  100% {
+    background-position: 0% 50%, 50% 100%;
+    filter: hue-rotate(0deg);
+  }
+  50% {
+    background-position: 100% 50%, 50% 0%;
+    filter: hue-rotate(18deg);
+  }
+}
+
+@keyframes blip-bg-hyperwave-2 {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-80px) rotate(2deg);
+  }
+}
+
+@keyframes blip-bg-plasma {
+  0% {
+    transform: scale(1) rotate(0deg);
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1.1) rotate(8deg);
+    filter: blur(1px);
+  }
+}
+
+@keyframes blip-bg-vortex {
+  0% {
+    transform: rotate(0deg) scale(1.4);
+  }
+  100% {
+    transform: rotate(360deg) scale(1.4);
+  }
+}
+
+@keyframes blip-bg-pixelstorm {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 48px 48px;
+  }
+}
+
+@keyframes blip-bg-synth {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes blip-bg-cosmos {
+  0% {
+    background-position: 0% 0%, 100% 50%, 50% 100%, center;
+  }
+  100% {
+    background-position: 100% 100%, 0% 50%, 50% 0%, center;
+  }
+}
+
 @keyframes blip-bg-waves {
   0%,
   100% {
@@ -419,6 +689,52 @@ html[data-animated-bg='tide'] body::before {
   }
 }
 
+@keyframes blip-bg-static {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 4px 4px;
+  }
+}
+
+@keyframes blip-bg-rain {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 120px;
+  }
+}
+
+@keyframes blip-bg-glitch {
+  0%,
+  90%,
+  100% {
+    transform: translate(0, 0);
+    opacity: var(--blip-bg-layer-opacity, 0.42);
+  }
+  92% {
+    transform: translate(3px, -2px);
+    opacity: calc(var(--blip-bg-layer-opacity, 0.42) * 1.2);
+  }
+  94% {
+    transform: translate(-2px, 1px);
+  }
+}
+
+@keyframes blip-bg-beacon {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: calc(var(--blip-bg-layer-opacity, 0.5) * 0.7);
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: var(--blip-bg-layer-opacity, 0.55);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html[data-animated-bg]:not([data-animated-bg='none']) body::before {
     animation: none !important;
@@ -426,7 +742,8 @@ html[data-animated-bg='tide'] body::before {
   }
 }
 
-html[data-reduced-motion='1'][data-animated-bg]:not([data-animated-bg='none']) body::before {
+html[data-reduced-motion='1'][data-animated-bg]:not([data-animated-bg='none']) body::before,
+html[data-reduced-motion='1'][data-animated-bg]:not([data-animated-bg='none']) body::after {
   animation: none !important;
   opacity: calc(var(--blip-bg-layer-opacity, 0.45) * 0.55);
 }

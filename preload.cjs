@@ -128,6 +128,12 @@ contextBridge.exposeInMainWorld('blip', {
   leaveGroupCall: () => ipcRenderer.invoke('leave-group-call'),
   closeGroupCallWindow: () => ipcRenderer.invoke('close-group-call-window'),
   reportGroupCallActive: (data) => ipcRenderer.send('group-call-active', data),
+  syncGroupCallRoster: (data) => ipcRenderer.send('sync-group-call-roster', data),
+  onGroupCallRosterSync: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('group-call-roster-sync', handler);
+    return () => ipcRenderer.removeListener('group-call-roster-sync', handler);
+  },
   isGroupCallActiveSync: () => groupCallActive,
   getActiveGroupCallIdSync: () => groupCallGroupId,
   onGroupCallActive: (cb) => {
@@ -162,4 +168,7 @@ contextBridge.exposeInMainWorld('blip', {
   groupCallWindowMinimize: () => ipcRenderer.send('group-call-window-minimize'),
   groupCallWindowMaximize: () => ipcRenderer.send('group-call-window-maximize'),
   groupCallWindowClose: () => ipcRenderer.send('group-call-window-close'),
+  reportCallWindowReady: () => ipcRenderer.send('call-window-ready'),
+  reportGroupCallWindowReady: () => ipcRenderer.send('group-call-window-ready'),
+  getGroupForCall: (groupId) => ipcRenderer.invoke('get-group-for-call', groupId),
 });

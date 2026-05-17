@@ -18,7 +18,12 @@ import {
 } from './mesh-handshake.js';
 import { isPeerBlocked } from './trust-policy.js';
 import { createTray, destroyTray } from './tray.js';
-import { setupAutoUpdater, checkForUpdatesNow, quitAndInstallUpdater } from './updater.js';
+import {
+  setupAutoUpdater,
+  checkForUpdatesNow,
+  quitAndInstallUpdater,
+  configureAutoUpdater,
+} from './updater.js';
 import { resolveBuildAsset } from './paths.js';
 import { resolvePorts } from './ports.js';
 import { serializeSdp, sendCallPayload } from './call-wire.js';
@@ -60,7 +65,15 @@ function loadAppMetadata() {
 
 let mainWindow = null;
 let callWindow = null;
+/** Active 1:1 call peer — hang up on app quit. */
+let activeCallPeerId = null;
 let groupCallWindow = null;
+let callWindowReady = false;
+let groupCallWindowReady = false;
+/** @type {Array<{ channel: string, data: unknown, focus: boolean }>} */
+const pendingCallIpc = [];
+/** @type {Array<{ channel: string, data: unknown, focus: boolean }>} */
+const pendingGroupCallIpc = [];
 let discovery = null;
 let tcpServer = null;
 let config = null;
@@ -199,9 +212,104 @@ async function ensureCallWindow() {
 
   callWindow.on('closed', () => {
     callWindow = null;
+    callWindowReady = false;
+    pendingCallIpc.length = 0;
+  });
+
+  callWindow.webContents.on('did-start-load', () => {
+    callWindowReady = false;
   });
 
   return callWindow;
+}
+
+function flushCallWindowQueue() {
+  if (!callWindow || callWindow.isDestroyed() || !callWindowReady) return;
+  let shouldFocus = false;
+  for (const item of pendingCallIpc) {
+    callWindow.webContents.send(item.channel, item.data);
+    if (item.focus) shouldFocus = true;
+  }
+  pendingCallIpc.length = 0;
+  if (shouldFocus) {
+    callWindow.show();
+    callWindow.focus();
+  }
+}
+
+function flushGroupCallWindowQueue() {
+  if (!groupCallWindow || groupCallWindow.isDestroyed() || !groupCallWindowReady) return;
+  let shouldFocus = false;
+  for (const item of pendingGroupCallIpc) {
+    groupCallWindow.webContents.send(item.channel, item.data);
+    if (item.focus) shouldFocus = true;
+  }
+  pendingGroupCallIpc.length = 0;
+  if (shouldFocus) {
+    groupCallWindow.show();
+    groupCallWindow.focus();
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function probeRendererReady(win, globalFlag) {
+  if (!win || win.isDestroyed()) return false;
+  try {
+    return await win.webContents.executeJavaScript(`Boolean(window.${globalFlag})`);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForCallWindowReady(win, timeoutMs = 20000) {
+  if (callWindowReady) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (callWindowReady) return;
+    if (await probeRendererReady(win, '__blipCallReady')) {
+      callWindowReady = true;
+      flushCallWindowQueue();
+      return;
+    }
+    await delay(50);
+  }
+  throw new Error('Call window did not become ready');
+}
+
+async function waitForGroupCallWindowReady(win, timeoutMs = 20000) {
+  if (groupCallWindowReady) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (groupCallWindowReady) return;
+    if (await probeRendererReady(win, '__blipGroupCallReady')) {
+      groupCallWindowReady = true;
+      flushGroupCallWindowQueue();
+      return;
+    }
+    await delay(50);
+  }
+  throw new Error('Group call window did not become ready');
+}
+
+async function readGroupFromMainWindow(groupId) {
+  if (!mainWindow || mainWindow.isDestroyed() || !groupId) return null;
+  const key = JSON.stringify(String(groupId));
+  try {
+    return await mainWindow.webContents.executeJavaScript(`(() => {
+      try {
+        const raw = localStorage.getItem('blip_groups_v1');
+        if (!raw) return null;
+        const o = JSON.parse(raw);
+        return o[${key}] ?? null;
+      } catch { return null; }
+    })()`);
+  } catch (e) {
+    console.warn('[BLIP] readGroupFromMainWindow', e?.message || e);
+    return null;
+  }
 }
 
 function getGroupCallWindowUrl() {
@@ -245,6 +353,12 @@ async function ensureGroupCallWindow() {
 
   groupCallWindow.on('closed', () => {
     groupCallWindow = null;
+    groupCallWindowReady = false;
+    pendingGroupCallIpc.length = 0;
+  });
+
+  groupCallWindow.webContents.on('did-start-load', () => {
+    groupCallWindowReady = false;
   });
 
   return groupCallWindow;
@@ -254,11 +368,11 @@ async function sendToGroupCallWindow(channel, data, { focus = true } = {}) {
   try {
     const win = await ensureGroupCallWindow();
     if (!win || win.isDestroyed()) return;
-    if (focus) {
-      win.show();
-      win.focus();
+    pendingGroupCallIpc.push({ channel, data, focus });
+    if (!groupCallWindowReady) {
+      await waitForGroupCallWindowReady(win);
     }
-    win.webContents.send(channel, data);
+    flushGroupCallWindowQueue();
   } catch (e) {
     console.error('[BLIP] sendToGroupCallWindow', channel, e);
   }
@@ -282,11 +396,12 @@ async function sendToCallWindow(channel, data, { focus = true } = {}) {
   try {
     const win = await ensureCallWindow();
     if (!win || win.isDestroyed()) return;
-    if (focus) {
-      win.show();
-      win.focus();
+    pendingCallIpc.push({ channel, data, focus });
+    if (!callWindowReady) {
+      console.log('[BLIP] → call-window (queued)', channel);
+      await waitForCallWindowReady(win);
     }
-    win.webContents.send(channel, data);
+    flushCallWindowQueue();
     console.log('[BLIP] → call-window', channel, focus ? '+focus' : '');
   } catch (e) {
     console.error('[BLIP] sendToCallWindow', channel, e);
@@ -443,7 +558,6 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'group-sync':
     case 'group-leave':
     case 'group-disband':
-    case 'avatar-sync':
       sendToRenderer('tcp-message', msg);
       break;
     case 'group-call-signal':
@@ -457,6 +571,10 @@ function handleTcpPayload(msg, fromBlipId) {
       sendToRenderer('tcp-message', msg);
       void sendToGroupCallWindow('group-call-tcp', msg, { focus: false });
       break;
+    case 'voice-ch-roster':
+    case 'voice-ch-signal':
+      sendToRenderer('tcp-message', msg);
+      break;
     case 'file-offer':
     case 'file-chunk':
     case 'file-done':
@@ -466,6 +584,7 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     case 'call-offer': {
       const callerId = msg.from ?? fromBlipId;
+      activeCallPeerId = Number(callerId) || null;
       if (config?.desktopCallNotifications !== false && !config?.doNotDisturb) {
         showDesktopNotification({
           kind: 'call',
@@ -487,6 +606,7 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     }
     case 'call-answer':
+      activeCallPeerId = Number(msg.from ?? fromBlipId) || activeCallPeerId;
       void sendToCallWindow('call-answer', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-candidate':
@@ -496,6 +616,7 @@ function handleTcpPayload(msg, fromBlipId) {
       void sendToCallWindow('call-rejected', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-hangup':
+      if (Number(msg.from ?? fromBlipId) === activeCallPeerId) activeCallPeerId = null;
       void sendToCallWindow('call-ended', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-state':
@@ -614,6 +735,9 @@ function setupIpc() {
   ipcMain.handle('save-config', (_, updates) => {
     const prevLang = config?.language;
     config = saveConfig(updates);
+    if (updates?.receiveBetaUpdates !== undefined || updates?.autoDownloadUpdates !== undefined) {
+      configureAutoUpdater(config);
+    }
     discovery?.updateConfig(config);
     discovery?.announce();
     if (typeof updates?.language === 'string' && updates.language !== prevLang) {
@@ -756,6 +880,7 @@ function setupIpc() {
 
   ipcMain.handle('call-hangup', async (_, payload) => {
     try {
+      if (Number(payload.to) === activeCallPeerId) activeCallPeerId = null;
       await sendCallPayload(tcpServer, ensurePeerSocket, payload.to, {
         type: 'call-hangup',
         from: config.blipId,
@@ -763,6 +888,7 @@ function setupIpc() {
       });
       return { ok: true };
     } catch {
+      activeCallPeerId = null;
       return { ok: true };
     }
   });
@@ -837,7 +963,7 @@ function setupIpc() {
     isPackaged: app.isPackaged,
   }));
 
-  ipcMain.handle('check-for-updates', () => checkForUpdatesNow());
+  ipcMain.handle('check-for-updates', () => checkForUpdatesNow(() => config));
   ipcMain.handle('quit-and-install', () => {
     quitAndInstallUpdater();
     return { ok: true };
@@ -862,13 +988,28 @@ function setupIpc() {
     return { ok: true };
   });
 
+  ipcMain.handle('get-group-for-call', async (_, groupId) => readGroupFromMainWindow(groupId));
+
   ipcMain.handle('open-call-outgoing', async (_, payload) => {
-    await sendToCallWindow(
-      'call-outgoing',
-      { peerId: payload.peerId, video: payload.video ?? false },
-      { focus: true }
-    );
-    return { ok: true };
+    try {
+      const peerId = Number(payload?.peerId);
+      if (Number.isFinite(peerId)) {
+        try {
+          await ensurePeerSocket(peerId);
+        } catch (err) {
+          console.warn('[BLIP] open-call-outgoing peer socket:', err?.message || err);
+        }
+      }
+      activeCallPeerId = Number(payload.peerId) || null;
+      await sendToCallWindow(
+        'call-outgoing',
+        { peerId: payload.peerId, video: payload.video ?? false },
+        { focus: true }
+      );
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
   });
 
   ipcMain.handle('close-call-window', () => {
@@ -879,12 +1020,16 @@ function setupIpc() {
   });
 
   ipcMain.handle('open-group-call', async (_, payload) => {
-    await sendToGroupCallWindow(
-      'group-call-join',
-      { groupId: payload?.groupId, skipInvite: !!payload?.skipInvite },
-      { focus: true }
-    );
-    return { ok: true };
+    try {
+      await sendToGroupCallWindow(
+        'group-call-join',
+        { groupId: payload?.groupId, skipInvite: !!payload?.skipInvite },
+        { focus: true }
+      );
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
   });
 
   ipcMain.handle('open-group-call-incoming', async (_, payload) => {
@@ -908,6 +1053,22 @@ function setupIpc() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('group-call-active', data);
     }
+  });
+
+  ipcMain.on('sync-group-call-roster', (_, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('group-call-roster-sync', data);
+    }
+  });
+
+  ipcMain.on('call-window-ready', () => {
+    callWindowReady = true;
+    flushCallWindowQueue();
+  });
+
+  ipcMain.on('group-call-window-ready', () => {
+    groupCallWindowReady = true;
+    flushGroupCallWindowQueue();
   });
 
   ipcMain.on('window-minimize', () => mainWindow?.minimize());
@@ -1024,15 +1185,33 @@ app.whenReady().then(async () => {
   setupIpc();
   createWindow();
   installTray();
-  setupAutoUpdater(() => mainWindow);
+  void ensureCallWindow().catch((e) => console.warn('[BLIP] prewarm call window', e));
+  void ensureGroupCallWindow().catch((e) => console.warn('[BLIP] prewarm group call window', e));
+  setupAutoUpdater(() => mainWindow, () => config);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
+async function hangupActiveCallIfAny() {
+  const peer = activeCallPeerId;
+  if (!peer || !config?.blipId) return;
+  activeCallPeerId = null;
+  try {
+    await sendCallPayload(tcpServer, ensurePeerSocket, peer, {
+      type: 'call-hangup',
+      from: config.blipId,
+      to: peer,
+    });
+  } catch {
+    /* peer may be offline */
+  }
+}
+
 app.on('before-quit', () => {
   appIsQuitting = true;
+  void hangupActiveCallIfAny();
   unregisterGlobalShortcuts();
   destroyTray();
 });

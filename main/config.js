@@ -11,6 +11,10 @@ const DEFAULT_CONFIG = {
   tcpPort: 42070,
   themeId: 'dark-signal',
   animatedBgId: 'none',
+  /** User override: pause animated wallpapers (lighter GPU). */
+  reduceMotion: false,
+  /** Default emoji for the chat reaction (+) button. */
+  defaultReactionEmoji: '➕',
   /** When true, the main window close button hides to tray instead of exiting (Windows default on). */
   closeToTray: process.platform === 'win32',
   /** Launch BLIP when the user signs in to the OS. */
@@ -54,6 +58,15 @@ const DEFAULT_CONFIG = {
   clipboardSyncMode: 'off',
   /** TOFU: blipId string → meshPublicKey */
   knownPeerKeys: {},
+  /** When true, electron-updater may install GitHub prerelease builds (e.g. 0.7.1-beta.x). */
+  receiveBetaUpdates: false,
+  /** Browser noise suppression + AGC on mic (voice + 1:1 calls). */
+  noiseSuppression: true,
+  autoGainControl: true,
+  /** Mic input gain 0–200 (%), applied before encode. */
+  micInputGain: 100,
+  /** Download and install updates automatically when available. */
+  autoDownloadUpdates: true,
 };
 
 let configPath = null;

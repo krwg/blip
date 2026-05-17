@@ -6,12 +6,16 @@ import {
   applyGroupCallStateFromTcp,
   noteGroupCallStarted,
   clearGroupCallRoster,
+  addVoiceParticipant,
 } from './group-call-roster.js';
 
 export { getOngoingGroupCall };
 
-export async function joinGroupCall(groupId, _api, opts = {}) {
+export async function joinGroupCall(groupId, api, opts = {}) {
   if (!window.blip?.openGroupCall) return;
+  const config = api?.config ?? (await window.blip?.getConfig?.());
+  const myId = Number(config?.blipId);
+  if (Number.isFinite(myId)) addVoiceParticipant(groupId, myId);
   await window.blip.openGroupCall({
     groupId,
     skipInvite: !!opts.skipInvite,
@@ -32,6 +36,7 @@ export function getActiveGroupCallId() {
 
 export async function handleGroupCallState(msg) {
   applyGroupCallStateFromTcp(msg);
+  if (!msg.active) clearGroupCallRoster(msg.groupId);
 }
 
 export async function handleGroupCallStart(msg) {

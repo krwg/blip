@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const STORAGE_KEY = 'blip_groups_v1';
 const DECLINED_KEY = 'blip_groups_declined_v1';
 
@@ -16,6 +18,7 @@ function load() {
         if (g.hostId != null) g.hostId = Number(g.hostId);
         if (Array.isArray(g.members)) g.members = normalizeMemberIds(g.members);
         if (Array.isArray(g.messages)) g.messages = dedupeMessages(g.messages);
+        ensureGroupChannels(g);
         groups.set(id, g);
       }
     }
@@ -122,13 +125,64 @@ export function getGroup(groupId) {
   return groups.get(groupId) || null;
 }
 
+/** Inject group from main window (separate call window has its own file:// storage). */
+export const DEFAULT_CHANNELS = [
+  { id: 'text-general', name: 'general', type: 'text' },
+  { id: 'voice-lounge', name: 'voice', type: 'voice' },
+];
+
+export function formatChannelLabel(ch) {
+  if (!ch) return '';
+  if (ch.type === 'voice' && (ch.id === 'voice-lounge' || ch.name === 'lounge' || ch.name === 'voice')) {
+    return t('voice.channel_name');
+  }
+  return ch.name || '';
+}
+
+export function ensureGroupChannels(group) {
+  if (!group) return group;
+  if (!Array.isArray(group.channels) || !group.channels.length) {
+    group.channels = DEFAULT_CHANNELS.map((c) => ({ ...c }));
+  } else {
+    for (const ch of group.channels) {
+      if (ch.type === 'voice' && (ch.name === 'lounge' || ch.id === 'voice-lounge')) {
+        ch.name = 'voice';
+      }
+    }
+  }
+  return group;
+}
+
+export function getTextChannels(group) {
+  ensureGroupChannels(group);
+  return group.channels.filter((c) => c.type === 'text');
+}
+
+export function getVoiceChannels(group) {
+  ensureGroupChannels(group);
+  return group.channels.filter((c) => c.type === 'voice');
+}
+
+export function importGroupRecord(group, { persist: doPersist = true } = {}) {
+  if (!group?.id) return false;
+  const normalized = ensureGroupChannels({
+    ...group,
+    hostId: group.hostId != null ? Number(group.hostId) : group.hostId,
+    members: normalizeMemberIds(group.members),
+    messages: Array.isArray(group.messages) ? group.messages : [],
+  });
+  groups.set(normalized.id, normalized);
+  if (doPersist) persist();
+  return true;
+}
+
 export function saveGroup(group) {
-  const normalized = {
+  const normalized = ensureGroupChannels({
     ...group,
     hostId: Number(group.hostId),
     members: normalizeMemberIds(group.members),
     updatedAt: Date.now(),
-  };
+  });
   if (Array.isArray(normalized.messages)) {
     normalized.messages = dedupeMessages(normalized.messages);
   }

@@ -166,6 +166,13 @@ async function boot() {
       e.preventDefault();
     }
   });
+
+  window.__blipCallReady = true;
+  window.blip.reportCallWindowReady?.();
 }
 
-boot().catch((e) => console.error(e));
+boot().catch((e) => {
+  console.error(e);
+  window.__blipCallReady = true;
+  window.blip?.reportCallWindowReady?.();
+});

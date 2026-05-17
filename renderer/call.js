@@ -10,6 +10,7 @@ import {
 } from './call-media.js';
 import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
+import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 
 const ICE_SERVERS = [];
 
@@ -100,6 +101,11 @@ export function createCallUI(config, api, options = {}) {
   remoteVideo.className = 'call-video remote';
   remoteVideo.autoplay = true;
   remoteVideo.playsInline = true;
+  remoteVideo.muted = true;
+  const remoteAudio = document.createElement('audio');
+  remoteAudio.className = 'call-remote-audio';
+  remoteAudio.autoplay = true;
+  remoteAudio.playsInline = true;
   const gridOverlay = document.createElement('div');
   gridOverlay.className = 'video-pixel-grid';
   videoWrap.appendChild(remoteVideo);
@@ -113,6 +119,14 @@ export function createCallUI(config, api, options = {}) {
   fsBtn.textContent = t('call.fullscreen');
   fsBtn.title = t('call.fullscreen');
   videoWrap.appendChild(fsBtn);
+
+  const streamExitBtn = document.createElement('button');
+  streamExitBtn.type = 'button';
+  streamExitBtn.className = 'call-video-stream-exit-btn btn btn-lang hidden';
+  streamExitBtn.dataset.i18n = 'call.exit_stream';
+  streamExitBtn.textContent = t('call.exit_stream');
+  streamExitBtn.title = t('call.exit_stream');
+  videoWrap.appendChild(streamExitBtn);
 
   const voiceWrap = document.createElement('div');
   voiceWrap.className = 'call-voice-wrap hidden';
@@ -203,6 +217,7 @@ export function createCallUI(config, api, options = {}) {
   inner.appendChild(timerEl);
   inner.appendChild(controls);
   overlay.appendChild(inner);
+  overlay.appendChild(remoteAudio);
 
   let localStream = null;
   let pc = null;
@@ -213,6 +228,8 @@ export function createCallUI(config, api, options = {}) {
   let sharingScreen = false;
   let screenStream = null;
   let savedCameraTrack = null;
+  let remotePlayback = null;
+  let outgoingAudioCtx = null;
   let remoteMuted = false;
   let remoteDeafened = false;
   let renegotiateAnswerResolve = null;
@@ -223,9 +240,71 @@ export function createCallUI(config, api, options = {}) {
   let stageActive = false;
   let remotePeerScreenSharing = false;
   let pseudoFullscreen = false;
+  let stateHeartbeat = null;
 
   /** @type {'off'|'local'|'remote'|'both'} */
   let stageMode = 'off';
+
+  function hasLiveVideo(stream) {
+    const track = stream?.getVideoTracks?.()?.[0];
+    return !!(track && track.readyState === 'live' && track.enabled);
+  }
+
+  function startStateHeartbeat() {
+    stopStateHeartbeat();
+    stateHeartbeat = setInterval(() => broadcastCallState(), 4000);
+  }
+
+  function stopStateHeartbeat() {
+    if (stateHeartbeat) clearInterval(stateHeartbeat);
+    stateHeartbeat = null;
+  }
+
+  function syncStreamExitButton() {
+    const remoteScreen =
+      remotePeerScreenSharing ||
+      (hasLiveVideo(remoteVideo.srcObject) &&
+        trackLooksLikeScreen(remoteVideo.srcObject.getVideoTracks()[0]));
+    const show = !sharingScreen && stageActive && remoteScreen;
+    streamExitBtn.classList.toggle('hidden', !show);
+  }
+
+  function exitRemoteStreamView() {
+    remotePeerScreenSharing = false;
+    remoteVideo.srcObject = null;
+    if (remotePlayback) {
+      for (const tr of [...remotePlayback.getVideoTracks()]) remotePlayback.removeTrack(tr);
+    }
+    const audioTracks =
+      remotePlayback?.getAudioTracks().filter((t) => t.readyState !== 'ended') || [];
+    syncRemotePlayback(audioTracks.length ? remotePlayback : null);
+    setStageView('off');
+    videoWrap.classList.add('hidden');
+    voiceWrap.classList.remove('hidden');
+    streamExitBtn.classList.add('hidden');
+    void exitPseudoFullscreen();
+  }
+
+  function reconcileRemoteVideo() {
+    if (sharingScreen) return;
+    if (remotePeerScreenSharing) return;
+    const vTrack = remoteVideo.srcObject?.getVideoTracks?.()?.[0];
+    if (vTrack && trackLooksLikeScreen(vTrack)) {
+      exitRemoteStreamView();
+      return;
+    }
+    if (hasLiveVideo(remoteVideo.srcObject)) return;
+    remoteVideo.srcObject = null;
+    if (!withVideo) {
+      setStageView('off');
+      videoWrap.classList.add('hidden');
+      voiceWrap.classList.remove('hidden');
+      void exitPseudoFullscreen();
+    } else {
+      refreshStageLayout();
+    }
+    syncStreamExitButton();
+  }
 
   function setStageView(mode) {
     stageMode = mode;
@@ -251,10 +330,13 @@ export function createCallUI(config, api, options = {}) {
     if (mode === 'both') {
       localVideo.classList.remove('hidden');
     }
+    syncStreamExitButton();
   }
 
   function refreshStageLayout() {
-    const remoteTrack = remoteVideo.srcObject?.getVideoTracks?.()?.[0];
+    const remoteTrack = hasLiveVideo(remoteVideo.srcObject)
+      ? remoteVideo.srcObject.getVideoTracks()[0]
+      : null;
     const remoteScreen =
       remotePeerScreenSharing || (remoteTrack && trackLooksLikeScreen(remoteTrack));
     const anyScreen = sharingScreen || remoteScreen;
@@ -276,6 +358,7 @@ export function createCallUI(config, api, options = {}) {
     } else {
       setStageView('remote');
     }
+    syncStreamExitButton();
   }
 
   function getFullscreenTarget() {
@@ -324,6 +407,7 @@ export function createCallUI(config, api, options = {}) {
           applyCallFullscreenLayout(videoWrap, null, config, false);
         }
         syncFullscreenButton();
+        void ensureRemoteAudioPlaying();
         return;
       } catch (err) {
         console.warn('[call] window fullscreen:', err.message);
@@ -358,6 +442,7 @@ export function createCallUI(config, api, options = {}) {
     overlay.classList.toggle('call-overlay--theater-fs', pseudoFullscreen);
     applyCallFullscreenLayout(videoWrap, pseudoFullscreen ? activeStageVideo() : null, config, pseudoFullscreen);
     syncFullscreenButton();
+    void ensureRemoteAudioPlaying();
   }
 
   function syncFullscreenButton() {
@@ -372,6 +457,7 @@ export function createCallUI(config, api, options = {}) {
     applyCallFullscreenLayout(videoWrap, on ? activeStageVideo() : null, config, on);
     if (!on) exitPseudoFullscreen();
     syncFullscreenButton();
+    void ensureRemoteAudioPlaying();
   });
 
   function show() {
@@ -390,6 +476,7 @@ export function createCallUI(config, api, options = {}) {
   }
 
   function cleanup() {
+    stopStateHeartbeat();
     sounds.stopIncomingRing();
     sounds.stopOutgoingRing();
     if (document.fullscreenElement) {
@@ -422,6 +509,12 @@ export function createCallUI(config, api, options = {}) {
     }
     localVideo.srcObject = null;
     remoteVideo.srcObject = null;
+    remoteAudio.srcObject = null;
+    remotePlayback = null;
+    if (outgoingAudioCtx) {
+      void outgoingAudioCtx.close();
+      outgoingAudioCtx = null;
+    }
     activeCall = null;
     inner.style.borderColor = '';
     acceptBtn.classList.add('hidden');
@@ -454,7 +547,8 @@ export function createCallUI(config, api, options = {}) {
     remoteDeafened = !!state?.deafened;
     if (typeof state?.screenSharing === 'boolean') {
       remotePeerScreenSharing = state.screenSharing;
-      refreshStageLayout();
+      if (!state.screenSharing) exitRemoteStreamView();
+      else refreshStageLayout();
     }
     updateRemoteBadges();
   }
@@ -471,6 +565,48 @@ export function createCallUI(config, api, options = {}) {
       .catch(() => {});
   }
 
+  function mergeRemotePlayback(stream) {
+    if (!remotePlayback) remotePlayback = new MediaStream();
+    for (const track of stream.getTracks()) {
+      remotePlayback
+        .getTracks()
+        .filter((t) => t.kind === track.kind && t.id !== track.id)
+        .forEach((t) => remotePlayback.removeTrack(t));
+      if (!remotePlayback.getTracks().some((t) => t.id === track.id)) {
+        remotePlayback.addTrack(track);
+      }
+    }
+    return remotePlayback;
+  }
+
+  async function restoreMicAudioSender() {
+    if (outgoingAudioCtx) {
+      try {
+        await outgoingAudioCtx.close();
+      } catch {
+        /* ignore */
+      }
+      outgoingAudioCtx = null;
+    }
+    const mic = localStream?.getAudioTracks()[0];
+    const sender = pc?.getSenders().find((s) => s.track?.kind === 'audio');
+    if (mic && sender) await sender.replaceTrack(mic);
+  }
+
+  async function applyScreenShareAudioMix() {
+    const screenAudio = screenStream?.getAudioTracks()[0];
+    const mic = localStream?.getAudioTracks()[0];
+    if (!screenAudio || !mic) return;
+    await restoreMicAudioSender();
+    outgoingAudioCtx = new AudioContext();
+    const dest = outgoingAudioCtx.createMediaStreamDestination();
+    outgoingAudioCtx.createMediaStreamSource(new MediaStream([mic])).connect(dest);
+    outgoingAudioCtx.createMediaStreamSource(new MediaStream([screenAudio])).connect(dest);
+    const mixed = dest.stream.getAudioTracks()[0];
+    const sender = pc?.getSenders().find((s) => s.track?.kind === 'audio');
+    if (sender && mixed) await sender.replaceTrack(mixed);
+  }
+
   function setShareButton(active) {
     shareBtn.classList.toggle('active', active);
     shareBtn.dataset.i18n = active ? 'call.share_stop' : 'call.share';
@@ -479,8 +615,12 @@ export function createCallUI(config, api, options = {}) {
 
   function showInCallControls() {
     shareBtn.classList.remove('hidden');
+    endBtn.classList.remove('hidden');
+    muteBtn.classList.remove('hidden');
+    deafenBtn.classList.remove('hidden');
     updateRemoteBadges();
     broadcastCallState();
+    startStateHeartbeat();
   }
 
   async function waitRenegotiateAnswer() {
@@ -561,11 +701,13 @@ export function createCallUI(config, api, options = {}) {
         videoWrap.classList.add('hidden');
         voiceWrap.classList.remove('hidden');
         localVideo.srcObject = null;
-        refreshStageLayout();
+        setStageView('off');
+        void exitPseudoFullscreen();
       } else {
         localVideo.srcObject = null;
         refreshStageLayout();
       }
+      await restoreMicAudioSender();
     } catch (err) {
       console.warn('[call] stop share:', err.message);
     }
@@ -581,10 +723,10 @@ export function createCallUI(config, api, options = {}) {
     }
 
     try {
-      const sourceId = await openScreenPickerDialog();
-      if (!sourceId) return;
+      const pick = await openScreenPickerDialog();
+      if (!pick?.sourceId) return;
 
-      const stream = await captureDisplayStream(sourceId, config);
+      const stream = await captureDisplayStream(pick.sourceId, config, { withAudio: !!pick.withAudio });
       const screenTrack = stream.getVideoTracks()[0];
       if (!screenTrack) throw new Error('No screen track');
 
@@ -609,7 +751,11 @@ export function createCallUI(config, api, options = {}) {
       }
 
       await applyOutgoingVideoTrack(screenTrack, { screenShare: true });
+      if (pick.withAudio && stream.getAudioTracks()[0]) {
+        await applyScreenShareAudioMix();
+      }
       refreshStageLayout();
+      void ensureRemoteAudioPlaying();
 
       screenTrack.onended = () => {
         void stopScreenShare();
@@ -651,22 +797,45 @@ export function createCallUI(config, api, options = {}) {
 
   async function applyRemoteAudioSink() {
     const deviceId = await resolveAudioDeviceId('output');
-    if (!deviceId || !remoteVideo.setSinkId) return;
+    if (!deviceId || !remoteAudio.setSinkId) return;
     try {
-      await remoteVideo.setSinkId(deviceId);
+      await remoteAudio.setSinkId(deviceId);
     } catch (err) {
       console.warn('[call] setSinkId:', err.message);
     }
   }
 
-  function attachRemoteStream(stream) {
-    remoteVideo.srcObject = stream;
+  async function ensureRemoteAudioPlaying() {
+    if (!remoteAudio.srcObject || deafened) return;
+    try {
+      await remoteAudio.play();
+    } catch (err) {
+      console.warn('[call] remote audio play:', err.message);
+    }
+  }
+
+  function syncRemotePlayback(stream) {
+    if (!stream) {
+      remoteVideo.srcObject = null;
+      remoteAudio.srcObject = null;
+      return;
+    }
+    const videoTracks = stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
+    const audioTracks = stream.getAudioTracks().filter((t) => t.readyState !== 'ended');
+    remoteVideo.srcObject = videoTracks.length ? new MediaStream(videoTracks) : null;
+    remoteAudio.srcObject = audioTracks.length ? new MediaStream(audioTracks) : null;
+    remoteAudio.muted = deafened;
     void applyRemoteAudioSink();
+    void ensureRemoteAudioPlaying();
+  }
+
+  function attachRemoteStream(stream) {
+    syncRemotePlayback(mergeRemotePlayback(stream));
     setConnectedStatus();
     startTimer();
     showInCallControls();
     const vTrack = stream.getVideoTracks()[0];
-    if (vTrack) {
+    if (vTrack && vTrack.readyState !== 'ended') {
       videoWrap.classList.remove('hidden');
       voiceWrap.classList.add('hidden');
       if (!trackLooksLikeScreen(vTrack)) {
@@ -677,27 +846,25 @@ export function createCallUI(config, api, options = {}) {
         remoteVideo.classList.add('call-video--camera');
         localVideo.classList.add('call-video--camera');
       }
+      vTrack.onended = () => {
+        if (trackLooksLikeScreen(vTrack)) exitRemoteStreamView();
+        else reconcileRemoteVideo();
+      };
     }
   }
 
   async function getMedia(video) {
-    const deviceId = await resolveAudioDeviceId('input');
-    const audio =
-      deviceId && deviceId !== 'default'
-        ? { deviceId: { exact: deviceId } }
-        : true;
+    if (!video) {
+      return getVoiceMediaStream(config);
+    }
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio,
-        video: video ? getCameraVideoConstraints(config) : false,
+        audio: getVoiceAudioConstraints(config),
+        video: getCameraVideoConstraints(config),
       });
     } catch (err) {
-      if (!deviceId) throw err;
-      console.warn('[call] mic device failed, using default:', err.message);
-      return navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: video ? getCameraVideoConstraints(config) : false,
-      });
+      console.warn('[call] getUserMedia:', err.message);
+      throw err;
     }
   }
 
@@ -799,11 +966,22 @@ export function createCallUI(config, api, options = {}) {
       const offerWire = toSdpWire(pc.localDescription);
       if (!offerWire) throw new Error('Invalid local SDP');
 
-      const result = await api.initiateCall({
+      let result = await api.initiateCall({
         to: targetId,
         sdp: offerWire,
         video,
       });
+      if (!result?.ok) {
+        const errMsg = result?.error || '';
+        if (/peer not found/i.test(errMsg)) {
+          await new Promise((r) => setTimeout(r, 400));
+          result = await api.initiateCall({
+            to: targetId,
+            sdp: offerWire,
+            video,
+          });
+        }
+      }
       if (!result?.ok) throw new Error(result?.error || 'Call failed');
     } catch (err) {
       console.error('[call] outgoing:', err);
@@ -825,6 +1003,7 @@ export function createCallUI(config, api, options = {}) {
     }
     localVideo.srcObject = null;
     remoteVideo.srcObject = null;
+    remoteAudio.srcObject = null;
     activeCall = null;
   }
 
@@ -980,6 +1159,8 @@ export function createCallUI(config, api, options = {}) {
       const answerWire = toSdpWire(pc.localDescription);
       if (!answerWire) throw new Error('Invalid local SDP');
       await api.callRenegotiateAnswer({ to: peerId, sdp: answerWire });
+      reconcileRemoteVideo();
+      refreshStageLayout();
       showInCallControls();
     } catch (err) {
       console.error('[BLIP call] renegotiate offer:', err);
@@ -1029,8 +1210,9 @@ export function createCallUI(config, api, options = {}) {
   function toggleDeafen() {
     if (deafenBtn.classList.contains('hidden')) return;
     deafened = !deafened;
-    remoteVideo.muted = deafened;
+    remoteAudio.muted = deafened;
     deafenBtn.classList.toggle('active', deafened);
+    if (!deafened) void ensureRemoteAudioPlaying();
     broadcastCallState();
   }
 
@@ -1045,6 +1227,9 @@ export function createCallUI(config, api, options = {}) {
   });
   fsBtn.addEventListener('click', () => {
     void toggleVideoFullscreen();
+  });
+  streamExitBtn.addEventListener('click', () => {
+    exitRemoteStreamView();
   });
 
   async function hangupCall() {

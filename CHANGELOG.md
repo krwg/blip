@@ -11,6 +11,129 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 _Nothing yet._
 
+## [0.7.0.7] — Portrait
+
+### Changed
+
+- **Chat** — removed trust gate and read receipts; default reaction is **➕** (custom emoji in Settings → Appearance).
+- **Voice channel** — default channel label **Voice** / **Голос** (was lounge).
+- **Appearance** — six new animated backgrounds; **Reduce background motion** toggle.
+
+### Fixed
+
+- **Voice channels** — audio via resumed `AudioContext` and raw mic for WebRTC (no silent mix).
+- **1:1 screen share** — frozen frame cleared; **Exit stream** button under fullscreen.
+- **Build** — restored `formatClipboardToast` export.
+
+## [0.7.0.6] — Portrait
+
+### Fixed
+
+- **Voice channels** — host join after clients, reconnect signal, stale peer cleanup; screen share sends video (renegotiate) with preview tiles.
+- **1:1 calls** — closing the app sends `call-hangup` to the remote peer.
+
+### Added
+
+- **Screen picker** — “Share system audio” checkbox when starting screen share (1:1, group, voice).
+- **Mic test** — input volume slider, level meter, and test loop (Settings → Calls).
+- **Updates** — toggle **Download updates automatically** (off = check only, no background download).
+
+## [0.7.0.5] — Portrait
+
+### Fixed
+
+- **Voice channels** — roster merges joins and removes leavers (no ghost avatars); SFU **mix-minus-self** (no hearing only yourself); mesh audio when group host is not in the channel.
+
+### Added
+
+- **Noise suppression** — WebRTC `noiseSuppression` / `autoGainControl` (Settings → Calls); shared `audio-capture.js` for 1:1 and voice channels.
+- **Voice channel screen share** — share button on the voice stage (status badge for peers).
+
+## [0.7.0.4] — Portrait
+
+### Fixed
+
+- **Voice channels (lounge)** — incoming `voice-ch-roster` / `voice-ch-signal` TCP messages reach the voice stack; host mixer plays locally and sends mixed audio to clients.
+- **1:1 fullscreen + screen share** — remote mic stays on a dedicated audio element; optional **Share sound** mixes system audio with the microphone.
+
+### Added
+
+- **Settings → Updates** — **Auto-update** section (startup check + background download).
+- **Settings → Developer** — **Receive beta releases** toggles `electron-updater` prerelease channel (`0.7.1-beta.x` vs stable `0.7.x`).
+
+## [0.7.0.3] — Portrait
+
+### Fixed
+
+- **1:1 call screen share + fullscreen** — remote microphone audio no longer drops when the stage is fullscreen; playback uses a dedicated `<audio>` element outside the fullscreen video container (Chromium/Electron quirk).
+
+## [0.7.0.2] — Portrait
+
+### Fixed
+
+- **Messages and group invites** — TCP `message`, `typing`, `group-msg`, `group-invite`, etc. were routed only to the group-call window instead of the main UI (regression in 0.7.0.x).
+
+## [0.7.0.1] — Portrait
+
+Display version **0.7.0.1**; package / installer semver **0.7.1-beta.1** (electron-builder requires `major.minor.patch`, not `0.7.0.1`).
+
+### Fixed
+
+- **Leave group** — voice channel cleanup no longer throws (broken `leaveGroupCall` reference).
+- **Group invites** — arrive as **cards in Chat** (Join / Decline), not a blocking dialog.
+
+### Added
+
+- **Themes**: Trace, Bloom, Midnight, Aqua, Crimson.
+- **Backgrounds**: Pixel (`static`), Rain, Glitch, Beacon.
+
+## [0.7.0] — Portrait
+
+### Added
+
+- **Voice channels** — groups have text + voice channels; sidebar on the main window (pixel/glass style).
+- **Star voice topology** — all voice flows through the **group host** (mixer); join channel = subscribe, no ad-hoc “group call” mesh.
+
+### Changed
+
+- Group voice uses `voice-ch-roster` / `voice-ch-signal` instead of opening a separate group-call window for new sessions.
+
+## [0.6.4] — Portrait
+
+### Fixed
+
+- **1:1 calls** — reliable delivery of `call-outgoing` / `incoming-call` to the call window (queue + flush); TCP to peer warmed before dial; retry if peer socket is not ready yet.
+- **Group calls** — mesh only to active voice participants (no stale PCs to offline members); reconnect when a peer joins; stop dial tone when WebRTC connects.
+- **Group roster** — main window hub/chat counts stay in sync with the group-call window (`sync-group-call-roster` IPC).
+- **Group UI** — status shows «СОЕДИНЕНО» when linked; member label no longer shows «ГОЛОС» before WebRTC is up.
+
+## [0.6.3] — Portrait
+
+### Fixed
+
+- **Group calls** — leaving peer is removed from the roster and tiles; mesh re-syncs screen share for rejoining participants; stopping share shows avatar again (not a gray tile).
+- **Group calls** — participant list sync every 4s (`group-call-state`) plus pruning stale WebRTC peers when roster shrinks.
+- **1:1 calls** — after remote screen share ends, video stage clears (no frozen frame); call controls stay visible; periodic `call-state` sync every 4s.
+- **Chat** — opening a conversation scrolls to the latest messages at the bottom.
+
+## [0.6.2] — Portrait
+
+### Fixed
+
+- **Calls (1:1 and group)** — pre-warm call windows at startup; wait until renderer is ready before IPC (fixes lost `call-outgoing` / `group-call-join`).
+- **Group calls** — group data is read from the main window’s `localStorage` (`get-group-for-call`); separate `file://` pages no longer see an empty group list.
+
+## [0.6.1] — Portrait
+
+### Fixed
+
+- **1:1 and group calls** — IPC to call windows is queued until the renderer signals ready (fixes lost `call-outgoing`, `incoming-call`, and `group-call-join` on first open).
+- **Group call window** — `config` is passed into join/handlers so `blipId` and mic access work reliably.
+
+### Removed
+
+- **Custom / LAN-synced profile photos** — avatars are **8×8 auto-generated** only (regenerate in Settings).
+
 ## [0.6.0] — Portrait
 
 ### Added

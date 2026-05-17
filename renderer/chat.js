@@ -18,7 +18,12 @@ import { createMessageId } from './message-id.js';
 
 const STORAGE_KEY = 'blip_chat_v1';
 const MAX_PER_PEER = 500;
-const REACTION_EMOJI = '❤️';
+const DEFAULT_REACTION = '➕';
+
+export function getDefaultReactionEmoji(config) {
+  const e = config?.defaultReactionEmoji;
+  return typeof e === 'string' && e.trim() ? e.trim() : DEFAULT_REACTION;
+}
 
 const messagesByPeer = new Map();
 
@@ -77,21 +82,6 @@ export function findMessage(peerId, messageId) {
   return getMessages(peerId).find((m) => m.id === messageId) || null;
 }
 
-export function applyReceiptToMessage(peerId, messageId, receipt) {
-  const m = findMessage(peerId, messageId);
-  if (!m || !m.outgoing) return false;
-  if (receipt === 'read') {
-    m.delivered = true;
-    m.read = true;
-  } else if (receipt === 'delivered') {
-    m.delivered = true;
-  } else {
-    return false;
-  }
-  persist();
-  return true;
-}
-
 export function toggleReactionOnMessage(peerId, messageId, emoji, fromPeerId) {
   const m = findMessage(peerId, messageId);
   if (!m || !emoji) return false;
@@ -134,13 +124,6 @@ export function exportPeerChat(peerId, displayName) {
 
 function openExternalUrl(url) {
   if (window.blip?.openExternal) void window.blip.openExternal(url);
-}
-
-function receiptLabel(m) {
-  if (!m.outgoing) return '';
-  if (m.read) return '✓✓';
-  if (m.delivered) return '✓';
-  return '';
 }
 
 function appendFileAttachment(block, attachment, openExternalUrl) {
@@ -190,7 +173,6 @@ export function createChatView(
   onSend,
   onBack,
   onTyping,
-  onReceipt,
   onReaction,
   onSendFile,
   onPeerMenu
@@ -335,6 +317,13 @@ export function createChatView(
 
   const messagesEl = document.createElement('div');
   messagesEl.className = 'chat-messages glass';
+
+  let stickToBottom = true;
+  messagesEl.addEventListener('scroll', () => {
+    const gap =
+      messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+    stickToBottom = gap < 80;
+  });
 
   const typingBar = document.createElement('div');
   typingBar.className = 'chat-typing hidden';
@@ -643,11 +632,11 @@ export function createChatView(
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'chat-reaction-add';
+    addBtn.className = 'chat-reaction-add chat-reaction-add--plus';
     addBtn.title = t('chat.react');
-    addBtn.textContent = REACTION_EMOJI;
+    addBtn.textContent = getDefaultReactionEmoji(config);
     addBtn.addEventListener('click', () => {
-      const emoji = REACTION_EMOJI;
+      const emoji = getDefaultReactionEmoji(config);
       toggleReactionOnMessage(peerId, m.id, emoji, selfId);
       void onReaction?.(peerId, { messageId: m.id, emoji, add: true });
       renderMessages();
@@ -667,8 +656,6 @@ export function createChatView(
     const cursorPos = hasFocus ? input.selectionStart : null;
 
     const scrollPos = messagesEl.scrollTop;
-    const nearBottom =
-      messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
 
     messagesEl.innerHTML = '';
     if (msgs.length === 0) {
@@ -717,14 +704,6 @@ export function createChatView(
         time.title = new Date(m.timestamp).toLocaleString();
         metaRow.appendChild(time);
       }
-      const rcpt = receiptLabel(m);
-      if (rcpt) {
-        const r = document.createElement('span');
-        r.className = 'chat-receipt';
-        r.textContent = rcpt;
-        r.title = m.read ? t('chat.read') : m.delivered ? t('chat.delivered') : '';
-        metaRow.appendChild(r);
-      }
       block.appendChild(metaRow);
 
       if (m.id) block.appendChild(buildReactionRow(m));
@@ -739,11 +718,18 @@ export function createChatView(
       });
     }
 
-    if (nearBottom || !hasFocus) {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    if (stickToBottom) {
+      requestAnimationFrame(() => {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
     } else {
       messagesEl.scrollTop = scrollPos;
     }
+  }
+
+  function scrollToBottom() {
+    stickToBottom = true;
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   function flashNew() {
@@ -757,6 +743,7 @@ export function createChatView(
   return {
     el: wrap,
     renderMessages,
+    scrollToBottom,
     flashNew,
     setPeerName(displayName) {
       name.textContent = displayName || `BLIP-${peerId}`;
@@ -780,12 +767,6 @@ export function createChatView(
       renderMessages();
       flashNew();
       sounds.messageReceived();
-      if (incoming.id) {
-        void onReceipt?.(peerId, { messageId: incoming.id, receipt: 'delivered' });
-      }
-    },
-    handleReceipt(msg) {
-      if (applyReceiptToMessage(peerId, msg.messageId, msg.receipt)) renderMessages();
     },
     handleReaction(msg) {
       const from = Number(msg.from);
@@ -804,15 +785,7 @@ export function createChatView(
       }
       renderMessages();
     },
-    markRead() {
-      const selfId = config?.blipId;
-      for (const m of getMessages(peerId)) {
-        if (!m.outgoing && m.id && !m._readAcked) {
-          m._readAcked = true;
-          void onReceipt?.(peerId, { messageId: m.id, receipt: 'read' });
-        }
-      }
-    },
+    markRead() {},
     setTyping,
   };
 }

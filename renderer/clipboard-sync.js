@@ -1,5 +1,5 @@
 import { t } from './i18n.js';
-import { isTrusted, isBlocked } from './peer-trust.js';
+import { isBlocked } from './peer-trust.js';
 
 const MAX_CLIP_BYTES = 32 * 1024;
 const POLL_MS = 1500;
@@ -8,10 +8,15 @@ let pollTimer = null;
 let lastSent = '';
 let lastApplied = '';
 
-export const CLIPBOARD_SYNC_MODES = ['off', 'active', 'trusted'];
+export const CLIPBOARD_SYNC_MODES = ['off', 'active'];
 
 export function normalizeClipboardSyncMode(value) {
+  if (value === 'trusted') return 'active';
   return CLIPBOARD_SYNC_MODES.includes(value) ? value : 'off';
+}
+
+export function formatClipboardToast(fromPeerId) {
+  return t('clipboard.received').replace('{id}', String(fromPeerId));
 }
 
 function resolveTargets(mode, config, peers, activePeer) {
@@ -22,10 +27,6 @@ function resolveTargets(mode, config, peers, activePeer) {
     const id = Number(activePeer);
     if (!Number.isFinite(id)) return [];
     return online.some((p) => Number(p.blipId) === id) ? [id] : [];
-  }
-
-  if (mode === 'trusted') {
-    return online.filter((p) => isTrusted(p.blipId)).map((p) => Number(p.blipId));
   }
 
   return [];
@@ -103,7 +104,6 @@ export async function handleClipboardPush(msg, ctx) {
   const mode = normalizeClipboardSyncMode(ctx.getConfig().clipboardSyncMode);
   if (mode === 'off') return;
 
-  if (mode === 'trusted' && !isTrusted(from)) return;
   if (mode === 'active') {
     const active = Number(ctx.getActivePeer());
     if (!Number.isFinite(active) || active !== from) return;
@@ -119,8 +119,4 @@ export async function handleClipboardPush(msg, ctx) {
   } catch {
     /* OS denied write */
   }
-}
-
-export function formatClipboardToast(from) {
-  return t('clipboard.received').replace('{id}', String(from));
 }

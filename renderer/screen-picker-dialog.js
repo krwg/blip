@@ -2,7 +2,7 @@ import { t } from './i18n.js';
 
 /**
  * Discord-style screen/window picker (sources from main process).
- * @returns {Promise<string|null>} desktopCapturer source id
+ * @returns {Promise<{ sourceId: string, withAudio: boolean } | null>}
  */
 export async function openScreenPickerDialog() {
   if (!window.blip?.listDisplaySources) return null;
@@ -33,6 +33,17 @@ export async function openScreenPickerDialog() {
     title.dataset.i18n = 'call.picker_title';
     title.textContent = t('call.picker_title');
 
+    const audioRow = document.createElement('label');
+    audioRow.className = 'screen-picker-audio-row settings-tray-toggle-row';
+    const audioCb = document.createElement('input');
+    audioCb.type = 'checkbox';
+    audioCb.checked = true;
+    const audioSpan = document.createElement('span');
+    audioSpan.dataset.i18n = 'call.picker_share_audio';
+    audioSpan.textContent = t('call.picker_share_audio');
+    audioRow.appendChild(audioCb);
+    audioRow.appendChild(audioSpan);
+
     const tabs = document.createElement('div');
     tabs.className = 'screen-picker-tabs';
 
@@ -52,11 +63,11 @@ export async function openScreenPickerDialog() {
     grid.className = 'screen-picker-grid';
 
     let done = false;
-    function finish(id) {
+    function finish(result) {
       if (done) return;
       done = true;
       backdrop.remove();
-      resolve(id);
+      resolve(result);
     }
 
     function renderGrid() {
@@ -90,7 +101,9 @@ export async function openScreenPickerDialog() {
         label.className = 'screen-picker-label';
         label.textContent = src.name;
         card.appendChild(label);
-        card.addEventListener('click', () => finish(src.id));
+        card.addEventListener('click', () =>
+          finish({ sourceId: src.id, withAudio: audioCb.checked })
+        );
         grid.appendChild(card);
       });
     }
@@ -127,6 +140,7 @@ export async function openScreenPickerDialog() {
     tabs.appendChild(screenTab);
     tabs.appendChild(windowTab);
     modal.appendChild(title);
+    modal.appendChild(audioRow);
     modal.appendChild(tabs);
     modal.appendChild(grid);
     modal.appendChild(actions);
