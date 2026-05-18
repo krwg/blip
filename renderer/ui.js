@@ -997,7 +997,7 @@ function buildAvatarSettingsSection() {
   function refreshPreview() {
     preview.innerHTML = '';
     preview.appendChild(
-      createAvatarElement(state.config.blipId, 5, { selfBlipId: state.config.blipId })
+      createAvatarElement(state.config.blipId, 4, { selfBlipId: state.config.blipId })
     );
   }
   refreshPreview();

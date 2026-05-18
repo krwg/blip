@@ -21,9 +21,10 @@
 @font-face {
   font-family: 'BlipPixel';
   src:
-    url('./assets/fonts/minecraft-cyrillic.woff2') format('woff2'),
-    url('./assets/fonts/minecraft.woff2') format('woff2');
+    url('./assets/fonts/minecraft.woff2') format('woff2'),
+    url('./assets/fonts/minecraft-cyrillic.woff2') format('woff2');
   font-display: swap;
+  unicode-range: U+0000-FFFF;
 }
 
 *,
@@ -42,7 +43,7 @@ body {
   overflow: hidden;
   background: var(--blip-bg);
   color: var(--blip-text);
-  font-family: 'Minecraft', 'BlipPixel', monospace;
+  font-family: 'BlipPixel', 'Minecraft', monospace;
   font-size: 15px;
   line-height: 1.35;
   -webkit-font-smoothing: none;
@@ -54,8 +55,16 @@ body {
 input,
 textarea,
 select,
-button {
+button,
+a {
   font-family: inherit;
+  pointer-events: auto;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #app {
@@ -69,6 +78,18 @@ button {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 2px solid var(--blip-glass-border);
+  isolation: isolate;
+}
+
+/* Electron: backdrop-filter breaks hit-testing on interactive panels */
+.main-content .glass,
+.chat-view .glass,
+.settings-shell .glass,
+.peers-list.glass,
+.chat-hub-list.glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--blip-glass) 92%, var(--blip-bg));
 }
 
 /* Title bar */
@@ -161,7 +182,8 @@ button {
 .main-content {
   flex: 1;
   padding: 16px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -173,6 +195,20 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.main-content > .chat-view {
+  overflow: hidden;
+}
+
+.view {
+  min-height: 0;
+}
+
+.peers-view,
+.settings-view,
+.dial-view {
+  width: 100%;
 }
 
 /* Buttons */
@@ -1295,6 +1331,7 @@ select.blip-select:focus {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
+  pointer-events: auto;
 }
 
 .chat-back-btn {
@@ -1499,7 +1536,9 @@ select.blip-select:focus {
   position: relative;
   z-index: 1;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1580,8 +1619,12 @@ select.blip-select:focus {
 }
 
 .chat-input-row {
+  position: relative;
+  z-index: 12;
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
+  pointer-events: auto;
 }
 
 .chat-input-row .input {
@@ -1593,6 +1636,31 @@ select.blip-select:focus {
 .avatar-wrap {
   display: inline-block;
   image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.chat-avatar-mount .avatar-wrap,
+.chat-avatar-mount .avatar-img,
+.chat-avatar-mount .avatar-canvas {
+  width: 28px;
+  height: 28px;
+}
+
+.chat-hub-row .avatar-wrap,
+.chat-hub-row .avatar-img,
+.chat-hub-row .avatar-canvas,
+.peers-list .avatar-wrap,
+.peers-list .avatar-img,
+.peers-list .avatar-canvas {
+  width: 24px;
+  height: 24px;
+}
+
+.settings-avatar-preview .avatar-wrap,
+.settings-avatar-preview .avatar-img,
+.settings-avatar-preview .avatar-canvas {
+  width: 40px;
+  height: 40px;
 }
 
 .avatar-canvas {
@@ -2140,6 +2208,7 @@ select.blip-select:focus {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .settings-shell__nav {
@@ -3372,6 +3441,8 @@ body.media-viewer-open {
 
 .settings-panel--about {
   flex: 1;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3379,6 +3450,16 @@ body.media-viewer-open {
   text-align: center;
   min-height: min(70vh, 520px);
   gap: 16px;
+  margin: 0 auto;
+}
+
+.settings-panel--about > .settings-about-hero,
+.settings-panel--about > .btn,
+.settings-panel--about > .settings-about-links {
+  width: 100%;
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .settings-about-hero {

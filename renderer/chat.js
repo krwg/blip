@@ -161,7 +161,7 @@ export function createChatView(
   function mountHeaderAvatar() {
     avatarMount.innerHTML = '';
     avatarMount.appendChild(
-      createAvatarElement(peerId, 3, { selfBlipId: getConfig()?.blipId ?? null })
+      createAvatarElement(peerId, 2, { selfBlipId: getConfig()?.blipId ?? null })
     );
   }
   mountHeaderAvatar();
