@@ -12,6 +12,16 @@
 [![P2P](https://img.shields.io/badge/Network-P2P%20LAN-00ffc8?style=flat-square)]()
 [![Lang](https://img.shields.io/badge/i18n-EN%20%7C%20RU-e0e0e0?style=flat-square)]()
 
+![](https://img.shields.io/badge/WebRTC-P2P-00ffc8?style=flat-square)
+![](https://img.shields.io/badge/discovery-UDP%20%2B%20mDNS-333?style=flat-square)
+![](https://img.shields.io/badge/signal-Ed25519-00ffc8?style=flat-square)
+
+![](https://img.shields.io/badge/network-LAN%20only-00ffc8?style=flat-square)
+![](https://img.shields.io/badge/cloud-none-00ffc8?style=flat-square)
+![](https://img.shields.io/badge/accounts-none-00ffc8?style=flat-square)
+![](https://img.shields.io/badge/peers-1–64-00ffc8?style=flat-square)
+
+
 *You're on the grid. You're the signal.*
 
 </div>
