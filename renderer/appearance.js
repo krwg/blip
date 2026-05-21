@@ -3,6 +3,7 @@
  */
 
 import { t } from './i18n.js';
+import { isMeshPlusTierActive } from '../shared/mesh-plus-gates.js';
 
 export const THEME_MODES = ['light', 'dark', 'auto'];
 
@@ -126,6 +127,32 @@ export function labelBg(id) {
   return label === key ? id : label;
 }
 
+/**
+ * @param {string} raw
+ * @returns {string} #rrggbb or ''
+ */
+export function normalizeCustomAccentHex(raw) {
+  const s = String(raw || '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(s)) return s.toLowerCase();
+  if (/^[0-9A-Fa-f]{6}$/.test(s)) return `#${s.toLowerCase()}`;
+  return '';
+}
+
+function applyCustomAccentVars(html, config) {
+  const hex = normalizeCustomAccentHex(config?.accentCustomHex);
+  if (isMeshPlusTierActive(config) && hex) {
+    html.style.setProperty('--blip-accent', hex);
+    html.style.setProperty('--blip-glass-border', hex);
+    html.style.setProperty('--blip-caret', hex);
+    html.dataset.accentCustom = '1';
+  } else {
+    html.style.removeProperty('--blip-accent');
+    html.style.removeProperty('--blip-glass-border');
+    html.style.removeProperty('--blip-caret');
+    delete html.dataset.accentCustom;
+  }
+}
+
 export function applyAppearance(config) {
   const html = document.documentElement;
   const mode = normalizeThemeMode(config?.themeMode, config?.themeId);
@@ -140,6 +167,7 @@ export function applyAppearance(config) {
   delete html.dataset.callWindow;
   html.dataset.reactiveBg =
     config?.reactiveBackground === true && bg !== 'none' ? '1' : '0';
+  applyCustomAccentVars(html, config);
   syncReducedMotion(config);
 }
 
@@ -153,6 +181,7 @@ export function applyCallWindowAppearance(config) {
   html.dataset.animatedBg = 'none';
   html.dataset.callWindow = '1';
   html.dataset.reactiveBg = '0';
+  applyCustomAccentVars(html, config);
   syncReducedMotion(config);
 }
 

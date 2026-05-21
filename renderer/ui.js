@@ -97,10 +97,20 @@ import {
   wrapInSettingsListPanel,
 } from './settings-ui.js';
 import { buildMicTestPanel } from './mic-test-panel.js';
-import { appendMeshPlusBadgeToNameRow } from './mesh-plus.js';
+import {
+  appendMeshPlusBadgeToNameRow,
+  fillMeshGatedDropdown,
+  isMeshPlusActive,
+  markMeshPlusGatedOptions,
+  MESH_PLUS_FEATURES,
+} from './mesh-plus.js';
 import { buildSettingsMeshPlusPanel } from './mesh-plus-settings.js';
 import { appendAppIconPickerSections } from './app-icon-picker.js';
-import { isMeshPlusActive } from './mesh-plus.js';
+import { appendThemeEditorSection } from './theme-editor.js';
+import { recordCallStarted, recordFileSent, recordPeersOnline, setAchievementConfigProvider } from './session-stats.js';
+import { buildSettingsAchievementsPanel } from './achievements-settings-panel.js';
+import { appendSessionStatsSection } from './session-stats-panel.js';
+import { syncAchievements } from './achievements-tracker.js';
 import {
   startClipboardSync,
   stopClipboardSync,
@@ -113,6 +123,9 @@ import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
 import { openConfirmDialog } from './confirm-dialog.js';
+import { buildPeerProfilePage } from './peer-profile.js';
+import { buildSettingsProfilePanel as buildSettingsProfilePanelView } from './settings-profile-panel.js';
+import { setPeerProfileGifDataUrl } from './peer-gif-cache.js';
 import {
   initPeerTrust,
   applyTrustFromConfig,
@@ -155,6 +168,37 @@ async function broadcastCustomAvatar() {
   }
 }
 
+async function broadcastProfileGif() {
+  const dataUrl = await window.blip?.getProfileGifActiveUrl?.();
+  if (!dataUrl || !state.config?.blipId) return;
+  const targets = state.peers.filter((p) => p.online && !isBlocked(p.blipId));
+  for (const p of targets) {
+    try {
+      await api.sendTcpMessage({
+        type: 'profile-gif-share',
+        to: p.blipId,
+        from: state.config.blipId,
+        dataUrl,
+      });
+    } catch {
+      /* offline */
+    }
+  }
+}
+
+async function requestPeerProfileGif(blipId) {
+  if (!state.config?.blipId || !blipId) return;
+  try {
+    await api.sendTcpMessage({
+      type: 'profile-gif-request',
+      to: blipId,
+      from: state.config.blipId,
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function restartClipboardSync() {
   stopClipboardSync();
   startClipboardSync({
@@ -176,6 +220,10 @@ let state = {
   groupChatViews: new Map(),
   /** `null` = no subsection selected (placeholder in content column). */
   settingsSection: null,
+  /** Peer profile page (full main-content view). */
+  profilePeerId: null,
+  /** Where to return from profile (view + chat targets). */
+  profileReturn: null,
 };
 
 /** @type {Map<string, number>} */
@@ -195,6 +243,8 @@ const peerLatencyMs = new Map();
 
 const MESH_PULSE_INTERVAL_MS = 60_000;
 let meshPulseTimer = null;
+/** @type {(() => void) | null} */
+let profilePageCleanup = null;
 
 /** @type {Map<number, number>} */
 const unreadByPeer = new Map();
@@ -210,6 +260,7 @@ function formatAppVersion(meta) {
 
 async function openCallOutgoing(peerId, video = false) {
   if (!window.blip?.openCallOutgoing) return;
+  recordCallStarted();
   try {
     await window.blip.openCallOutgoing({ peerId, video });
   } catch (e) {
@@ -368,7 +419,7 @@ function ensureProjectsView() {
   if (!projectsViewInstance || !projectsViewInstance.el?.parentElement) {
     projectsViewInstance?.destroy?.();
     projectsViewInstance = createProjectsView(
-      state.config,
+      () => state.config,
       api,
       () =>
         state.peers
@@ -467,6 +518,7 @@ function ensureChatView(peerId) {
             { transferId: xfer.transferId }
           );
           if (result.transferId) xfer.transferId = result.transferId;
+          if (result?.ok !== false) recordFileSent();
           if (result.chunked) {
             const dataUrl = await fileToDataUrl(file);
             result.attachment = { ...result.attachment, dataUrl };
@@ -480,6 +532,7 @@ function ensureChatView(peerId) {
         }
       },
       (e, peerId) => showPeerContextMenu(e, peerId, { hideMessage: true }),
+      (peerId) => openPeerProfileFromUi(peerId),
       (to, payload) =>
         api.sendTcpMessage({
           type: 'message-pin',
@@ -740,6 +793,13 @@ function renderPeersView() {
       }`;
 
       const avatar = createAvatarElement(peer.blipId, 2, { selfBlipId: state.config.blipId });
+      avatar.classList.add('peer-row-avatar');
+      avatar.style.cursor = 'pointer';
+      avatar.title = t('peers.profile_open');
+      avatar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPeerProfileFromUi(peer);
+      });
       const info = document.createElement('div');
       info.className = 'peer-info';
       const name = document.createElement('span');
@@ -833,6 +893,7 @@ async function promptMeshLabel(peer) {
   const chat = state.chatViews.get(peer.blipId);
   if (chat) chat.setPeerName(formatPeerDisplayName(peer));
   if (state.view === 'peers') renderView('peers');
+  if (state.view === 'profile') renderView('profile');
   if (state.view === 'chat' && !state.activePeer) renderView('chat');
 
   showAppToast({
@@ -840,6 +901,102 @@ async function promptMeshLabel(peer) {
     body: saved ? saved : t('peers.mesh_label_removed'),
     durationMs: 4000,
   });
+}
+
+function getPeerProfileHooks(peer) {
+  return {
+    selfBlipId: state.config?.blipId ?? null,
+    isBlocked: (id) => isBlocked(id),
+    presenceClass: peerPresenceClass,
+    statusTooltip: peerStatusTooltip,
+    onMessage: () => openChatFromProfile(peer.blipId),
+    onCall: () => {
+      if (peer.online) openCallOutgoing(peer.blipId, false);
+    },
+    onBlock: () => {
+      if (isBlocked(peer.blipId)) {
+        unblockPeer(peer.blipId);
+        showAppToast({ title: t('peers.unblock_done'), durationMs: 3000 });
+      } else {
+        blockPeer(peer.blipId);
+        showAppToast({ title: t('peers.block_done'), durationMs: 3000 });
+      }
+      if (state.view === 'profile' && state.profilePeerId === peer.blipId) {
+        renderView('profile');
+      }
+      if (state.view === 'peers') renderView('peers');
+      if (state.view === 'chat' && state.activePeer === peer.blipId) {
+        state.activePeer = null;
+        renderView('chat');
+      }
+    },
+    onPing: () => runPeerPing(peer),
+  };
+}
+
+function openPeerProfileFromUi(peerOrId) {
+  const peer = peerForContextMenu(peerOrId);
+  if (state.view !== 'profile') {
+    state.profileReturn = {
+      view: state.view,
+      activePeer: state.activePeer,
+      activeGroup: state.activeGroup,
+    };
+  }
+  state.profilePeerId = peer.blipId;
+  renderView('profile');
+}
+
+function leavePeerProfilePage() {
+  const ret = state.profileReturn ?? { view: 'peers', activePeer: null, activeGroup: null };
+  state.profilePeerId = null;
+  state.profileReturn = null;
+  state.activePeer = ret.activePeer ?? null;
+  state.activeGroup = ret.activeGroup ?? null;
+  renderView(ret.view);
+}
+
+function openChatFromProfile(peerId) {
+  state.profilePeerId = null;
+  state.profileReturn = null;
+  void openChat(peerId);
+}
+
+function renderPeerProfileView() {
+  profilePageCleanup?.();
+  profilePageCleanup = null;
+
+  const peer = peerForContextMenu(state.profilePeerId);
+  if (peer.hasProfileGif && !getPeerProfileGifDataUrl(peer.blipId)) {
+    void requestPeerProfileGif(peer.blipId);
+  }
+  const built = buildPeerProfilePage(peer, getPeerProfileHooks(peer));
+  profilePageCleanup = built.destroy;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'view peer-profile-view';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'peer-profile-toolbar';
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'btn btn-lang peer-profile-back';
+  backBtn.dataset.i18n = 'peers.profile_back';
+  backBtn.textContent = `← ${t('peers.profile_back')}`;
+  backBtn.addEventListener('click', () => leavePeerProfilePage());
+
+  const title = document.createElement('h2');
+  title.className = 'section-title peer-profile-toolbar-title';
+  title.dataset.i18n = 'peers.profile_title';
+  title.textContent = t('peers.profile_title');
+
+  toolbar.appendChild(backBtn);
+  toolbar.appendChild(title);
+  wrap.appendChild(toolbar);
+  wrap.appendChild(built.el);
+
+  return wrap;
 }
 
 function peerForContextMenu(peerOrId) {
@@ -968,6 +1125,12 @@ function showPeerContextMenu(e, peerOrId, options = {}) {
     });
   }
 
+  const profileItem = document.createElement('button');
+  profileItem.type = 'button';
+  profileItem.dataset.i18n = 'peers.profile';
+  profileItem.textContent = t('peers.profile');
+  bindItem(profileItem, () => openPeerProfileFromUi(peer));
+
   const msgItem = document.createElement('button');
   msgItem.type = 'button';
   msgItem.textContent = t('dial.message');
@@ -1048,6 +1211,7 @@ function showPeerContextMenu(e, peerOrId, options = {}) {
   menu.addEventListener('mousedown', (ev) => ev.stopPropagation());
   menu.addEventListener('click', (ev) => ev.stopPropagation());
 
+  menu.appendChild(profileItem);
   if (!options.hideMessage) menu.appendChild(msgItem);
   menu.appendChild(callItem);
   menu.appendChild(labelItem);
@@ -1237,14 +1401,32 @@ function buildAppearanceSection() {
   });
   block.appendChild(buildSettingsField('settings.appearance_accent', accentSelect));
 
-  const animOpts = ANIMATED_BACKGROUNDS.map((id) => ({ value: id, label: labelBg(id) }));
-  const animSelect = buildThemedSelect();
-  fillSettingsDropdown(animSelect, animOpts, ANIMATED_BACKGROUNDS.includes(curBg) ? curBg : 'none', async (id) => {
-    state.config = await api.saveConfig({ animatedBgId: normalizeBgId(id) });
-    applyAppearance(state.config);
-    applyReactiveWallpaperConfig(state.config);
+  appendThemeEditorSection(block, () => state.config, async (patch) => {
+    state.config = await api.saveConfig(patch);
+    return state.config;
   });
-  block.appendChild(buildSettingsField('settings.bg_animated', animSelect));
+
+  const animOpts = markMeshPlusGatedOptions(
+    ANIMATED_BACKGROUNDS.map((id) => ({ value: id, label: labelBg(id) })),
+    MESH_PLUS_FEATURES.animated_bg,
+    state.config
+  );
+  const animSelect = buildThemedSelect();
+  fillMeshGatedDropdown(
+    animSelect,
+    animOpts,
+    ANIMATED_BACKGROUNDS.includes(curBg) ? curBg : 'none',
+    MESH_PLUS_FEATURES.animated_bg,
+    state.config,
+    async (id) => {
+      state.config = await api.saveConfig({ animatedBgId: normalizeBgId(id) });
+      applyAppearance(state.config);
+      applyReactiveWallpaperConfig(state.config);
+    }
+  );
+  block.appendChild(
+    buildSettingsFieldWithHint('settings.bg_animated', 'settings.bg_animated_mesh_hint', animSelect)
+  );
 
   const artOpts = STATIC_ART_BACKGROUNDS.map((id) => ({ value: id, label: labelBg(id) }));
   const artSelect = buildThemedSelect();
@@ -1509,6 +1691,11 @@ function setupGlobalShortcuts() {
     }
 
     if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey && !typing) {
+      if (state.view === 'profile' && state.profilePeerId != null) {
+        e.preventDefault();
+        leavePeerProfilePage();
+        return;
+      }
       if (state.view === 'chat' && (state.activePeer || state.activeGroup)) {
         e.preventDefault();
         state.activePeer = null;
@@ -1522,6 +1709,7 @@ function setupGlobalShortcuts() {
 function getSettingsSectionIds() {
   const ids = [
     'profile',
+    'achievements',
     'mesh_plus',
     'language',
     'notifications',
@@ -1544,129 +1732,11 @@ function getSettingsSectionIds() {
 }
 
 function buildSettingsProfilePanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  const h = document.createElement('h2');
-  h.className = 'settings-panel-title';
-  h.dataset.i18n = 'settings.section_profile';
-  h.textContent = t('settings.section_profile');
-  frag.appendChild(h);
-
-  const nameLabel = document.createElement('label');
-  nameLabel.dataset.i18n = 'settings.name';
-  nameLabel.textContent = t('settings.name');
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.className = 'input';
-  nameInput.value = state.config.displayName || '';
-  nameInput.placeholder = t('settings.name_placeholder');
-  nameInput.dataset.i18nPlaceholder = 'settings.name_placeholder';
-
-  const idRow = document.createElement('div');
-  idRow.className = 'settings-id-row';
-  const idLabel = document.createElement('span');
-  idLabel.dataset.i18n = 'settings.id';
-  idLabel.textContent = `${t('settings.id')}: ${state.config.blipId ?? '—'}`;
-  const changeIdBtn = document.createElement('button');
-  changeIdBtn.type = 'button';
-  changeIdBtn.className = 'btn btn-accent';
-  changeIdBtn.dataset.i18n = 'settings.change_id';
-  changeIdBtn.textContent = t('settings.change_id');
-  changeIdBtn.addEventListener('click', () => showGridView(true));
-
-  const copyIdBtn = document.createElement('button');
-  copyIdBtn.type = 'button';
-  copyIdBtn.className = 'btn btn-lang';
-  copyIdBtn.dataset.i18n = 'settings.copy_id';
-  copyIdBtn.textContent = t('settings.copy_id');
-  copyIdBtn.addEventListener('click', async () => {
-    const text = String(state.config.blipId ?? '');
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* ignore */
-    }
+  return buildSettingsProfilePanelView(state, api, {
+    broadcastCustomAvatar,
+    broadcastProfileGif,
+    onChangeId: () => showGridView(true),
   });
-
-  idRow.appendChild(idLabel);
-  idRow.appendChild(copyIdBtn);
-  idRow.appendChild(changeIdBtn);
-
-  nameInput.addEventListener('change', async () => {
-    const name = nameInput.value.trim() || 'Anonymous';
-    state.config.displayName = name;
-    await api.saveConfig({ displayName: name });
-  });
-
-  const presenceSelect = buildThemedSelect();
-  fillSettingsDropdown(
-    presenceSelect,
-    [
-      { id: 'online', key: 'settings.presence_online' },
-      { id: 'away', key: 'settings.presence_away' },
-      { id: 'busy', key: 'settings.presence_busy' },
-    ].map(({ id, key }) => ({ value: id, label: t(key) })),
-    state.config.presenceStatus || 'online',
-    async (id) => {
-      state.config.presenceStatus = id;
-      await api.saveConfig({ presenceStatus: id });
-    }
-  );
-
-  const statusLabel = document.createElement('label');
-  statusLabel.className = 'settings-field-label';
-  statusLabel.dataset.i18n = 'settings.status_custom';
-  statusLabel.textContent = t('settings.status_custom');
-  const statusInput = document.createElement('input');
-  statusInput.type = 'text';
-  statusInput.className = 'input settings-status-input';
-  statusInput.maxLength = 48;
-  statusInput.placeholder = t('settings.status_placeholder');
-  statusInput.dataset.i18nPlaceholder = 'settings.status_placeholder';
-  statusInput.value = state.config.presenceText || '';
-
-  statusInput.addEventListener('change', async () => {
-    const presenceText = statusInput.value.trim().slice(0, 48);
-    statusInput.value = presenceText;
-    state.config = await api.saveConfig({ presenceText });
-  });
-
-  const presetsWrap = document.createElement('div');
-  presetsWrap.className = 'status-preset-buttons';
-  const presetDefs = [
-    'settings.status_empty',
-    'settings.status_game',
-    'settings.status_afk',
-    'settings.status_work',
-    'settings.status_stream',
-    'settings.status_listen',
-    'settings.status_code',
-    'settings.status_away_short',
-  ];
-  for (const key of presetDefs) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-lang status-preset-btn';
-    btn.dataset.i18n = key;
-    btn.textContent = t(key);
-    btn.addEventListener('click', async () => {
-      const text = key === 'settings.status_empty' ? '' : t(key);
-      statusInput.value = text;
-      state.config = await api.saveConfig({ presenceText: text });
-    });
-    presetsWrap.appendChild(btn);
-  }
-
-  frag.appendChild(buildAvatarSettingsSection());
-  frag.appendChild(buildSettingsField('settings.presence', presenceSelect));
-  frag.appendChild(statusLabel);
-  frag.appendChild(statusInput);
-  frag.appendChild(presetsWrap);
-  frag.appendChild(nameLabel);
-  frag.appendChild(nameInput);
-  frag.appendChild(idRow);
-  return frag;
 }
 
 function buildSettingsLanguagePanel() {
@@ -1897,15 +1967,21 @@ function buildSettingsSoundPanel() {
   volRow.appendChild(volVal);
 
   const soundPackSelect = buildThemedSelect();
-  fillSettingsDropdown(
+  fillMeshGatedDropdown(
     soundPackSelect,
-    [
-      { value: 'signal', label: t('settings.sound_pack_signal') },
-      { value: 'pulse', label: t('settings.sound_pack_pulse') },
-      { value: 'wire', label: t('settings.sound_pack_wire') },
-      { value: 'static', label: t('settings.sound_pack_static') },
-    ],
+    markMeshPlusGatedOptions(
+      [
+        { value: 'signal', label: t('settings.sound_pack_signal') },
+        { value: 'pulse', label: t('settings.sound_pack_pulse') },
+        { value: 'wire', label: t('settings.sound_pack_wire') },
+        { value: 'static', label: t('settings.sound_pack_static') },
+      ],
+      MESH_PLUS_FEATURES.sound_pack,
+      state.config
+    ),
     SOUND_PACK_IDS.includes(state.config.uiSoundPack) ? state.config.uiSoundPack : 'signal',
+    MESH_PLUS_FEATURES.sound_pack,
+    state.config,
     async (id) => {
       state.config = await api.saveConfig({ uiSoundPack: id });
       applySoundPrefsFromConfig(state.config);
@@ -1913,15 +1989,21 @@ function buildSettingsSoundPanel() {
   );
 
   const melodyPackSelect = buildThemedSelect();
-  fillSettingsDropdown(
+  fillMeshGatedDropdown(
     melodyPackSelect,
-    [
-      { value: 'mesh', label: t('settings.melody_pack_mesh') },
-      { value: 'grid', label: t('settings.melody_pack_grid') },
-      { value: 'beacon', label: t('settings.melody_pack_beacon') },
-      { value: 'chime', label: t('settings.melody_pack_chime') },
-    ],
+    markMeshPlusGatedOptions(
+      [
+        { value: 'mesh', label: t('settings.melody_pack_mesh') },
+        { value: 'grid', label: t('settings.melody_pack_grid') },
+        { value: 'beacon', label: t('settings.melody_pack_beacon') },
+        { value: 'chime', label: t('settings.melody_pack_chime') },
+      ],
+      MESH_PLUS_FEATURES.melody_pack,
+      state.config
+    ),
     MELODY_PACK_IDS.includes(state.config.uiMelodyPack) ? state.config.uiMelodyPack : 'mesh',
+    MESH_PLUS_FEATURES.melody_pack,
+    state.config,
     async (id) => {
       state.config = await api.saveConfig({ uiMelodyPack: id });
       applySoundPrefsFromConfig(state.config);
@@ -1980,7 +2062,9 @@ function buildSettingsSoundPanel() {
   frag.appendChild(enableToggle.el);
   frag.appendChild(volLabel);
   frag.appendChild(volRow);
-  frag.appendChild(buildSettingsField('settings.sound_pack', soundPackSelect));
+  frag.appendChild(
+    buildSettingsFieldWithHint('settings.sound_pack', 'settings.sound_mesh_plus_hint', soundPackSelect)
+  );
   frag.appendChild(buildSettingsField('settings.melody_pack', melodyPackSelect));
   const previewTitle = document.createElement('h3');
   previewTitle.className = 'section-subtitle';
@@ -2292,6 +2376,8 @@ function buildSettingsNetworkPanel() {
     buildSettingsFieldWithHint('clipboard.mode', 'clipboard.hint', clipSelect)
   );
 
+  const statsUi = appendSessionStatsSection(frag);
+
   const actions = document.createElement('div');
   actions.className = 'settings-network-actions';
 
@@ -2460,6 +2546,14 @@ function buildSettingsNetworkPanel() {
   });
 
   void loadDiagnostics();
+
+  const statsRefreshTimer = setInterval(() => {
+    statsUi?.refresh?.();
+    if (state.config?.achievementsEnabled) syncAchievements(state.config);
+  }, 60_000);
+
+  frag._networkCleanup = () => clearInterval(statsRefreshTimer);
+
   return frag;
 }
 
@@ -3042,8 +3136,12 @@ function renderSettingsMainPanel() {
   switch (state.settingsSection) {
     case 'profile':
       return buildSettingsProfilePanel();
+    case 'achievements':
+      return buildSettingsAchievementsPanel(state, api);
     case 'mesh_plus':
       return buildSettingsMeshPlusPanel(state, () => {
+        applyAppearance(state.config);
+        applySoundPrefsFromConfig(state.config);
         if (state.view === 'peers') renderView('peers');
         if (state.view === 'settings') renderView('settings');
       });
@@ -3447,6 +3545,12 @@ function renderChatHubView() {
       item.className = `chat-hub-row glass ${row.online ? 'online' : 'offline'}`;
 
       const avatar = createAvatarElement(row.blipId, 2, { selfBlipId: state.config.blipId });
+      avatar.classList.add('chat-hub-avatar');
+      avatar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        openPeerProfileFromUi(peer || { blipId: row.blipId, displayName: row.displayName, online: row.online });
+      });
       const info = document.createElement('div');
       info.className = 'chat-hub-info';
       const name = document.createElement('span');
@@ -3503,6 +3607,9 @@ function renderChatHubView() {
 
 function renderView(viewName) {
   if (!mainContent) return;
+  if (viewName === 'profile' && state.profilePeerId == null) {
+    viewName = 'peers';
+  }
   state.view = viewName;
 
   let view;
@@ -3518,6 +3625,9 @@ function renderView(viewName) {
       break;
     case 'projects':
       view = renderProjectsView();
+      break;
+    case 'profile':
+      view = renderPeerProfileView();
       break;
     case 'chat': {
       if (state.activeGroup) {
@@ -3549,7 +3659,7 @@ function renderView(viewName) {
     }
     applyI18n(mainContent);
     updateNavActive();
-    if (viewName === 'peers') {
+    if (viewName === 'peers' || viewName === 'profile') {
       void runMeshPulseRound();
     }
     return;
@@ -3561,9 +3671,16 @@ function renderView(viewName) {
 
   updateNavActive();
 
-  if (viewName === 'peers') {
+  if (viewName === 'peers' || viewName === 'profile') {
     void runMeshPulseRound();
   }
+}
+
+function clearProfileNavigationState() {
+  profilePageCleanup?.();
+  profilePageCleanup = null;
+  state.profilePeerId = null;
+  state.profileReturn = null;
 }
 
 function render() {
@@ -3579,6 +3696,7 @@ function render() {
   layout.className = 'app-layout';
 
   const nav = createNav((view) => {
+    clearProfileNavigationState();
     if (view === 'chat' && state.view === 'chat') {
       state.activePeer = null;
       state.activeGroup = null;
@@ -3622,7 +3740,9 @@ export function initUI(config, blipApi) {
   applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
   applyReactiveWallpaperConfig(state.config);
+  setAchievementConfigProvider(() => state.config);
   initReactiveWallpaper(() => state.config);
+  if (state.config?.achievementsEnabled) syncAchievements(state.config);
   void loadSelfAvatarFromMain();
   appearanceListenerDispose?.();
   appearanceListenerDispose = listenReducedMotion(
@@ -3757,12 +3877,15 @@ export function updatePeers({ peers, occupiedIds }) {
   const nextOnline = new Set(peers.filter((p) => p.online).map((p) => p.blipId));
   state.peers = peers;
   state.occupiedIds = occupiedIds;
+  recordPeersOnline(peers.filter((p) => p.online).length);
 
   peers.forEach((p) => {
     if (p.online && !prevOnline.has(p.blipId)) {
       logPeerEvent(p.blipId, 'online');
       if (!state.config?.doNotDisturb) sounds.peerOnline();
       if (getSelfAvatarCache()) void broadcastCustomAvatar();
+      if (p.hasProfileGif) void requestPeerProfileGif(p.blipId);
+      void broadcastProfileGif();
     } else if (!p.online && prevOnline.has(p.blipId)) {
       logPeerEvent(p.blipId, 'offline');
       if (!state.config?.doNotDisturb) sounds.peerOffline();
@@ -3783,6 +3906,9 @@ export function updatePeers({ peers, occupiedIds }) {
 
   if (state.view === 'peers' && mainContent) {
     renderView('peers');
+  }
+  if (state.view === 'profile' && mainContent && state.profilePeerId != null) {
+    renderView('profile');
   }
   if (state.view === 'chat' && !state.activePeer && mainContent) {
     renderView('chat');
@@ -3812,6 +3938,32 @@ export function handleTcpMessage(msg) {
     const peerId = Number(msg.from === state.config.blipId ? msg.to : msg.from);
     if (Number.isFinite(peerId)) logPeerEvent(peerId, `tcp:${msg.type}`);
   }
+  if (msg.type === 'profile-gif-request') {
+    const from = Number(msg.from);
+    if (!Number.isFinite(from) || isBlocked(from)) return;
+    void (async () => {
+      const dataUrl = await window.blip?.getProfileGifActiveUrl?.();
+      if (!dataUrl) return;
+      await api.sendTcpMessage({
+        type: 'profile-gif-share',
+        to: from,
+        from: state.config.blipId,
+        dataUrl,
+      });
+    })();
+    return;
+  }
+
+  if (msg.type === 'profile-gif-share') {
+    const from = Number(msg.from);
+    if (!Number.isFinite(from) || isBlocked(from)) return;
+    setPeerProfileGifDataUrl(from, msg.dataUrl ? String(msg.dataUrl) : null);
+    if (state.view === 'profile' && state.profilePeerId === from) {
+      renderView('profile');
+    }
+    return;
+  }
+
   if (msg.type === 'avatar-share') {
     const from = Number(msg.from);
     if (!Number.isFinite(from) || isBlocked(from)) return;
@@ -3826,9 +3978,12 @@ export function handleTcpMessage(msg) {
         dataUrl: mine,
       });
     }
+    void broadcastProfileGif();
     window.dispatchEvent(new CustomEvent('blip-avatar-changed'));
     if (state.view === 'peers') {
       renderView('peers');
+    } else if (state.view === 'profile') {
+      renderView('profile');
     } else if (state.view === 'chat') {
       if (state.activePeer != null) {
         state.chatViews.get(state.activePeer)?.refreshHeaderAvatar?.();
@@ -3841,7 +3996,7 @@ export function handleTcpMessage(msg) {
     return;
   }
 
-  if (handleMeshProjectTcp(msg, state.config)) return;
+  if (handleMeshProjectTcp(msg, state.config, api)) return;
 
   if (msg.type === 'clipboard-push') {
     if (isBlocked(Number(msg.from))) return;

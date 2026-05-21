@@ -72,7 +72,8 @@ Environment overrides: `BLIP_UDP_PORT`, `BLIP_TCP_PORT`. Separate user data dirs
 |--------|------|
 | **Nav entry** | `PROJECTS` between Chat and Settings when the developer toggle is on. |
 | **Pad (✦)** | Full-height shared textarea; `mesh-proj-pad` broadcasts LWW updates to all **online** peers (not group-scoped). |
-| **Board / Canvas / Clipboard** | UI stubs; TCP types reserved for future drops. |
+| **Board / Canvas** | MESH+ gated kanban + grid (`mesh-proj-board`, `mesh-proj-canvas`). |
+| **Clipboard** | Mesh sync; FREE 20 entries, MESH+ 500 + search. |
 | **UX** | Tool list in a 140px sidebar; page title uses the standard **?** hint (`projects.hub_hint`) like Peers and Settings. |
 
 Groups (`groups.js`, voice channels) are intentionally separate and remain beta; do not route Signal Corps traffic through group relays.
@@ -85,13 +86,11 @@ Groups (`groups.js`, voice channels) are intentionally separate and remain beta;
 | Chat history | Renderer `localStorage` key `blip_chat_v1`. |
 | Favorite peer IDs | Renderer `localStorage` key `blip_favorites_v1`. |
 | Avatar seeds (per BLIP ID) | Renderer `localStorage` key `blip_avatar_seed_v1` (`avatar.js`). |
-<<<<<<< HEAD
-| Release metadata | `app-metadata.json` (version **0.7.8**, codename **MESH+ Gate**, repo URL). |
-| MESH+ roadmap | [`MESH-PLUS-PLAN.md`](MESH-PLUS-PLAN.md) — tiers, license, phased features (not all implemented yet). |
+| Release metadata | `app-metadata.json` (version **0.10.x**, codename **Signal Corps**, repo URL). |
+| MESH+ overview | [`MESH-PLUS.md`](MESH-PLUS.md) — tier summary (no phased roadmap file). |
 | Group avatars | Renderer `localStorage` `blip_group_avatar_v1` |
-=======
-| Release metadata | `app-metadata.json` (version **0.7.4**, codename **Signal**, repo URL). |
->>>>>>> 3ae1d92 (update /docs)
+| Session stats | Renderer `session-stats.js` + **Settings → Network** |
+| Achievements | Renderer `achievements*.js` + **Settings → Achievements** (off by default) |
 
 ## Security posture (today)
 
