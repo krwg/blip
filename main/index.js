@@ -11,6 +11,10 @@ import { loadConfig, saveConfig, initConfigPath, getLocalIp, getLocalIpv4Set } f
 import { toPublicConfig } from './config-public.js';
 import { validateMeshPlusActivationKey, isMeshPlusActive } from './mesh-plus-license.js';
 import {
+  meshPlusClampPatch,
+  sanitizeMeshPlusConfigUpdates,
+} from '../shared/mesh-plus-gates.js';
+import {
   canUseAppIconVariant,
   normalizeAppIconVariant,
   APP_ICON_VARIANTS,
@@ -44,6 +48,23 @@ import {
   clearCustomAvatar,
   hasCustomAvatar,
 } from './avatar-store.js';
+import {
+  clearActiveProfileGif,
+  getActiveProfileGifId,
+  getProfileGifDataUrl,
+  getProfileGifPublicState,
+  hasActiveProfileGif,
+  listProfileGifHistory,
+  saveProfileGifFromBuffer,
+  saveProfileGifFromDataUrl,
+  setActiveProfileGif,
+} from './profile-gif-store.js';
+import {
+  downloadGifUrl,
+  isGiphyConfigured,
+  searchGiphy,
+  trendingGiphy,
+} from './giphy-client.js';
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts.js';
 import {
   listDisplaySources,
@@ -602,6 +623,8 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'file-abort':
     case 'clipboard-push':
     case 'avatar-share':
+    case 'profile-gif-share':
+    case 'profile-gif-request':
       sendToRenderer('tcp-message', msg);
       break;
     case 'call-offer': {
@@ -774,6 +797,11 @@ function setupIpc() {
         ? id
         : 'main';
     }
+    const meshActive = isMeshPlusActive({ ...config, ...safe });
+    Object.assign(
+      safe,
+      sanitizeMeshPlusConfigUpdates(config, safe, meshActive)
+    );
     config = saveConfig(safe);
     if (safe.appIconVariant !== undefined) refreshAppIcons();
     if (updates?.receiveBetaUpdates !== undefined || updates?.autoDownloadUpdates !== undefined) {
@@ -833,6 +861,9 @@ function setupIpc() {
     if (String(config.appIconVariant || '').startsWith('mesh-')) {
       patch.appIconVariant = 'main';
     }
+    const prefsPatch = meshPlusClampPatch(config);
+    if (prefsPatch) Object.assign(patch, prefsPatch);
+    if (prefsPatch?.hasProfileGif === false) clearActiveProfileGif();
     config = saveConfig(patch);
     discovery?.updateConfig(config);
     discovery?.announce();
@@ -1093,6 +1124,111 @@ function setupIpc() {
     return { ok: true };
   });
 
+  ipcMain.handle('get-profile-gif-active-url', () => getProfileGifDataUrl());
+  ipcMain.handle('get-profile-gif-history', () => listProfileGifHistory());
+  ipcMain.handle('is-giphy-configured', () => isGiphyConfigured());
+  ipcMain.handle('search-giphy', (_, query, offset) => searchGiphy(query, { offset }));
+  ipcMain.handle('trending-giphy', (_, offset) => trendingGiphy({ offset }));
+
+  ipcMain.handle('save-profile-gif', async (_, dataUrl) => {
+    if (!isMeshPlusActive(config)) return { ok: false, error: 'mesh_plus_required' };
+    try {
+      const id = saveProfileGifFromDataUrl(dataUrl);
+      const pub = getProfileGifPublicState();
+      config = saveConfig({
+        profileGifActiveId: pub.profileGifActiveId,
+        hasProfileGif: pub.hasProfileGif,
+      });
+      discovery?.announce();
+      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
+    } catch (e) {
+      return { ok: false, error: e?.message || 'save_failed' };
+    }
+  });
+
+  ipcMain.handle('save-profile-gif-bytes', async (_, base64) => {
+    if (!isMeshPlusActive(config)) return { ok: false, error: 'mesh_plus_required' };
+    try {
+      const buf = Buffer.from(String(base64 || ''), 'base64');
+      if (!buf.length) return { ok: false, error: 'invalid_gif' };
+      const id = saveProfileGifFromBuffer(buf);
+      const pub = getProfileGifPublicState();
+      config = saveConfig({
+        profileGifActiveId: pub.profileGifActiveId,
+        hasProfileGif: pub.hasProfileGif,
+      });
+      discovery?.announce();
+      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
+    } catch (e) {
+      return { ok: false, error: e?.message || 'save_failed' };
+    }
+  });
+
+  ipcMain.handle('save-profile-gif-path', async (_, filePath) => {
+    if (!isMeshPlusActive(config)) return { ok: false, error: 'mesh_plus_required' };
+    try {
+      const p = String(filePath || '').trim();
+      if (!p) return { ok: false, error: 'invalid_gif' };
+      const buf = readFileSync(p);
+      const id = saveProfileGifFromBuffer(buf);
+      const pub = getProfileGifPublicState();
+      config = saveConfig({
+        profileGifActiveId: pub.profileGifActiveId,
+        hasProfileGif: pub.hasProfileGif,
+      });
+      discovery?.announce();
+      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
+    } catch (e) {
+      return { ok: false, error: e?.message || 'save_failed' };
+    }
+  });
+
+  ipcMain.handle('import-giphy-gif', async (_, gifUrl) => {
+    try {
+      const buf = await downloadGifUrl(gifUrl);
+      const id = saveProfileGifFromBuffer(buf);
+      const pub = getProfileGifPublicState();
+      config = saveConfig({
+        profileGifActiveId: pub.profileGifActiveId,
+        hasProfileGif: pub.hasProfileGif,
+      });
+      discovery?.announce();
+      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
+    } catch (e) {
+      return { ok: false, error: e?.message || 'import_failed' };
+    }
+  });
+
+  ipcMain.handle('set-profile-gif-active', (_, id) => {
+    try {
+      if (!id) {
+        clearActiveProfileGif();
+      } else {
+        setActiveProfileGif(id);
+      }
+      const pub = getProfileGifPublicState();
+      config = saveConfig({
+        profileGifActiveId: pub.profileGifActiveId,
+        hasProfileGif: pub.hasProfileGif,
+      });
+      discovery?.announce();
+      return { ok: true, dataUrl: getProfileGifDataUrl() };
+    } catch (e) {
+      return { ok: false, error: e?.message || 'set_failed' };
+    }
+  });
+
+  ipcMain.handle('clear-profile-gif', () => {
+    clearActiveProfileGif();
+    const pub = getProfileGifPublicState();
+    config = saveConfig({
+      profileGifActiveId: '',
+      hasProfileGif: false,
+    });
+    discovery?.announce();
+    return { ok: true };
+  });
+
   ipcMain.handle('check-for-updates', () => checkForUpdatesNow(() => config));
   ipcMain.handle('quit-and-install', () => {
     quitAndInstallUpdater();
@@ -1292,6 +1428,20 @@ app.whenReady().then(async () => {
 
   initConfigPath();
   config = loadConfig();
+  const gifPub = getProfileGifPublicState();
+  if (
+    config.hasProfileGif !== gifPub.hasProfileGif ||
+    config.profileGifActiveId !== gifPub.profileGifActiveId
+  ) {
+    config = saveConfig({
+      profileGifActiveId: gifPub.profileGifActiveId,
+      hasProfileGif: gifPub.hasProfileGif,
+    });
+  }
+  const meshClamp = meshPlusClampPatch(config);
+  if (meshClamp && !isMeshPlusActive(config)) {
+    config = saveConfig(meshClamp);
+  }
   const hadMeshKeys = !!(config.meshPrivateKey && config.meshPublicKey);
   config = ensureMeshIdentity(config);
   if (!hadMeshKeys && config.meshPrivateKey) {

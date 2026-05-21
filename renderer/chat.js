@@ -21,7 +21,9 @@ function formatFileLimitLabelForChat(config) {
 }
 import { createMessageId } from './message-id.js';
 import { getPinnedMessageId, setPinnedMessageId } from './chat-pins.js';
-import { exportPeerChatJson, exportPeerChatPdf } from './chat-export.js';
+import { exportPeerChatJson, exportPeerChatPdf, exportPeerChatHtml } from './chat-export.js';
+import { isMeshPlusActive, showMeshPlusLockedToast } from './mesh-plus.js';
+import { recordMessageSent } from './session-stats.js';
 
 const STORAGE_KEY = 'blip_chat_v1';
 const MAX_PER_PEER = 500;
@@ -149,7 +151,8 @@ export function createChatView(
   onSendFile,
   onPeerMenu,
   onPin,
-  onEdit
+  onEdit,
+  onPeerProfile
 ) {
   registerMediaPlaceholder(t('chat.image_sent'));
   registerMediaPlaceholder(t('chat.file_sent'));
@@ -196,6 +199,19 @@ export function createChatView(
     meta.addEventListener('contextmenu', openPeerMenu);
     avatarMount.addEventListener('contextmenu', openPeerMenu);
     meta.classList.add('chat-peer-meta--menu');
+  }
+
+  if (onPeerProfile) {
+    const openProfile = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onPeerProfile(peerId);
+    };
+    avatarMount.style.cursor = 'pointer';
+    avatarMount.title = t('peers.profile_open');
+    avatarMount.addEventListener('click', openProfile);
+    name.style.cursor = 'pointer';
+    name.addEventListener('click', openProfile);
   }
 
   const headActions = document.createElement("div");
@@ -253,7 +269,35 @@ export function createChatView(
   exportPdfItem.textContent = t('chat.export_pdf');
   exportPdfItem.addEventListener('click', () => {
     menu.classList.add('hidden');
-    void exportPeerChatPdf(peerId, name.textContent);
+    void exportPeerChatPdf(peerId, name.textContent, { themed: false });
+  });
+
+  const exportPdfThemedItem = document.createElement('button');
+  exportPdfThemedItem.type = 'button';
+  exportPdfThemedItem.className = 'chat-menu-item';
+  exportPdfThemedItem.dataset.i18n = 'chat.export_pdf_themed';
+  exportPdfThemedItem.textContent = `${t('chat.export_pdf_themed')}${isMeshPlusActive(getConfig()) ? '' : ' ◆'}`;
+  exportPdfThemedItem.addEventListener('click', () => {
+    menu.classList.add('hidden');
+    if (!isMeshPlusActive(getConfig())) {
+      showMeshPlusLockedToast();
+      return;
+    }
+    void exportPeerChatPdf(peerId, name.textContent, { themed: true, config: getConfig() });
+  });
+
+  const exportHtmlItem = document.createElement('button');
+  exportHtmlItem.type = 'button';
+  exportHtmlItem.className = 'chat-menu-item';
+  exportHtmlItem.dataset.i18n = 'chat.export_html_themed';
+  exportHtmlItem.textContent = `${t('chat.export_html_themed')}${isMeshPlusActive(getConfig()) ? '' : ' ◆'}`;
+  exportHtmlItem.addEventListener('click', () => {
+    menu.classList.add('hidden');
+    if (!isMeshPlusActive(getConfig())) {
+      showMeshPlusLockedToast();
+      return;
+    }
+    exportPeerChatHtml(peerId, name.textContent, { config: getConfig() });
   });
 
   const clearItem = document.createElement('button');
@@ -271,6 +315,8 @@ export function createChatView(
   menu.appendChild(exportItem);
   menu.appendChild(exportJsonItem);
   menu.appendChild(exportPdfItem);
+  menu.appendChild(exportPdfThemedItem);
+  menu.appendChild(exportHtmlItem);
   menu.appendChild(clearItem);
   menuWrap.appendChild(menuBtn);
   menuWrap.appendChild(menu);
@@ -492,6 +538,7 @@ export function createChatView(
     };
     clearReplyTarget();
     addMessage(peerId, msg);
+    recordMessageSent();
     renderMessages();
     sounds.messageSent();
     const result = await onSend?.(peerId, msg);

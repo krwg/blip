@@ -63,7 +63,7 @@ Outputs go to `dist-electron/` (see `electron-builder.yml`).
 
 Version and codename live in [`app-metadata.json`](app-metadata.json) (synced into `package.json` on `npm run build`). Update [`CHANGELOG.md`](CHANGELOG.md) when shipping.
 
-**MESH+** features are planned in [`docs/MESH-PLUS-PLAN.md`](docs/MESH-PLUS-PLAN.md) — implement in phases; do not break FREE behavior.
+**MESH+** tier notes: [`docs/MESH-PLUS.md`](docs/MESH-PLUS.md). Do not break FREE behavior when gating premium features.
 
 Issue test keys locally: `npm run mesh-plus:keygen` (uses `scripts/.mesh-plus-private.b64`, gitignored). Embed only the **public** key in `main/mesh-plus-public-key.js` when rotating keys.
 

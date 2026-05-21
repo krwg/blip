@@ -13,7 +13,13 @@ const clips = new Map();
 
 const CANVAS_W = 32;
 const CANVAS_H = 16;
-const CLIP_MAX = 20;
+export const CLIP_MAX_FREE = 20;
+/** Practical cap for MESH+ clipboard board (effectively unlimited vs FREE). */
+export const CLIP_MAX_MESH_PLUS = 500;
+
+export function clipLimitForTier(meshPlusActive) {
+  return meshPlusActive ? CLIP_MAX_MESH_PLUS : CLIP_MAX_FREE;
+}
 
 function padKey(groupId) {
   return String(groupId);
@@ -63,14 +69,16 @@ export function getClipState(groupId) {
   return clips.get(k);
 }
 
-export function pushClipEntry(groupId, entry) {
+export function pushClipEntry(groupId, entry, maxEntries = CLIP_MAX_FREE) {
   const st = getClipState(groupId);
-  st.entries = [entry, ...st.entries].slice(0, CLIP_MAX);
+  const cap = Math.max(1, maxEntries);
+  st.entries = [entry, ...st.entries].slice(0, cap);
   emit(groupId, 'clipboard');
 }
 
-export function mergeClipEntries(groupId, entries) {
+export function mergeClipEntries(groupId, entries, maxEntries = CLIP_MAX_FREE) {
   const st = getClipState(groupId);
+  const cap = Math.max(1, maxEntries);
   const seen = new Set(st.entries.map((e) => e.id));
   for (const e of entries || []) {
     if (!e?.id || seen.has(e.id)) continue;
@@ -78,7 +86,7 @@ export function mergeClipEntries(groupId, entries) {
     st.entries.push(e);
   }
   st.entries.sort((a, b) => b.ts - a.ts);
-  st.entries = st.entries.slice(0, CLIP_MAX);
+  st.entries = st.entries.slice(0, cap);
   emit(groupId, 'clipboard');
 }
 

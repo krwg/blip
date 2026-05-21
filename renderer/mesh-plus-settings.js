@@ -9,7 +9,7 @@ const CAROUSEL_SLIDES = [
   { icon: '◎', titleKey: 'mesh_plus.slide_relay', descKey: 'mesh_plus.slide_relay_desc' },
   { icon: '▦', titleKey: 'mesh_plus.slide_projects', descKey: 'mesh_plus.slide_projects_desc' },
   { icon: '⧉', titleKey: 'mesh_plus.slide_clipboard', descKey: 'mesh_plus.slide_clipboard_desc' },
-  { icon: '★', titleKey: 'mesh_plus.slide_identity', descKey: 'mesh_plus.slide_identity_desc' },
+  { icon: '▶', titleKey: 'mesh_plus.slide_gif', descKey: 'mesh_plus.slide_gif_desc' },
 ];
 
 /**
