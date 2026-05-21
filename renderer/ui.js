@@ -93,6 +93,8 @@ import {
   createPixelToggle,
   createPixelHintIcon,
   copyTextToClipboard,
+  createSettingsListPanel,
+  wrapInSettingsListPanel,
 } from './settings-ui.js';
 import { buildMicTestPanel } from './mic-test-panel.js';
 import {
@@ -1766,12 +1768,12 @@ function buildSettingsPrivacyPanel() {
   hint.textContent = t('settings.privacy_hint');
   frag.appendChild(hint);
 
-  const list = document.createElement('div');
-  list.className = 'settings-blocked-list';
+  const list = createSettingsListPanel('settings-blocked-list');
 
   function renderList() {
     list.innerHTML = '';
     const blocked = getBlockedPeerIds();
+    list.classList.toggle('settings-list-panel--empty', blocked.length === 0);
     if (blocked.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'hint';
@@ -1782,7 +1784,7 @@ function buildSettingsPrivacyPanel() {
     }
     for (const id of blocked) {
       const row = document.createElement('div');
-      row.className = 'settings-blocked-row glass';
+      row.className = 'settings-blocked-row settings-list-panel__row';
 
       const peer = state.peers.find((p) => p.blipId === id);
       const meta = document.createElement('div');
@@ -2314,7 +2316,7 @@ function buildSettingsNetworkPanel() {
   frag.appendChild(actions);
 
   const bodyHost = document.createElement('div');
-  bodyHost.className = 'settings-network-body';
+  bodyHost.className = 'settings-network-body settings-list-panel settings-list-panel--auto';
   frag.appendChild(bodyHost);
 
   let lastDiagnostics = null;
@@ -2493,7 +2495,7 @@ function buildSettingsShortcutsPanel() {
       list.appendChild(dt);
       list.appendChild(dd);
     }
-    frag.appendChild(list);
+    frag.appendChild(wrapInSettingsListPanel(list, 'settings-list-panel--compact'));
   }
 
   addShortcutBlock('settings.shortcuts_main_scope', [
@@ -2881,7 +2883,7 @@ function buildSettingsUpdatesPanel() {
   frag.appendChild(releasesTitle);
 
   const releasesFeed = document.createElement('div');
-  releasesFeed.className = 'settings-releases-feed';
+  releasesFeed.className = 'settings-releases-feed settings-list-panel settings-list-panel--tall';
   releasesFeed.textContent = '…';
   frag.appendChild(releasesFeed);
 
