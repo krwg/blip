@@ -6,6 +6,23 @@ export function buildThemedSelect(className = 'blip-select settings-dropdown') {
   return sel;
 }
 
+/** Scrollable glass panel for settings lists (blocked peers, shortcuts, network, releases). */
+export function createSettingsListPanel(extraClass = '') {
+  const panel = document.createElement('div');
+  panel.className = ['settings-list-panel', extraClass].filter(Boolean).join(' ');
+  return panel;
+}
+
+/**
+ * @param {HTMLElement} content
+ * @param {string} [extraClass]
+ */
+export function wrapInSettingsListPanel(content, extraClass = '') {
+  const panel = createSettingsListPanel(extraClass);
+  panel.appendChild(content);
+  return panel;
+}
+
 /**
  * @param {{ value: string, label: string }[]} options
  * @param {string} current
