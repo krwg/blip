@@ -11,6 +11,79 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 _Nothing yet._
 
+## [0.10.1] — Achievements, Network stats, polish
+
+### Added
+
+- **Settings → Achievements** — off by default; Steam-style cards; unlock toasts; empty `iconAsset` slots for custom icons.
+- **Settings → Network** — session stats summary + activity bar chart.
+- **MESH+** — status GIF gated; themed PDF/HTML chat export; profile banner styling.
+
+### Removed
+
+- **Mesh identity** settings (ID color, status icons, ID bookmarks) — dropped as unnecessary.
+- **`docs/MESH-PLUS-PLAN.md`** — replaced by short [`docs/MESH-PLUS.md`](docs/MESH-PLUS.md).
+
+### Changed
+
+- MESH+ panel is activation + carousel only (relay/bridge remain marketing-only).
+
+## [0.10.0] — MESH+ Identity & Stats
+
+### Added
+
+- **MESH+ Phase 8 — Identity:** custom BLIP ID color (LAN announce), status icons (game/code/stream/listen/work/afk), up to 8 reserved ID bookmarks on the change-ID grid.
+- **MESH+ Phase 9 — Gamification:** session stats (messages, files, calls, peak peers, online time) and achievements in Settings → MESH+.
+- **Profile:** quick status-icon picker for MESH+; preview shows ID tint and icon.
+- **Peers list:** peer ID color and status glyph when announced on LAN.
+
+### Changed
+
+- Phase 7 (LAN relay, MESH+ Bridge, traffic priority) stays in the MESH+ carousel only — not implemented until after a stable release.
+
+## [0.9.1] — Signal Corps · Clipboard & Theme
+
+### Added
+
+- **MESH+ Phase 6 — Clipboard Board:** mesh sync (`mesh-proj-clipboard`, pull); **FREE** up to 20 entries; **MESH+** up to 500 + search filter.
+- **MESH+ Theme editor:** custom `#RRGGBB` accent in Settings → Appearance (color picker + hex); cleared on license revoke.
+
+### Changed
+
+- Projects → **БУФЕР / CLIPBOARD** is live for all users (dev Projects flag still required).
+
+## [0.9.0] — Signal Corps
+
+### Added
+
+- **MESH+ Phase 5 — Projects (Signal Corps):** **BOARD** (kanban, mesh sync `mesh-proj-board`) and **CANVAS** (32×16 grid, `mesh-proj-canvas`) in standalone Projects — MESH+ only; FREE sees lock stub + toast.
+- **Pad history (MESH+):** local snapshots in Pad tool — save, list, restore/rollback; sync still via `mesh-proj-pad` with LWW on `updatedAt`.
+- **Mesh wire:** `broadcastMeshBoard` / `broadcastMeshCanvas`; pad receive respects last-write-wins.
+
+### Changed
+
+- Projects hub uses live config getter so activation unlocks Board/Canvas without restart.
+- Clipboard in Projects nav remains “coming soon” (Phase 6).
+
+## [0.8.1] — MESH+ Gate
+
+### Added
+
+- **Peer profile page** — full in-app profile (avatar left, details right): BLIP ID, status, Mesh Pulse, MESH+ badge, mesh label, actions. Open from avatar click, context menu **Profile**, or chat header. Back / Esc returns to the previous screen.
+
+## [0.8.0] — MESH+ Gate
+
+### Added
+
+- **`requireMeshPlus(feature)`** — shared gates in `shared/mesh-plus-gates.js`; enforced in main on load, save, and deactivate.
+- **Premium animated backgrounds** — Ember & Rift locked for FREE (◆ in picker, toast on attempt).
+- **Premium sound packs** — WIRE / STATIC FX and BEACON / CHIME melodies locked for FREE.
+
+### Changed
+
+- Settings hints for animated background and sound sections (what requires MESH+).
+- Revoking MESH+ resets premium wallpaper and sound prefs to FREE defaults.
+
 ## [0.7.10] — MESH+ Gate
 
 ### Added
@@ -43,7 +116,7 @@ _Nothing yet._
 
 ### Added
 
-- **[`docs/MESH-PLUS-PLAN.md`](docs/MESH-PLUS-PLAN.md)** — full MESH+ roadmap (tiers, Ed25519 keys, feature matrix, phased rollout). Implementation is incremental; FREE baseline unchanged.
+- **[`docs/MESH-PLUS.md`](docs/MESH-PLUS.md)** — MESH+ tier summary (license, feature list). Phased roadmap file removed in 0.10.1.
 
 ### Changed
 

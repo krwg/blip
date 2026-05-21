@@ -1,22 +1,31 @@
 import { t } from './i18n.js';
 import { createPixelHintIcon } from './settings-ui.js';
-import { createPadToolView } from './project-tools-ui.js';
+import {
+  createPadToolView,
+  createBoardToolView,
+  createCanvasToolView,
+  createClipboardToolView,
+} from './project-tools-ui.js';
+import { clipLimitForTier } from './group-projects-store.js';
 import { MESH_PROJECT_SCOPE } from './projects-mesh-wire.js';
+import { isMeshPlusActive, showMeshPlusLockedToast, createMeshPlusBadge } from './mesh-plus.js';
 
 const TOOLS = [
-  { id: 'pad', icon: '✦', labelKey: 'projects.tool_pad', ready: true },
-  { id: 'board', icon: '▦', labelKey: 'projects.tool_board', ready: false },
-  { id: 'canvas', icon: '◻', labelKey: 'projects.tool_canvas', ready: false },
-  { id: 'clipboard', icon: '⧉', labelKey: 'projects.tool_clip', ready: false },
+  { id: 'pad', icon: '✦', labelKey: 'projects.tool_pad', tier: 'free' },
+  { id: 'board', icon: '▦', labelKey: 'projects.tool_board', tier: 'mesh_plus' },
+  { id: 'canvas', icon: '◻', labelKey: 'projects.tool_canvas', tier: 'mesh_plus' },
+  { id: 'clipboard', icon: '⧉', labelKey: 'projects.tool_clip', tier: 'free' },
 ];
 
 /**
  * Standalone Projects workspace (not tied to groups).
- * @param {object} config
+ * @param {object | (() => object)} configOrGetter — live config (use getter so MESH+ activation applies)
  * @param {object} api
  * @param {() => number[]} getOnlinePeerIds
  */
-export function createProjectsView(config, api, getOnlinePeerIds) {
+export function createProjectsView(configOrGetter, api, getOnlinePeerIds) {
+  const getConfig =
+    typeof configOrGetter === 'function' ? configOrGetter : () => configOrGetter;
   const root = document.createElement('div');
   root.className = 'projects-workspace';
 
@@ -48,17 +57,56 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
 
   let activeTool = 'pad';
   let padView = null;
+  let boardView = null;
+  let canvasView = null;
+  let clipboardView = null;
+
+  function meshGroup() {
+    return { id: MESH_PROJECT_SCOPE, members: getOnlinePeerIds() };
+  }
+
+  function meshOpts() {
+    const mp = isMeshPlusActive(getConfig());
+    return {
+      scopeId: MESH_PROJECT_SCOPE,
+      getBroadcastTargets: getOnlinePeerIds,
+      meshPlusActive: mp,
+      clipMax: clipLimitForTier(mp),
+    };
+  }
 
   function destroyPad() {
     padView?.destroy?.();
     padView = null;
   }
 
-  function showStub(toolId) {
+  function destroyBoard() {
+    boardView?.destroy?.();
+    boardView = null;
+  }
+
+  function destroyCanvas() {
+    canvasView?.destroy?.();
+    canvasView = null;
+  }
+
+  function destroyClipboard() {
+    clipboardView?.destroy?.();
+    clipboardView = null;
+  }
+
+  function clearMain() {
     destroyPad();
+    destroyBoard();
+    destroyCanvas();
+    destroyClipboard();
     main.innerHTML = '';
+  }
+
+  function showStub(toolId, opts = {}) {
+    clearMain();
     const stubEl = document.createElement('div');
-    stubEl.className = 'projects-stub glass';
+    stubEl.className = `projects-stub glass${opts.locked ? ' projects-stub--locked' : ''}`;
     const icon = document.createElement('span');
     icon.className = 'projects-stub-icon';
     const def = TOOLS.find((x) => x.id === toolId);
@@ -68,8 +116,14 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
     stubTitle.textContent = def ? t(def.labelKey) : toolId;
     const hint = document.createElement('p');
     hint.className = 'hint projects-stub-hint';
-    hint.dataset.i18n = 'projects.tool_soon';
-    hint.textContent = t('projects.tool_soon');
+    if (opts.locked) {
+      hint.dataset.i18n = 'projects.mesh_plus_required';
+      hint.textContent = t('projects.mesh_plus_required');
+      stubEl.appendChild(createMeshPlusBadge());
+    } else {
+      hint.dataset.i18n = 'projects.tool_soon';
+      hint.textContent = t('projects.tool_soon');
+    }
     stubEl.appendChild(icon);
     stubEl.appendChild(stubTitle);
     stubEl.appendChild(hint);
@@ -77,19 +131,37 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
   }
 
   function showPad() {
-    main.innerHTML = '';
-    destroyPad();
-    padView = createPadToolView(
-      { id: MESH_PROJECT_SCOPE, members: getOnlinePeerIds() },
-      config,
-      api,
-      {
-        scopeId: MESH_PROJECT_SCOPE,
-        getBroadcastTargets: getOnlinePeerIds,
-      }
-    );
+    clearMain();
+    padView = createPadToolView(meshGroup(), getConfig(), api, meshOpts());
     padView.el.classList.add('glass');
     main.appendChild(padView.el);
+  }
+
+  function showBoard() {
+    clearMain();
+    boardView = createBoardToolView(meshGroup(), getConfig(), api, meshOpts());
+    boardView.el.classList.add('glass');
+    main.appendChild(boardView.el);
+  }
+
+  function showCanvas() {
+    clearMain();
+    canvasView = createCanvasToolView(meshGroup(), getConfig(), api, meshOpts());
+    canvasView.el.classList.add('glass');
+    main.appendChild(canvasView.el);
+  }
+
+  function showClipboard() {
+    clearMain();
+    clipboardView = createClipboardToolView(meshGroup(), getConfig(), api, meshOpts());
+    clipboardView.el.classList.add('glass');
+    main.appendChild(clipboardView.el);
+  }
+
+  function canUseTool(tool) {
+    if (tool.tier === 'free') return true;
+    if (tool.tier === 'mesh_plus') return isMeshPlusActive(getConfig());
+    return false;
   }
 
   function selectTool(id) {
@@ -98,7 +170,22 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
       btn.classList.toggle('projects-tool-btn--active', btn.dataset.tool === id);
     });
     const def = TOOLS.find((x) => x.id === id);
-    if (def?.ready) showPad();
+    if (!def) return;
+
+    if (!canUseTool(def)) {
+      if (def.tier === 'mesh_plus') {
+        showMeshPlusLockedToast();
+        showStub(id, { locked: true });
+      } else {
+        showStub(id);
+      }
+      return;
+    }
+
+    if (id === 'pad') showPad();
+    else if (id === 'board') showBoard();
+    else if (id === 'canvas') showCanvas();
+    else if (id === 'clipboard') showClipboard();
     else showStub(id);
   }
 
@@ -115,7 +202,9 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
     iconSpan.textContent = tool.icon;
     btn.appendChild(iconSpan);
     btn.appendChild(label);
-    if (!tool.ready) btn.classList.add('projects-tool-btn--soon');
+    if (tool.tier === 'mesh_plus' && !isMeshPlusActive(getConfig())) {
+      btn.classList.add('projects-tool-btn--mesh-locked');
+    }
     btn.addEventListener('click', () => selectTool(tool.id));
     toolList.appendChild(btn);
   });
@@ -133,10 +222,23 @@ export function createProjectsView(config, api, getOnlinePeerIds) {
   return {
     el: root,
     destroy() {
-      destroyPad();
+      clearMain();
     },
     refreshPeers() {
-      /* pad reads getOnlinePeerIds on each broadcast */
+      boardView?.refresh?.();
+    },
+    refreshMeshPlus() {
+      toolList.querySelectorAll('.projects-tool-btn').forEach((btn) => {
+        const def = TOOLS.find((x) => x.id === btn.dataset.tool);
+        if (!def) return;
+        btn.classList.toggle(
+          'projects-tool-btn--mesh-locked',
+          def.tier === 'mesh_plus' && !isMeshPlusActive(getConfig())
+        );
+      });
+      if (activeTool !== 'pad' && !canUseTool(TOOLS.find((x) => x.id === activeTool) || {})) {
+        selectTool(activeTool);
+      }
     },
   };
 }

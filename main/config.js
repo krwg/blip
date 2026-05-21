@@ -14,9 +14,15 @@ const DEFAULT_CONFIG = {
   themeMode: 'dark',
   /** Color accent id — see themes.css [data-accent] */
   accentId: 'mint',
+  /** MESH+: custom #RRGGBB accent (overrides preset when set). */
+  accentCustomHex: '',
   animatedBgId: 'none',
   /** User uploaded profile image on disk */
   customAvatar: false,
+  /** Active profile GIF id (local file in profile-gifs/). */
+  profileGifActiveId: '',
+  /** Whether a profile GIF is set (for LAN announce). */
+  hasProfileGif: false,
   /** User override: pause animated wallpapers (lighter GPU). */
   reduceMotion: false,
   /** Pulse animated wallpaper from mic level (voice / 1:1 call). */
@@ -89,6 +95,10 @@ const DEFAULT_CONFIG = {
   meshPlusActivatedAt: 0,
   /** App / tray / about icon: main | dop-1..4 | mesh-1..6 */
   appIconVariant: 'main',
+  /** Track session achievements (off by default). */
+  achievementsEnabled: false,
+  /** Toast when an achievement unlocks. */
+  achievementsNotify: true,
 };
 
 let configPath = null;

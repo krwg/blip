@@ -1,6 +1,6 @@
 import { t } from './i18n.js';
 
-export function createIdGrid({ occupiedIds = [], selectedId = null, onSelect }) {
+export function createIdGrid({ occupiedIds = [], reservedIds = [], selectedId = null, onSelect }) {
   const container = document.createElement('div');
   container.className = 'id-grid-wrap';
 
@@ -11,14 +11,20 @@ export function createIdGrid({ occupiedIds = [], selectedId = null, onSelect }) 
 
   const hint = document.createElement('p');
   hint.className = 'hint';
-  hint.dataset.i18n = 'grid.hint';
-  hint.textContent = t('grid.hint');
+  if (reserved.size > 0) {
+    hint.dataset.i18n = 'grid.hint_reserved';
+    hint.textContent = t('grid.hint_reserved');
+  } else {
+    hint.dataset.i18n = 'grid.hint';
+    hint.textContent = t('grid.hint');
+  }
 
   const grid = document.createElement('div');
   grid.className = 'id-grid';
   grid.setAttribute('role', 'grid');
 
   const occupied = new Set(occupiedIds);
+  const reserved = new Set(reservedIds);
   let pending = selectedId;
 
   for (let n = 1; n <= 64; n++) {
@@ -43,6 +49,8 @@ export function createIdGrid({ occupiedIds = [], selectedId = null, onSelect }) 
       cell.appendChild(cross);
     } else if (n === selectedId) {
       cell.classList.add('selected');
+    } else if (reserved.has(n)) {
+      cell.classList.add('reserved');
     }
 
     cell.addEventListener('click', () => {

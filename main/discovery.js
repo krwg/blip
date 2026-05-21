@@ -151,7 +151,8 @@ export class Discovery {
     });
     const meshAnnounceSig = signCanonical(this.config, canonical);
     const meshPlus = isMeshPlusActive(this.config);
-    return { ...base, meshAnnounceSig, meshPlus };
+    const hasProfileGif = meshPlus && !!this.config?.hasProfileGif;
+    return { ...base, meshAnnounceSig, meshPlus, hasProfileGif };
   }
 
   announce() {
@@ -213,6 +214,7 @@ export class Discovery {
       meshLegacy,
       meshPubkey,
       meshPlus: !!data.meshPlus,
+      hasProfileGif: !!data.meshPlus && !!data.hasProfileGif,
     };
 
     if (
@@ -224,7 +226,8 @@ export class Discovery {
       existing.tcpPort !== peer.tcpPort ||
       existing.meshVerified !== peer.meshVerified ||
       existing.meshLegacy !== peer.meshLegacy ||
-      existing.meshPlus !== peer.meshPlus
+      existing.meshPlus !== peer.meshPlus ||
+      existing.hasProfileGif !== peer.hasProfileGif
     ) {
       this.peers.set(data.blipId, peer);
     } else {
@@ -238,6 +241,7 @@ export class Discovery {
       existing.meshLegacy = meshLegacy;
       existing.meshPubkey = meshPubkey;
       existing.meshPlus = peer.meshPlus;
+      existing.hasProfileGif = peer.hasProfileGif;
     }
 
     this.occupiedIds.add(data.blipId);
