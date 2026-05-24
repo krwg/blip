@@ -6,6 +6,7 @@ import {
   inferAttachmentKind,
 } from './chat-attachments.js';
 import { getChunkDelayMs } from './file-transfer-speed.js';
+import { recordBandwidthSample } from './bandwidth-monitor.js';
 
 const CHUNK_RAW_BYTES = 48 * 1024;
 
@@ -156,6 +157,7 @@ export async function sendChatFile(api, config, peerId, file, onProgress, opts =
     bytesSent = end;
     const elapsed = Math.max(0.001, (Date.now() - startedAt) / 1000);
     const speedBps = bytesSent / elapsed;
+    recordBandwidthSample({ upBps: speedBps });
     onProgress?.(Math.round(((i + 1) / chunkCount) * 100), { speedBps, bytesSent });
     await delay(chunkDelay);
   }

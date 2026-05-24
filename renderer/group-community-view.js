@@ -123,7 +123,8 @@ export function createGroupCommunityView(
   onBack,
   onGroupMenu,
   onSendFile,
-  api
+  api,
+  chatOpts = {}
 ) {
   const root = document.createElement('div');
   root.className = 'group-community';
@@ -273,7 +274,8 @@ export function createGroupCommunityView(
     null,
     onGroupMenu,
     null,
-    onSendFile
+    onSendFile,
+    chatOpts
   );
   chat.el.classList.add('group-community-chat');
   chat.el.querySelector('.group-call-ongoing')?.remove();
@@ -399,6 +401,7 @@ export function createGroupCommunityView(
     el: root,
     renderMessages: () => chat.renderMessages(),
     handleIncoming: (msg) => chat.handleIncoming(msg),
+    handlePin: (msg) => chat.handlePin?.(msg),
     updateGroup(next) {
       group.hostId = next.hostId;
       group.members = next.members;

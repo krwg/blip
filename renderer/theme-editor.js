@@ -55,14 +55,14 @@ export function appendThemeEditorSection(block, getConfig, saveConfig) {
 
   function setDisabled(locked) {
     hexInput.disabled = locked;
-    colorPick.disabled = locked;
+    colorPickUi.disabled = locked;
     applyBtn.disabled = locked;
     clearBtn.disabled = locked;
     row.classList.toggle('settings-theme-editor--locked', locked);
   }
 
   colorPick.addEventListener('input', () => {
-    hexInput.value = colorPick.value;
+    hexInput.value = colorPickUi.value;
   });
 
   applyBtn.addEventListener('click', async () => {

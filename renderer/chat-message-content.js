@@ -27,7 +27,10 @@ export function appendForwardBlock(block, forwardFrom) {
   label.textContent = t('chat.forwarded');
   const from = document.createElement('span');
   from.className = 'chat-forward-from';
-  const who = forwardFrom.fromLabel || forwardFrom.sourceLabel || '';
+  let who = forwardFrom.fromLabel || forwardFrom.sourceLabel || '';
+  if (forwardFrom.sourceGroupName) {
+    who = who ? `${forwardFrom.sourceGroupName} · ${who}` : forwardFrom.sourceGroupName;
+  }
   from.textContent = who ? `${t('chat.forward_from')} ${who}` : t('chat.forward_from_unknown');
   const body = document.createElement('span');
   body.className = 'chat-forward-body';
@@ -36,6 +39,42 @@ export function appendForwardBlock(block, forwardFrom) {
   box.appendChild(from);
   box.appendChild(body);
   block.appendChild(box);
+}
+
+export function appendForwardSeedNotice(block, forwardFrom, opts = {}) {
+  const seedId = forwardFrom?.seedId;
+  if (!seedId) return;
+  if (opts.isSeedAvailable?.(seedId)) return;
+  const row = document.createElement('div');
+  row.className = 'chat-forward-seed-unavail';
+  const text = document.createElement('span');
+  text.className = 'chat-forward-seed-text';
+  text.dataset.i18n = 'chat.forward_seed_unavail';
+  text.textContent = t('chat.forward_seed_unavail');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-lang chat-forward-seed-btn';
+  btn.dataset.i18n = 'chat.forward_seed_request';
+  btn.textContent = t('chat.forward_seed_request');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    opts.onRequestSeed?.(seedId);
+  });
+  row.appendChild(text);
+  row.appendChild(btn);
+  if (opts.onShareSeedLink) {
+    const linkBtn = document.createElement('button');
+    linkBtn.type = 'button';
+    linkBtn.className = 'btn btn-accent chat-forward-seed-btn';
+    linkBtn.dataset.i18n = 'chat.forward_seed_link';
+    linkBtn.textContent = t('chat.forward_seed_link');
+    linkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      opts.onShareSeedLink(seedId, forwardFrom);
+    });
+    row.appendChild(linkBtn);
+  }
+  block.appendChild(row);
 }
 
 export function appendQuoteBlock(block, replyTo, onQuoteClick) {
@@ -208,6 +247,7 @@ function appendTextWithEmbeds(block, text) {
  */
 export function appendChatMessageBody(block, m, opts = {}) {
   if (m.forwardFrom) appendForwardBlock(block, m.forwardFrom);
+  if (m.forwardFrom) appendForwardSeedNotice(block, m.forwardFrom, opts);
   if (m.replyTo) appendQuoteBlock(block, m.replyTo, opts.onQuoteClick);
 
   const att = m.attachment;
@@ -244,7 +284,7 @@ export function formatReplyFromLabel(from, displayName) {
 }
 
 /** Lite forward snapshot (wire-safe; no blob re-upload). */
-export function buildForwardSnapshot(sourcePeerId, m, fromLabel) {
+export function buildForwardSnapshot(sourcePeerId, m, fromLabel, opts = {}) {
   const snap = {
     sourcePeerId: Number(sourcePeerId),
     messageId: m.id || null,
@@ -252,6 +292,8 @@ export function buildForwardSnapshot(sourcePeerId, m, fromLabel) {
     preview: buildReplyPreview(m, sourcePeerId),
     text: String(m.text || '').slice(0, 500),
   };
+  if (opts.groupId) snap.sourceGroupId = String(opts.groupId);
+  if (opts.groupName) snap.sourceGroupName = String(opts.groupName);
   if (m.attachment?.seedId) snap.seedId = String(m.attachment.seedId);
   if (m.attachment?.kind) snap.attachmentKind = m.attachment.kind;
   if (m.attachment?.name) snap.attachmentName = m.attachment.name;

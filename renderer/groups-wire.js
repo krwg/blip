@@ -22,6 +22,7 @@ import { showAppToast } from './toasts.js';
 import { sounds } from './audio.js';
 import { openConfirmDialog } from './confirm-dialog.js';
 import { createMessageId } from './message-id.js';
+import { setGroupPinnedMessageId } from './chat-pins.js';
 import {
   joinVoiceChannel,
   leaveVoiceChannel,
@@ -258,6 +259,28 @@ export async function sendGroupChatMessage(api, config, groupId, msg) {
       id: msg.id,
       timestamp: msg.timestamp,
       attachment: msg.attachment,
+      replyTo: msg.replyTo,
+      forwardFrom: msg.forwardFrom,
+    });
+  }
+  return { ok: true };
+}
+
+export async function sendGroupPin(api, config, groupId, payload) {
+  const group = getGroup(groupId);
+  if (!group) return { ok: false };
+  const myId = Number(config.blipId);
+
+  for (const m of group.members) {
+    if (Number(m) === myId) continue;
+    await safeSendTcp(api, {
+      type: 'group-pin',
+      to: m,
+      groupId,
+      host: group.hostId,
+      messageId: payload.messageId,
+      pinned: payload.pinned !== false,
+      author: myId,
     });
   }
   return { ok: true };
@@ -336,6 +359,8 @@ export async function handleGroupTcpMessage(msg, ctx) {
       text: msg.text,
       timestamp: msg.timestamp || Date.now(),
       attachment: msg.attachment,
+      replyTo: msg.replyTo,
+      forwardFrom: msg.forwardFrom,
     };
 
     deliverGroupMessage(msg.groupId, incoming, ctx, { bumpUnread: true });
@@ -343,6 +368,18 @@ export async function handleGroupTcpMessage(msg, ctx) {
       applyStashedGroupFile(msg.groupId, incoming.id);
       getGroupChatView(msg.groupId)?.renderMessages?.();
     }
+    return true;
+  }
+
+  if (type === 'group-pin') {
+    const group = getGroup(msg.groupId);
+    if (!group || !isGroupMember(group, myId)) return true;
+    if (msg.pinned === false || !msg.messageId) {
+      setGroupPinnedMessageId(msg.groupId, null);
+    } else {
+      setGroupPinnedMessageId(msg.groupId, String(msg.messageId));
+    }
+    ctx.getGroupChatView?.(msg.groupId)?.handlePin?.(msg);
     return true;
   }
 

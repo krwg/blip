@@ -3,7 +3,7 @@
 **Codename:** Beacon  
 **UI naming:** EN **BEACON** · RU **МАЯК** (not mixed)  
 **Version line:** `1.1.0` (no “MVP” in user-facing naming)  
-**Status:** In development (`app-metadata.json` → `1.1.0-alpha`)
+**Status:** **Released** 2026-05-24 (`app-metadata.json` → `1.1.0`, GitHub tag `1.1.0`)
 
 ---
 
@@ -38,6 +38,8 @@ Leecher picks peers using **two factors**, not latency alone:
 2. **Latency** — tie-break among peers with similar coverage.
 
 Default **N = 3** parallel peers; rare chunks from fast partial seeders, bulk from full seeders.
+
+**Implemented (1.1.0):** `seed-have` bitmap + rarity-weighted peer pick; up to **6** parallel peers, pipelined batches (**16** chunks × **3** per peer), parallel serve/receive, **`seed-chunks-batch`** TCP packing, **1 MiB** chunks for new seeds.
 
 ### Forward (lite) — file availability
 
@@ -120,11 +122,11 @@ Optional: `capabilities: ['beacon','reply','pin']` in announce or first TCP hand
 | Item | Notes |
 |------|--------|
 | Pixel nav icon | Lighthouse / tower, not generic folder |
-| Drag-to-seed | Drop file on BEACON view → Publish? |
-| Seed preview | Thumbnail from first chunk (images/video) |
+| Drag-to-seed | Drop file on BEACON view → Publish |
+| Seed preview | Thumbnail from first chunk (images) |
 | Tray progress | Windows tray tooltip % on large downloads |
 | `blip://seed/<id>` | Copy link → paste in chat → open in Library |
-| Bandwidth graph | Settings → Network, Mesh Pulse style |
+| Bandwidth graph | Settings → Network, live mesh throughput |
 
 ---
 
@@ -153,8 +155,8 @@ Optional: `capabilities: ['beacon','reply','pin']` in announce or first TCP hand
 
 - [x] Toasts: ~9s default, × and swipe dismiss.
 - [x] Transfer hub: 5s after 100%, per-row ×, clear all.
-- [ ] Completed section + “Open folder” (phase B).
-- [ ] Settings → toast duration slider (1.1.1).
+- [x] Completed section + “Open folder” (when path known)
+- [x] Settings → toast duration slider
 
 ---
 
@@ -166,7 +168,7 @@ Optional: `capabilities: ['beacon','reply','pin']` in announce or first TCP hand
 - [x] UDP `seed-*` in `discovery.js`, TCP forward, `beacon-mesh.js` skeleton
 - [x] Main nav **BEACON / МАЯК** with [BETA]
 
-### Phase B — Beacon core (in progress)
+### Phase B — Beacon core ✓
 
 - [x] Publish file → announce + local seed
 - [x] Single-peer download E2E
@@ -180,14 +182,17 @@ Optional: `capabilities: ['beacon','reply','pin']` in announce or first TCP hand
 - [x] Reply UI (DM: quote, composer, context menu)
 - [x] Pin UI (1 pin per DM via `chat-pins.js`)
 - [x] Forward lite (`forwardFrom` on `message`; DM picker)
-- [ ] Pin + Reply + Forward in **group** chat
-- [ ] Forward seed unavailable UX + re-seed prompt
+- [x] Pin + Reply + Forward in **group** chat
+- [x] Forward seed unavailable UX + open in BEACON
+- [x] `blip://seed/<id>` links in chat
+- [x] BEACON drag-and-drop publish
 
 ### Phase D — UX + ship
 
-- [ ] 21, 22, 29, 30
-- [ ] i18n EN/RU, CHANGELOG 1.1.0, tag `v1.1.0`
-- [ ] 1.0.3 ↔ 1.1.0 compat smoke test
+- [x] 21 Compact, 22 Font scale, 29 Idle → Away, 30 Typing sound
+- [x] i18n EN/RU, CHANGELOG 1.1.0
+- [x] Compat checklist [`COMPAT-1.0.3.md`](COMPAT-1.0.3.md)
+- [x] Tag `1.1.0` on GitHub (attach `latest.yml` + Setup + Portable)
 
 ---
 

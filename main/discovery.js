@@ -129,6 +129,7 @@ export class Discovery {
     const { udpPort, tcpPort } = resolvePorts(this.config);
     let presence = this.config.presenceStatus || 'online';
     if (this.config.doNotDisturb) presence = 'busy';
+    else if (presence === 'online' && this.config.idleAwayActive) presence = 'away';
     const ip = getLocalIp();
     const meshAnnounceTs = Date.now();
     const meshPubkey = this.config.meshPublicKey || '';

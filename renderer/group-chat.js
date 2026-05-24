@@ -9,13 +9,27 @@ import {
   registerMediaPlaceholder,
   INLINE_FILE_BYTES,
 } from './chat-attachments.js';
-import { appendChatMessageBody } from './chat-message-content.js';
+import {
+  appendChatMessageBody,
+  buildReplyPreview,
+  buildForwardSnapshot,
+} from './chat-message-content.js';
 import { getMaxFileBytes } from './file-transfer-limits.js';
 import { createMessageId } from './message-id.js';
-import { addGroupMessage, getGroupMessages, groupDisplayName, amHost } from './groups.js';
+import {
+  addGroupMessage,
+  findGroupMessage,
+  getGroupMessages,
+  groupDisplayName,
+  amHost,
+} from './groups.js';
 import { getOngoingGroupCall } from './group-call-roster.js';
 import { isInGroupCall, getActiveGroupCallId } from './group-call-client.js';
 import { openAlertDialog } from './confirm-dialog.js';
+import { attachTypingSound } from './typing-sound.js';
+import { getGroupPinnedMessageId, setGroupPinnedMessageId } from './chat-pins.js';
+import { openForwardPeerPicker } from './chat-forward-picker.js';
+import { showAppToast } from './toasts.js';
 
 function formatChatTime(ts) {
   try {
@@ -30,6 +44,11 @@ function formatGroupFileLimit(config) {
   return `${gb} GB`;
 }
 
+function memberLabel(from, config) {
+  const mine = Number(from) === Number(config.blipId);
+  return mine ? t('group.you') : `#${from}`;
+}
+
 export function createGroupChatView(
   group,
   config,
@@ -38,12 +57,17 @@ export function createGroupChatView(
   onGroupCall,
   onGroupMenu,
   onJoinOngoingCall,
-  onSendFile
+  onSendFile,
+  { onPin, getForwardTargets, onForwardToPeer } = {}
 ) {
+  registerMediaPlaceholder(t('chat.image_sent'));
+  registerMediaPlaceholder(t('chat.file_sent'));
+  registerMediaPlaceholder(t('chat.file_received'));
+
   const wrap = document.createElement('div');
   wrap.className = 'chat-view group-chat-view';
 
-  const header = document.createElement("div");
+  const header = document.createElement('div');
   header.className = 'chat-header glass';
 
   if (onBack) {
@@ -55,14 +79,16 @@ export function createGroupChatView(
     header.appendChild(backBtn);
   }
 
-  const meta = document.createElement("div");
+  const meta = document.createElement('div');
   meta.className = 'chat-peer-meta';
   const name = document.createElement('span');
   name.className = 'chat-peer-name';
   name.textContent = groupDisplayName(group);
   const sub = document.createElement('span');
   sub.className = 'chat-peer-id';
-  const hostLabel = amHost(group, config.blipId) ? t('group.you_host') : t('group.host_line').replace('{id}', String(group.hostId));
+  const hostLabel = amHost(group, config.blipId)
+    ? t('group.you_host')
+    : t('group.host_line').replace('{id}', String(group.hostId));
   sub.textContent = `${t('group.members')}: ${group.members.length} · ${hostLabel}`;
   meta.appendChild(name);
   meta.appendChild(sub);
@@ -109,10 +135,50 @@ export function createGroupChatView(
   ongoingBar.appendChild(ongoingBody);
   ongoingBar.appendChild(ongoingJoin);
 
+  const pinBar = document.createElement('div');
+  pinBar.className = 'chat-pin-bar glass hidden';
+  const pinLabel = document.createElement('span');
+  pinLabel.className = 'chat-pin-label';
+  pinLabel.dataset.i18n = 'chat.pinned';
+  pinLabel.textContent = t('chat.pinned');
+  const pinPreview = document.createElement('button');
+  pinPreview.type = 'button';
+  pinPreview.className = 'chat-pin-preview btn btn-lang';
+  const pinUnpin = document.createElement('button');
+  pinUnpin.type = 'button';
+  pinUnpin.className = 'chat-pin-unpin btn btn-lang chat-reply-btn--pixel';
+  pinUnpin.title = t('chat.unpin');
+  pinUnpin.textContent = '×';
+  pinBar.appendChild(pinLabel);
+  pinBar.appendChild(pinPreview);
+  pinBar.appendChild(pinUnpin);
+
   const messagesEl = document.createElement('div');
   messagesEl.className = 'chat-messages glass';
 
-  const inputRow = document.createElement("div");
+  let stickToBottom = true;
+  messagesEl.addEventListener('scroll', () => {
+    const gap = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+    stickToBottom = gap < 80;
+  });
+
+  const replyBar = document.createElement('div');
+  replyBar.className = 'chat-reply-bar hidden';
+  const replyLabel = document.createElement('span');
+  replyLabel.className = 'chat-reply-label';
+  replyLabel.dataset.i18n = 'chat.replying';
+  replyLabel.textContent = t('chat.replying');
+  const replyPreview = document.createElement('span');
+  replyPreview.className = 'chat-reply-preview';
+  const replyCancel = document.createElement('button');
+  replyCancel.type = 'button';
+  replyCancel.className = 'chat-reply-cancel btn btn-lang';
+  replyCancel.textContent = '×';
+  replyBar.appendChild(replyLabel);
+  replyBar.appendChild(replyPreview);
+  replyBar.appendChild(replyCancel);
+
+  const inputRow = document.createElement('div');
   inputRow.className = 'chat-input-row';
 
   const fileInput = document.createElement('input');
@@ -139,17 +205,134 @@ export function createGroupChatView(
   input.maxLength = 2000;
   input.placeholder = t('chat.input_placeholder');
   attachEmojiPicker(emojiBtn, input);
+  attachTypingSound(input, () => config);
 
   const sendBtn = document.createElement('button');
   sendBtn.type = 'button';
   sendBtn.className = 'btn btn-accent';
   sendBtn.textContent = t('chat.send');
 
+  let pendingReply = null;
+
+  function clearReplyTarget() {
+    pendingReply = null;
+    replyBar.classList.add('hidden');
+  }
+
+  function setReplyTarget(m) {
+    if (!m?.id) return;
+    const mine = Number(m.from) === Number(config.blipId);
+    pendingReply = {
+      id: m.id,
+      from: m.from,
+      fromLabel: memberLabel(m.from, config),
+      preview: buildReplyPreview(m, m.from),
+      text: m.text || '',
+    };
+    replyPreview.textContent = pendingReply.preview;
+    replyBar.classList.remove('hidden');
+    input.focus();
+  }
+
+  replyCancel.addEventListener('click', clearReplyTarget);
+
+  function scrollToMessageId(messageId) {
+    if (!messageId) return;
+    const el = messagesEl.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('chat-block--highlight');
+    setTimeout(() => el.classList.remove('chat-block--highlight'), 1600);
+  }
+
+  function renderPinBar() {
+    const pinId = getGroupPinnedMessageId(group.id);
+    const pinned = pinId ? findGroupMessage(group.id, pinId) : null;
+    if (!pinned) {
+      pinBar.classList.add('hidden');
+      return;
+    }
+    pinBar.classList.remove('hidden');
+    const who = memberLabel(pinned.from, config);
+    pinPreview.textContent = `${who}: ${buildReplyPreview(pinned, pinned.from).slice(0, 80)}`;
+    pinPreview.onclick = () => scrollToMessageId(pinId);
+  }
+
+  pinUnpin.addEventListener('click', () => {
+    setGroupPinnedMessageId(group.id, null);
+    void onPin?.(group.id, { messageId: null, pinned: false });
+    renderPinBar();
+  });
+
+  function setPinMessage(m) {
+    if (!m?.id) return;
+    setGroupPinnedMessageId(group.id, m.id);
+    void onPin?.(group.id, { messageId: m.id, pinned: true });
+    renderPinBar();
+  }
+
+  async function forwardMessage(m) {
+    if (!m?.id || typeof onForwardToPeer !== 'function') return;
+    const raw = typeof getForwardTargets === 'function' ? getForwardTargets() : [];
+    if (!raw.length) {
+      void openAlertDialog({ title: t('chat.forward_no_peers') });
+      return;
+    }
+    const targetId = await openForwardPeerPicker(raw);
+    if (targetId == null) return;
+    const mine = Number(m.from) === Number(config.blipId);
+    const fromLabel = memberLabel(m.from, config);
+    const forwardFrom = buildForwardSnapshot(m.from, m, fromLabel, {
+      groupId: group.id,
+      groupName: groupDisplayName(group),
+    });
+    await onForwardToPeer(targetId, { forwardFrom, sourceMessage: m });
+    showAppToast({ title: t('chat.forward_sent'), durationMs: 3200 });
+  }
+
+  function openMessageMenu(e, m) {
+    e.preventDefault();
+    const menuEl = document.createElement('div');
+    menuEl.className = 'chat-msg-menu';
+    const add = (key, fn) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chat-menu-item';
+      btn.dataset.i18n = key;
+      btn.textContent = t(key);
+      btn.addEventListener('click', () => {
+        menuEl.remove();
+        fn();
+      });
+      menuEl.appendChild(btn);
+    };
+    if (m.id) {
+      add('chat.reply', () => setReplyTarget(m));
+      add('chat.pin', () => setPinMessage(m));
+      if (onForwardToPeer) add('chat.forward', () => void forwardMessage(m));
+      if (m.replyTo?.id) add('chat.jump_reply', () => scrollToMessageId(m.replyTo.id));
+    }
+    if (!menuEl.childElementCount) return;
+    document.body.appendChild(menuEl);
+    menuEl.style.position = 'fixed';
+    menuEl.style.left = `${Math.min(e.clientX, window.innerWidth - 180)}px`;
+    menuEl.style.top = `${Math.min(e.clientY, window.innerHeight - 120)}px`;
+    menuEl.style.zIndex = '600';
+    requestAnimationFrame(() => {
+      document.addEventListener('click', () => menuEl.remove(), { once: true });
+    });
+  }
+
   async function publish(msg) {
-    addGroupMessage(group.id, msg);
+    const payload = {
+      ...msg,
+      replyTo: pendingReply ? { ...pendingReply } : undefined,
+    };
+    clearReplyTarget();
+    addGroupMessage(group.id, payload);
     renderMessages();
     sounds.messageSent();
-    await onSend?.(group.id, msg);
+    await onSend?.(group.id, payload);
   }
 
   async function send() {
@@ -312,38 +495,74 @@ export function createGroupChatView(
 
   wrap.appendChild(header);
   wrap.appendChild(ongoingBar);
+  wrap.appendChild(pinBar);
   wrap.appendChild(messagesEl);
   wrap.appendChild(dropOverlay);
+  wrap.appendChild(replyBar);
   wrap.appendChild(inputRow);
 
   function renderMessages() {
     const msgs = getGroupMessages(group.id);
+    const scrollPos = messagesEl.scrollTop;
     messagesEl.innerHTML = '';
     if (!msgs.length) {
       const p = document.createElement('p');
       p.className = 'chat-empty';
       p.textContent = t('chat.empty');
       messagesEl.appendChild(p);
+      renderPinBar();
       return;
     }
     msgs.forEach((m) => {
-      const block = document.createElement("div");
+      const block = document.createElement('div');
       const mine = Number(m.from) === Number(config.blipId);
       block.className = `chat-block ${mine ? 'outgoing' : 'incoming'}`;
+      block.dataset.messageId = m.id || '';
+
       const who = document.createElement('span');
       who.className = 'group-msg-from';
-      who.textContent = mine ? t('group.you') : `#${m.from}`;
+      who.textContent = memberLabel(m.from, config);
       block.appendChild(who);
-      appendChatMessageBody(block, m);
+
+      appendChatMessageBody(block, m, { onQuoteClick: (id) => scrollToMessageId(id) });
+
+      block.addEventListener('contextmenu', (e) => openMessageMenu(e, m));
+
+      const actions = document.createElement('div');
+      actions.className = 'chat-block-actions';
+      if (m.id) {
+        const replyBtn = document.createElement('button');
+        replyBtn.type = 'button';
+        replyBtn.className = 'btn btn-lang chat-reply-btn chat-reply-btn--pixel';
+        replyBtn.title = t('chat.reply');
+        replyBtn.innerHTML = '<span class="pixel-glyph pixel-glyph--reply"></span>';
+        replyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setReplyTarget(m);
+        });
+        actions.appendChild(replyBtn);
+      }
+
+      const metaRow = document.createElement('div');
+      metaRow.className = 'chat-meta-row';
       if (m.timestamp) {
         const time = document.createElement('span');
         time.className = 'chat-time';
         time.textContent = formatChatTime(m.timestamp);
-        block.appendChild(time);
+        metaRow.appendChild(time);
       }
+      if (actions.childElementCount) block.appendChild(actions);
+      block.appendChild(metaRow);
+
       messagesEl.appendChild(block);
     });
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    if (stickToBottom) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else {
+      messagesEl.scrollTop = scrollPos;
+    }
+    renderPinBar();
   }
 
   renderMessages();
@@ -354,14 +573,26 @@ export function createGroupChatView(
     handleIncoming(msg) {
       const stored = addGroupMessage(group.id, { ...msg, outgoing: false });
       if (!stored) return;
+      stickToBottom = true;
       renderMessages();
       sounds.messageReceived();
+    },
+    handlePin(msg) {
+      if (msg.pinned === false || !msg.messageId) {
+        setGroupPinnedMessageId(group.id, null);
+      } else {
+        setGroupPinnedMessageId(group.id, String(msg.messageId));
+      }
+      renderPinBar();
+      renderMessages();
     },
     updateGroup(next) {
       group.hostId = next.hostId;
       group.members = next.members;
       sub.textContent = `${t('group.members')}: ${group.members.length} · ${
-        amHost(group, config.blipId) ? t('group.you_host') : t('group.host_line').replace('{id}', String(group.hostId))
+        amHost(group, config.blipId)
+          ? t('group.you_host')
+          : t('group.host_line').replace('{id}', String(group.hostId))
       }`;
       refreshOngoingBar();
     },

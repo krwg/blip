@@ -9,7 +9,7 @@
 
 !macro customFinishPage
   !define MUI_FINISHPAGE_TITLE "BLIP installed"
-  !define MUI_FINISHPAGE_TEXT "BLIP is ready on your network.$\r$\n$\r$\nAllow UDP 42069 and TCP 42070 in the firewall if peers are not discovered."
+  !define MUI_FINISHPAGE_TEXT "BLIP is ready on your network.$\r$\n$\r$\nAllow UDP 42069 and TCP 42070 in the firewall if peers are not discovered.$\r$\n$\r$\nFiles .blip open in BLIP automatically after install."
   !define MUI_FINISHPAGE_RUN_TEXT "Launch BLIP"
 
   Function StartApp
