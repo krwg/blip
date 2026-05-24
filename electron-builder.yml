@@ -70,3 +70,16 @@ nsis:
   license: LICENSE
 portable:
   artifactName: ${productName}-${version}-Portable.${ext}
+
+fileAssociations:
+  - ext: blip
+    name: BLIPSeed
+    description: BLIP Mesh Seed
+    mimeType: application/vnd.blip.seed+json
+    role: Editor
+    icon: icon.ico
+
+protocols:
+  - name: BLIP
+    schemes:
+      - blip

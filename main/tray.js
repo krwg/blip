@@ -4,6 +4,7 @@ import { resolveBuildAsset } from './paths.js';
 
 let tray = null;
 let trayIconPath = null;
+let baseTrayTooltip = 'BLIP';
 
 function createTrayIconFromPath(trayPath) {
   if (trayPath && existsSync(trayPath)) {
@@ -28,6 +29,25 @@ function createTrayIconFromPath(trayPath) {
 /** @deprecated use setTrayIconPath */
 function createTrayIcon() {
   return createTrayIconFromPath(trayIconPath) || createTrayIconFallback();
+}
+
+export function setTrayBaseTooltip(tooltip) {
+  baseTrayTooltip = tooltip || 'BLIP';
+  if (tray && !tray.isDestroyed?.()) {
+    tray.setToolTip(baseTrayTooltip);
+  }
+}
+
+/** @param {{ percent?: number, label?: string } | null} info */
+export function setTrayTransferProgress(info) {
+  if (!tray || tray.isDestroyed?.()) return;
+  const pct = Math.round(Number(info?.percent) || 0);
+  if (info && pct > 0 && pct < 100) {
+    const label = String(info.label || 'Transfer').trim();
+    tray.setToolTip(`${baseTrayTooltip} — ${label} ${pct}%`);
+  } else {
+    tray.setToolTip(baseTrayTooltip);
+  }
 }
 
 export function destroyTray() {
@@ -71,7 +91,8 @@ export function createTray(opts) {
   const L = { show: labels?.show || 'Show', quit: labels?.quit || 'Quit' };
   try {
     tray = new Tray(createTrayIconFromPath(trayIconPath) || createTrayIconFallback());
-    tray.setToolTip(tooltip || 'BLIP');
+    baseTrayTooltip = tooltip || 'BLIP';
+    tray.setToolTip(baseTrayTooltip);
 
     const showMain = () => {
       const w = getMainWindow();

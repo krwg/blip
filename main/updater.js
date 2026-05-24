@@ -3,9 +3,9 @@ import { join } from 'path';
 import { existsSync, readFileSync, rmSync } from 'fs';
 import electronUpdater from 'electron-updater';
 import {
-  fetchGithubReleases,
-  getGithubPublishConfig,
-  loadGithubRepo,
+  releaseHasUpdateManifest,
+  releaseTagCandidates,
+  resolveUpdateFeedUrl,
 } from './github-releases.js';
 
 const updaterModule = electronUpdater.default ?? electronUpdater;
@@ -15,11 +15,20 @@ let getMainWindow = () => null;
 let getConfigRef = () => null;
 let listenersAttached = false;
 let retryingAfterStaleFeed = false;
+/** @type {string | null} */
+let activeFeedTag = null;
+
+export function isPortableInstall() {
+  return !!(
+    process.env.PORTABLE_EXECUTABLE_DIR ||
+    process.env.PORTABLE_EXECUTABLE_FILE
+  );
+}
 
 /** @param {object} [config] */
-export function configureAutoUpdater(config) {
-  if (!app.isPackaged) return Promise.resolve();
-  return applyUpdateFeed(config);
+export async function configureAutoUpdater(config) {
+  if (!app.isPackaged || isPortableInstall()) return;
+  await applyUpdateFeed(config);
 }
 
 function getUpdaterCacheDir() {
@@ -43,19 +52,6 @@ export function clearUpdaterCache() {
   }
 }
 
-async function releaseHasUpdateManifest(tag) {
-  const version = String(tag || '').replace(/^v/i, '');
-  if (!version) return false;
-  const repo = loadGithubRepo();
-  const url = `https://github.com/${repo}/releases/download/${version}/latest.yml`;
-  try {
-    const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function sanitizeUpdaterCacheOnStartup() {
   const pendingInfo = join(getUpdaterCacheDir(), 'pending', 'update-info.json');
   if (!existsSync(pendingInfo)) return;
@@ -67,19 +63,21 @@ async function sanitizeUpdaterCacheOnStartup() {
       fileName.match(/BLIP-(.+?)-Portable/i) ||
       fileName.match(/(\d+\.\d+\.\d+[^\s/]*)/);
     const version = match?.[1]?.replace(/^v/i, '');
-    if (version && !(await releaseHasUpdateManifest(version))) {
-      clearUpdaterCache();
+    if (version) {
+      let ok = false;
+      for (const tag of releaseTagCandidates(version)) {
+        if (await releaseHasUpdateManifest(tag)) {
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) clearUpdaterCache();
     }
   } catch {
     clearUpdaterCache();
   }
 }
 
-/**
- * electron-updater with allowPrerelease reads releases.atom, which still lists
- * deleted releases (orphan tags). Use GitHub REST + generic feed for betas instead.
- * @param {object} [config]
- */
 function isUnsignedInstallerError(err) {
   const msg = err?.message || String(err);
   return /not signed by the application owner|not digitally signed|SignerCertificate/i.test(
@@ -87,40 +85,36 @@ function isUnsignedInstallerError(err) {
   );
 }
 
+/**
+ * @param {object} [config]
+ */
 async function applyUpdateFeed(config) {
   autoUpdater.allowPrerelease = false;
   autoUpdater.autoDownload = config?.autoDownloadUpdates !== false;
-  // GitHub releases are not Authenticode-signed; without this, Windows blocks install.
+  autoUpdater.autoInstallOnAppQuit = config?.autoDownloadUpdates !== false;
+  autoUpdater.disableDifferentialDownload = true;
+
   if (process.platform === 'win32') {
     autoUpdater.verifyUpdateCodeSignature = false;
   }
 
-  const receiveBeta = !!config?.receiveBetaUpdates;
-  if (receiveBeta) {
-    const result = await fetchGithubReleases(15);
-    if (result.ok) {
-      for (const release of result.releases) {
-        if (!release.prerelease || !release.tag) continue;
-        const tag = release.tag.replace(/^v/i, '');
-        if (await releaseHasUpdateManifest(tag)) {
-          const repo = loadGithubRepo();
-          autoUpdater.setFeedURL({
-            provider: 'generic',
-            url: `https://github.com/${repo}/releases/download/${tag}/`,
-          });
-          return;
-        }
-      }
-    }
-    console.warn('[BLIP] No valid prerelease with latest.yml; using stable feed');
+  const feed = await resolveUpdateFeedUrl(config);
+  activeFeedTag = feed.channelTag || null;
+
+  if (feed.provider === 'generic' && feed.url) {
+    autoUpdater.setFeedURL({ provider: 'generic', url: feed.url });
+    console.info('[BLIP] updater feed', feed.url);
+    return;
   }
 
-  autoUpdater.setFeedURL(getGithubPublishConfig());
+  const { provider, owner, repo } = feed;
+  autoUpdater.setFeedURL({ provider, owner, repo });
+  console.info('[BLIP] updater feed github', `${owner}/${repo}`);
 }
 
 function isStaleFeedError(err) {
   const msg = err?.message || String(err);
-  return /latest\.yml|CHANNEL_FILE_NOT_FOUND|release artifacts/i.test(msg);
+  return /latest\.yml|CHANNEL_FILE_NOT_FOUND|release artifacts|404/i.test(msg);
 }
 
 function notify(payload) {
@@ -190,7 +184,7 @@ function attachListeners() {
 export function setupAutoUpdater(getWindow, getConfig) {
   getMainWindow = getWindow;
   getConfigRef = getConfig;
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || isPortableInstall()) return;
 
   attachListeners();
   void (async () => {
@@ -205,18 +199,21 @@ export function setupAutoUpdater(getWindow, getConfig) {
 }
 
 export async function checkForUpdatesNow(getConfig) {
-  if (!app.isPackaged) return { ok: false, skipped: true };
+  if (!app.isPackaged) return { ok: false, skipped: true, reason: 'dev' };
+  if (isPortableInstall()) {
+    return { ok: false, skipped: true, reason: 'portable' };
+  }
   attachListeners();
   if (typeof getConfig === 'function') await configureAutoUpdater(getConfig());
   try {
     await autoUpdater.checkForUpdates();
-    return { ok: true };
+    return { ok: true, channelTag: activeFeedTag };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
   }
 }
 
 export function quitAndInstallUpdater() {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || isPortableInstall()) return;
   autoUpdater.quitAndInstall(false, true);
 }

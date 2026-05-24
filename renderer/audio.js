@@ -635,3 +635,13 @@ export const sounds = {
   preview,
   ensureAudioReady,
 };
+
+/** Local composer click (#30) — ignores global uiSoundsEnabled. */
+export async function playTypingClick() {
+  const ready = await ensureAudioReady();
+  if (!ready) return;
+  const prev = soundsVolume;
+  soundsVolume = Math.min(1, Math.max(0.05, prev * 0.35));
+  playFxKey('uiClick', true);
+  soundsVolume = prev;
+}

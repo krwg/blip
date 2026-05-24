@@ -1,0 +1,29 @@
+# Build Windows installers and publish to GitHub Releases (needs latest.yml for auto-update).
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish to GitHub
+        run: npm run electron:publish:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

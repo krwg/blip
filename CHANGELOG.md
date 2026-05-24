@@ -9,22 +9,54 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [Unreleased]
 
-### Added (1.1.0 Beacon — in progress)
+_No changes yet._
 
-- **BEACON / Mesh Library** — publish files to LAN (`seed-announce`), download via `seed-request`/`seed-chunk` (multi-peer, up to 3 seeds), save assembled file; see [`docs/ROADMAP-1.1-BEACON.md`](docs/ROADMAP-1.1-BEACON.md).
-- **Chat (DM)** — Reply, single pin, Forward lite (`forwardFrom` on wire).
-- **BEACON** — Stop seeding (`seed-gone`), pause/resume, resume local seed after stop.
-- **UX** — Compact mode, font size sliders, idle → Away, typing sound (planned).
+## [1.1.1] — Beacon — 2026-05-24
+
+Patch (codename **Beacon** unchanged).
 
 ### Fixed
 
-- **Toasts** — default auto-dismiss; close (×) and swipe-to-dismiss; message toasts no longer stay forever when actions are shown.
-- **MESH TRANSFER hub** — completed transfers auto-clear after 5s; manual dismiss per row and “clear all” on header.
+- **BEACON publish** — large files, ZIP and archives: ingest via main-process disk read (`file.path`) instead of `File.arrayBuffer()` in the renderer (fixes «could not be read» / NotReadableError).
+
+See [`docs/release-notes-v1.1.1-github.md`](docs/release-notes-v1.1.1-github.md).
+
+## [1.1.0] — Beacon — 2026-05-24
+
+Major release (codename **Beacon** / **МАЯК**): LAN mesh file library, chat polish, UX settings, faster BEACON transfers, GitHub auto-update fixes.
+
+### Added
+
+- **BEACON / МАЯК** — publish files to LAN (`seed-announce`), multi-seed download (up to **6** peers, rarity scheduler, **1 MiB** chunks, pipelined **`seed-chunks-batch`** IPC), pause/stop/resume seeding, `seed-gone`, drag-and-drop publish, **`blip://seed/<id>`** links, seed image previews, row **⋮** / context menu (copy link, delete local seed, pause, etc.).
+- **`.blip` seed files** — torrent-style descriptors; **Open `.blip`** in BEACON; Windows **`.blip` → BLIP** file association after NSIS install (`blip://` protocol).
+- **Chat** — Reply, single pin, Forward lite (`forwardFrom`) in DM and groups; `group-pin` sync; forward seed unavailable → open in BEACON or send link.
+- **UX (#21–#30)** — Compact mode, UI/chat font scales, idle → Away (5 min default, configurable), local typing sound.
+- **MESH TRANSFER hub** — Active/Completed sections, Open folder when path is known, 5s auto-clear.
+- **Settings** — toast duration slider (2–60s); **Network** mesh bandwidth graph + sparkline.
+- **Tray** — BEACON publish/download progress % in tooltip.
+- **BLIP color picker** — custom in-app palette (HSV + hex/RGB) for MESH+ accent and Projects canvas (`blip-color-input.js`).
+- **Updates** — GitHub **generic feed** resolver (`latest.yml` per release tag); `npm run electron:publish:win`, `npm run release:assets`, [`.github/workflows/release.yml`](.github/workflows/release.yml) on tag push.
 
 ### Changed
 
-- **BEACON / МАЯК** — main nav entry with [BETA] badge; EN **BEACON**, RU **МАЯК** (consistent naming).
-- **Video lightbox** — adjustable volume (saved in settings as `videoVolume`).
+- **BEACON** in main nav (EN **BEACON**, RU **МАЯК**); stats bar; theme-adaptive accents (`var(--blip-accent)`); table/cell padding.
+- **Side nav** — wider min column so labels (e.g. **SETTINGS** / **НАСТРОЙКИ**) do not clip.
+- **Video lightbox** — volume slider (`videoVolume`).
+
+### Fixed
+
+- **Toasts** — auto-dismiss, × and swipe dismiss.
+- **Transfer hub** — completed rows visible before auto-clear; no instant delete at 100%.
+- **BEACON** — copy `blip://seed/…` to clipboard; stop seeding no longer deletes local files; mesh speed / batch IPC regressions.
+- **Windows auto-update** — unsigned GitHub installers (`verifyUpdateCodeSignature = false`); stale-cache recovery; **Portable** builds show manual-update hint (no in-app install).
+
+### Notes
+
+- **1.0.3 ↔ 1.1.0** on the same LAN: old clients ignore `seed-*` traffic; chat/calls stay compatible — [`docs/COMPAT-1.0.3.md`](docs/COMPAT-1.0.3.md).
+- **GitHub Release** must include **`latest.yml`** + **`BLIP-Setup-1.1.0.exe`** for in-app updates (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
+- Still on **v1.0.0** Windows: install **Setup once by hand**; later versions auto-update from the app.
+
+See [`docs/ROADMAP-1.1-BEACON.md`](docs/ROADMAP-1.1-BEACON.md) and [`docs/release-notes-v1.1.0-github.md`](docs/release-notes-v1.1.0-github.md).
 
 ## [1.0.3] — Echo — 2026-05-23
 
