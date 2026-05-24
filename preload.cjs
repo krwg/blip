@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('blip', {
   trendingGiphy: (offset) => ipcRenderer.invoke('trending-giphy', offset),
   importGiphyGif: (url) => ipcRenderer.invoke('import-giphy-gif', url),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
   listDisplaySources: () => ipcRenderer.invoke('list-display-sources'),
   prepareDisplayCapture: (sourceId) => ipcRenderer.invoke('prepare-display-capture', sourceId),
   getPeers: () => ipcRenderer.invoke('get-peers'),
@@ -95,14 +96,39 @@ contextBridge.exposeInMainWorld('blip', {
   },
   beaconSendUdp: (payload) => ipcRenderer.invoke('beacon-udp-send', payload),
   getBeaconPaths: () => ipcRenderer.invoke('beacon-paths'),
+  beaconPublishFromPath: (payload) => ipcRenderer.invoke('beacon-publish-from-path', payload),
+  onBeaconIngestProgress: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('beacon-ingest-progress', handler);
+    return () => ipcRenderer.removeListener('beacon-ingest-progress', handler);
+  },
   beaconWriteMeta: (payload) => ipcRenderer.invoke('beacon-write-meta', payload),
   beaconReadMeta: (payload) => ipcRenderer.invoke('beacon-read-meta', payload),
+  beaconReadPreview: (payload) => ipcRenderer.invoke('beacon-read-preview', payload),
+  beaconWritePreview: (payload) => ipcRenderer.invoke('beacon-write-preview', payload),
+  setTrayTransferProgress: (info) => ipcRenderer.invoke('set-tray-transfer-progress', info),
   beaconWriteChunk: (payload) => ipcRenderer.invoke('beacon-write-chunk', payload),
+  beaconWriteChunksBatch: (payload) => ipcRenderer.invoke('beacon-write-chunks-batch', payload),
   beaconReadChunk: (payload) => ipcRenderer.invoke('beacon-read-chunk', payload),
+  beaconReadChunksBatch: (payload) => ipcRenderer.invoke('beacon-read-chunks-batch', payload),
+  beaconHaveBitmap: (payload) => ipcRenderer.invoke('beacon-have-bitmap', payload),
   beaconChunkExists: (payload) => ipcRenderer.invoke('beacon-chunk-exists', payload),
   beaconCountChunks: (payload) => ipcRenderer.invoke('beacon-count-chunks', payload),
   beaconListLocal: () => ipcRenderer.invoke('beacon-list-local'),
   beaconSaveAssembled: (payload) => ipcRenderer.invoke('beacon-save-assembled', payload),
+  beaconDeleteSeed: (payload) => ipcRenderer.invoke('beacon-delete-seed', payload),
+  beaconSeedExists: (payload) => ipcRenderer.invoke('beacon-seed-exists', payload),
+  beaconReadBlipFile: (payload) => ipcRenderer.invoke('beacon-read-blip-file', payload),
+  onBeaconOpenSeed: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('beacon-open-seed', handler);
+    return () => ipcRenderer.removeListener('beacon-open-seed', handler);
+  },
+  onBeaconOpenBlipFile: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('beacon-open-blip-file', handler);
+    return () => ipcRenderer.removeListener('beacon-open-blip-file', handler);
+  },
   onNotificationOpenChat: (cb) => {
     const handler = (_, peerId) => cb(peerId);
     ipcRenderer.on('notification-open-chat', handler);

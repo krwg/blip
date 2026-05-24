@@ -28,7 +28,9 @@ import { getPinnedMessageId, setPinnedMessageId } from './chat-pins.js';
 import { exportPeerChatJson, exportPeerChatPdf, exportPeerChatHtml } from './chat-export.js';
 import { premiumTierEnabled, showPremiumLockedToast } from './mesh-plus.js';
 import { openAlertDialog, openConfirmDialog } from './confirm-dialog.js';
+import { attachTypingSound } from './typing-sound.js';
 import { recordMessageSent } from './session-stats.js';
+import { getBeaconCatalog, isSeedLocalComplete, buildBeaconSeedLink, buildBeaconAttachment } from './beacon-mesh.js';
 
 const STORAGE_KEY = 'blip_chat_v1';
 const MAX_PER_PEER = 500;
@@ -451,6 +453,7 @@ export function createChatView(
   input.placeholder = t('chat.input_placeholder');
   input.dataset.i18nPlaceholder = 'chat.input_placeholder';
   attachEmojiPicker(emojiBtn, input);
+  attachTypingSound(input, getConfig);
 
   const sendBtn = document.createElement('button');
   sendBtn.type = 'button';
@@ -1010,7 +1013,31 @@ export function createChatView(
       block.className = `chat-block ${m.outgoing ? 'outgoing' : 'incoming'}`;
       block.dataset.messageId = m.id || '';
 
-      appendChatMessageBody(block, m, { onQuoteClick: (id) => scrollToMessageId(id) });
+      appendChatMessageBody(block, m, {
+        onQuoteClick: (id) => scrollToMessageId(id),
+        isSeedAvailable: (seedId) => {
+          if (isSeedLocalComplete(seedId)) return true;
+          return getBeaconCatalog().some(
+            (e) => e.seedId === seedId && (e.seederCount > 0 || e.mine)
+          );
+        },
+        onRequestSeed: (seedId) => {
+          window.dispatchEvent(
+            new CustomEvent('blip-open-beacon-seed', { detail: { seedId } })
+          );
+        },
+        onShareSeedLink: (seedId, forwardFrom) => {
+          const att = buildBeaconAttachment({
+            seedId,
+            filename: forwardFrom?.attachmentName || 'file',
+            size: 0,
+          });
+          void sendPayload({
+            text: buildBeaconSeedLink(seedId),
+            attachment: att || undefined,
+          });
+        },
+      });
 
       if (m.editedAt) {
         const edited = document.createElement('span');

@@ -107,6 +107,24 @@ const DEFAULT_CONFIG = {
   achievementsEnabled: false,
   /** Toast when an achievement unlocks. */
   achievementsNotify: true,
+  /** In-app toast auto-dismiss (seconds, 2–60). */
+  toastDurationSec: 9,
+  /** BEACON parallel download peers (1–8). */
+  beaconParallelPeers: 6,
+  /** BEACON upload throttle % (10–100). */
+  beaconUploadCapPercent: 100,
+  /** comfortable | compact — tighter spacing (#21) */
+  uiDensity: 'comfortable',
+  /** UI font scale 0.85–1.25 (#22) */
+  uiFontScale: 1,
+  /** Chat message font scale 0.85–1.35 (#22) */
+  chatFontScale: 1,
+  /** Local composer key click (#30) */
+  typingSoundEnabled: false,
+  /** Auto away after N minutes of inactivity; 0 = off (#29) */
+  idleAwayMinutes: 5,
+  /** Set by idle timer when effective presence is away while manual status is online */
+  idleAwayActive: false,
 };
 
 let configPath = null;

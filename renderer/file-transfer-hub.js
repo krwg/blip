@@ -4,7 +4,7 @@ import { formatTransferSpeed } from './file-transfer-speed.js';
 
 const AUTO_CLEAR_MS = 5000;
 
-/** @type {Map<string, { id: string, peerId: number, transferId: string, name: string, direction: string, progress: number, size: number, speedBps?: number, startedAt?: number, cancellable?: boolean, onCancel?: () => void }>} */
+/** @type {Map<string, object>} */
 const active = new Map();
 /** @type {Map<string, ReturnType<typeof setTimeout>>} */
 const autoClearTimers = new Map();
@@ -47,6 +47,11 @@ function clearAllTransfers() {
   render();
 }
 
+function openSavedFolder(filePath) {
+  if (!filePath || !window.blip?.showItemInFolder) return;
+  void window.blip.showItemInFolder(filePath);
+}
+
 function ensureDom() {
   if (rootEl?.isConnected) return;
   rootEl = document.createElement('div');
@@ -81,6 +86,87 @@ function ensureDom() {
   document.body.appendChild(rootEl);
 }
 
+function renderJobRow(job) {
+  const row = document.createElement('div');
+  row.className = `transfer-hub-row${job.progress >= 100 ? ' transfer-hub-row--done' : ''}`;
+
+  const top = document.createElement('div');
+  top.className = 'transfer-hub-row-top';
+
+  const meta = document.createElement('div');
+  meta.className = 'transfer-hub-meta';
+  const name = document.createElement('span');
+  name.className = 'transfer-hub-name';
+  name.textContent = job.name || 'file';
+  const sub = document.createElement('span');
+  sub.className = 'transfer-hub-sub';
+  const dir =
+    job.direction === 'in'
+      ? t('transfer.hub_in').replace('{id}', String(job.peerId))
+      : t('transfer.hub_out').replace('{id}', String(job.peerId));
+  const speedPart =
+    job.speedBps && job.progress > 0 && job.progress < 100
+      ? ` · ${formatTransferSpeed(job.speedBps)}`
+      : '';
+  const donePart = job.progress >= 100 ? ` · ${t('transfer.hub_done')}` : ` · ${job.progress}%`;
+  sub.textContent = `${dir} · ${formatFileSize(job.size)}${speedPart}${donePart}`;
+  meta.appendChild(name);
+  meta.appendChild(sub);
+  top.appendChild(meta);
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'btn btn-lang transfer-hub-dismiss';
+  dismissBtn.setAttribute('aria-label', t('transfer.hub_dismiss'));
+  dismissBtn.textContent = '×';
+  dismissBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissTransfer(job.id);
+  });
+  top.appendChild(dismissBtn);
+
+  row.appendChild(top);
+
+  if (job.progress < 100) {
+    const track = document.createElement('div');
+    track.className = 'transfer-hub-track';
+    const fill = document.createElement('div');
+    fill.className = 'transfer-hub-fill';
+    fill.style.width = `${Math.min(100, Math.max(0, job.progress))}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+  }
+
+  if (job.cancellable && job.progress < 100 && job.onCancel) {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-lang transfer-hub-cancel';
+    cancelBtn.dataset.i18n = 'transfer.hub_cancel';
+    cancelBtn.textContent = t('transfer.hub_cancel');
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      job.onCancel?.();
+    });
+    row.appendChild(cancelBtn);
+  }
+
+  if (job.progress >= 100 && job.savedPath) {
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn btn-accent transfer-hub-open';
+    openBtn.dataset.i18n = 'transfer.hub_open_folder';
+    openBtn.textContent = t('transfer.hub_open_folder');
+    openBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSavedFolder(job.savedPath);
+    });
+    row.appendChild(openBtn);
+  }
+
+  return row;
+}
+
 function render() {
   ensureDom();
   if (!listEl) return;
@@ -91,69 +177,26 @@ function render() {
   }
   rootEl.classList.remove('hidden');
 
-  for (const job of active.values()) {
-    const row = document.createElement('div');
-    row.className = 'transfer-hub-row';
+  const jobs = [...active.values()];
+  const inProgress = jobs.filter((j) => j.progress < 100);
+  const completed = jobs.filter((j) => j.progress >= 100);
 
-    const top = document.createElement('div');
-    top.className = 'transfer-hub-row-top';
+  if (inProgress.length) {
+    const head = document.createElement('div');
+    head.className = 'transfer-hub-section-head';
+    head.dataset.i18n = 'transfer.hub_active';
+    head.textContent = t('transfer.hub_active');
+    listEl.appendChild(head);
+    for (const job of inProgress) listEl.appendChild(renderJobRow(job));
+  }
 
-    const meta = document.createElement('div');
-    meta.className = 'transfer-hub-meta';
-    const name = document.createElement('span');
-    name.className = 'transfer-hub-name';
-    name.textContent = job.name || 'file';
-    const sub = document.createElement('span');
-    sub.className = 'transfer-hub-sub';
-    const dir =
-      job.direction === 'in'
-        ? t('transfer.hub_in').replace('{id}', String(job.peerId))
-        : t('transfer.hub_out').replace('{id}', String(job.peerId));
-    const speedPart =
-      job.speedBps && job.progress > 0 && job.progress < 100
-        ? ` · ${formatTransferSpeed(job.speedBps)}`
-        : '';
-    sub.textContent = `${dir} · ${formatFileSize(job.size)}${speedPart} · ${job.progress}%`;
-    meta.appendChild(name);
-    meta.appendChild(sub);
-    top.appendChild(meta);
-
-    const dismissBtn = document.createElement('button');
-    dismissBtn.type = 'button';
-    dismissBtn.className = 'btn btn-lang transfer-hub-dismiss';
-    dismissBtn.setAttribute('aria-label', t('transfer.hub_dismiss'));
-    dismissBtn.textContent = '×';
-    dismissBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      dismissTransfer(job.id);
-    });
-    top.appendChild(dismissBtn);
-
-    const track = document.createElement('div');
-    track.className = 'transfer-hub-track';
-    const fill = document.createElement('div');
-    fill.className = 'transfer-hub-fill';
-    fill.style.width = `${Math.min(100, Math.max(0, job.progress))}%`;
-    track.appendChild(fill);
-
-    row.appendChild(top);
-    row.appendChild(track);
-
-    if (job.cancellable && job.progress < 100 && job.onCancel) {
-      const cancelBtn = document.createElement('button');
-      cancelBtn.type = 'button';
-      cancelBtn.className = 'btn btn-lang transfer-hub-cancel';
-      cancelBtn.dataset.i18n = 'transfer.hub_cancel';
-      cancelBtn.textContent = t('transfer.hub_cancel');
-      cancelBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        job.onCancel?.();
-      });
-      row.appendChild(cancelBtn);
-    }
-
-    listEl.appendChild(row);
+  if (completed.length) {
+    const head = document.createElement('div');
+    head.className = 'transfer-hub-section-head transfer-hub-section-head--done';
+    head.dataset.i18n = 'transfer.hub_completed';
+    head.textContent = t('transfer.hub_completed');
+    listEl.appendChild(head);
+    for (const job of completed) listEl.appendChild(renderJobRow(job));
   }
 }
 
@@ -170,6 +213,7 @@ export function trackTransferStart(peerId, transferId, meta = {}) {
     size: meta.size || 0,
     startedAt: Date.now(),
     speedBps: 0,
+    savedPath: meta.savedPath || '',
     cancellable: meta.cancellable !== false && meta.direction === 'out',
     onCancel: meta.onCancel,
   });
@@ -187,6 +231,7 @@ export function trackTransferProgress(peerId, transferId, progress, meta = {}) {
   job.progress = Math.min(100, Math.max(0, Math.round(progress)));
   if (meta.name) job.name = meta.name;
   if (meta.size) job.size = meta.size;
+  if (meta.savedPath) job.savedPath = meta.savedPath;
   if (meta.speedBps) job.speedBps = meta.speedBps;
   else if (job.size && job.startedAt) {
     const elapsed = Math.max(0.001, (Date.now() - job.startedAt) / 1000);

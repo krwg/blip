@@ -2,6 +2,8 @@
  * Bottom-right in-app toast stack (messages, updates, hints).
  */
 
+import { resolveToastDurationMs } from './toast-config.js';
+
 export const DEFAULT_TOAST_MS = 9000;
 const FADE_MS = 300;
 const SWIPE_DISMISS_PX = 72;
@@ -85,10 +87,11 @@ export function showAppToast(opts) {
     title,
     body = '',
     variant = 'accent',
-    durationMs = DEFAULT_TOAST_MS,
+    durationMs: durationOverride,
     dismissible = true,
     actions = [],
   } = opts;
+  const durationMs = resolveToastDurationMs(durationOverride);
   if (!title) return null;
 
   const stack = ensureStack();

@@ -7,17 +7,234 @@ import {
   setSeedPaused,
   setAllSeedsPaused,
   stopBeaconSeed,
+  stopAllBeaconSeeds,
   resumeBeaconSeeding,
+  buildBeaconSeedLink,
+  getBeaconJobProgress,
+  resolveBeaconPreviewUrl,
+  deleteBeaconSeed,
+  hasLocalSeedData,
+  openBlipSeedFileContent,
+  getBeaconSeedExportMeta,
 } from './beacon-mesh.js';
 import { formatFileSize } from './file-transfer.js';
+import { formatTransferSpeed } from './file-transfer-speed.js';
 import { showAppToast } from './toasts.js';
 import { createPixelHintIcon } from './settings-ui.js';
+import { copyTextToClipboard } from './settings-ui.js';
+import { getBandwidthRates, subscribeBandwidth } from './bandwidth-monitor.js';
+import { openBeaconRowMenu, createBeaconRowMenuButton } from './beacon-row-menu.js';
+import { downloadBlipSeedFile } from './beacon-seed-file.js';
 
 /** @type {'mesh' | 'mine' | 'downloads'} */
 let activeTab = 'mesh';
 let tableBodyEl = null;
 let statsRootEl = null;
+let bwUnsub = null;
+let searchQuery = '';
 let publishBusy = false;
+/** @type {() => object} */
+let getUiConfig = () => ({});
+
+async function copySeedLink(seedId) {
+  const link = buildBeaconSeedLink(seedId);
+  const ok = await copyTextToClipboard(link);
+  showAppToast({
+    title: ok ? t('beacon.link_copied') : t('beacon.copy_failed'),
+    body: link,
+    variant: ok ? 'accent' : 'danger',
+    durationMs: ok ? 3200 : 5000,
+  });
+}
+
+async function confirmDeleteSeed(item) {
+  const name = item.filename || item.seedId.slice(0, 8);
+  const ok = window.confirm(t('beacon.delete_confirm').replace('{name}', name));
+  if (!ok) return;
+  try {
+    await deleteBeaconSeed(item.seedId);
+    showAppToast({ title: t('beacon.deleted'), durationMs: 3500 });
+    renderTableRows();
+  } catch (err) {
+    showAppToast({
+      title: t('beacon.failed'),
+      body: err?.message || '',
+      variant: 'danger',
+      durationMs: 5000,
+    });
+  }
+}
+
+function buildSeedMenuItems(item) {
+  const busy =
+    item.phase === 'hashing' || item.phase === 'publishing' || item.phase === 'downloading';
+
+  if (busy) {
+    if (item.hasLocalData || hasLocalSeedData(item.seedId)) {
+      return [
+        {
+          id: 'delete',
+          label: t('beacon.delete'),
+          danger: true,
+          onClick: () => void confirmDeleteSeed(item),
+        },
+      ];
+    }
+    return [];
+  }
+
+  const items = [];
+
+  if (!busy && !item.canSave && item.seederCount > 0) {
+    items.push({
+      id: 'download',
+      label: t('beacon.download'),
+      onClick: () => {
+        void downloadBeaconSeed(item.seedId)
+          .then((res) => {
+            if (res?.cancelled) return;
+            showAppToast({ title: t('beacon.saved'), durationMs: 4000 });
+          })
+          .catch((err) => {
+            showAppToast({
+              title: t('beacon.failed'),
+              body: err?.message || '',
+              variant: 'danger',
+              durationMs: 5000,
+            });
+          })
+          .finally(renderTableRows);
+      },
+    });
+  }
+
+  if (!busy && item.canSave) {
+    items.push({
+      id: 'save',
+      label: t('beacon.save'),
+      onClick: () => {
+        void downloadBeaconSeed(item.seedId)
+          .then((res) => {
+            if (res?.cancelled) return;
+            showAppToast({ title: t('beacon.saved'), durationMs: 4000 });
+          })
+          .catch((err) => {
+            showAppToast({
+              title: t('beacon.failed'),
+              body: err?.message || '',
+              variant: 'danger',
+              durationMs: 5000,
+            });
+          });
+      },
+    });
+  }
+
+  if (!busy && item.canSave) {
+    if (item.stopped) {
+      items.push({
+        id: 'resume_seed',
+        label: t('beacon.resume_seed'),
+        onClick: () => {
+          void resumeBeaconSeeding(item.seedId)
+            .then(renderTableRows)
+            .catch((err) => {
+              showAppToast({
+                title: t('beacon.failed'),
+                body: err?.message || '',
+                variant: 'danger',
+                durationMs: 5000,
+              });
+            });
+        },
+      });
+    } else {
+      items.push({
+        id: 'pause',
+        label: item.paused ? t('beacon.resume') : t('beacon.pause'),
+        onClick: () => {
+          setSeedPaused(item.seedId, !item.paused);
+          renderTableRows();
+        },
+      });
+      items.push({
+        id: 'stop',
+        label: t('beacon.stop'),
+        onClick: () => {
+          void stopBeaconSeed(item.seedId)
+            .then(renderTableRows)
+            .catch((err) => {
+              showAppToast({
+                title: t('beacon.failed'),
+                body: err?.message || '',
+                variant: 'danger',
+                durationMs: 5000,
+              });
+            });
+        },
+      });
+    }
+  }
+
+  if (!busy) {
+    items.push({
+      id: 'copy',
+      label: t('beacon.copy_link'),
+      onClick: () => void copySeedLink(item.seedId),
+    });
+    items.push({
+      id: 'blip',
+      label: t('beacon.save_blip_file'),
+      onClick: () => {
+        void getBeaconSeedExportMeta(item.seedId).then((meta) => {
+          if (!meta?.seedId) {
+            showAppToast({ title: t('beacon.failed'), variant: 'danger', durationMs: 4000 });
+            return;
+          }
+          downloadBlipSeedFile(meta, meta.filename);
+          showAppToast({ title: t('beacon.blip_saved'), durationMs: 3500 });
+        });
+      },
+    });
+  }
+
+  if (!busy && item.canSave) {
+    items.push({
+      id: 'share',
+      label: t('beacon.share_chat'),
+      onClick: () => shareSeedInChat(item),
+    });
+  }
+
+  if (item.hasLocalData || hasLocalSeedData(item.seedId)) {
+    items.push({
+      id: 'delete',
+      label: t('beacon.delete'),
+      danger: true,
+      onClick: () => void confirmDeleteSeed(item),
+    });
+  }
+
+  return items;
+}
+
+function openRowActions(anchor, item) {
+  const menuItems = buildSeedMenuItems(item);
+  if (!menuItems.length) return;
+  openBeaconRowMenu(anchor, menuItems);
+}
+
+function shareSeedInChat(item) {
+  window.dispatchEvent(
+    new CustomEvent('blip-beacon-share-chat', {
+      detail: {
+        seedId: item.seedId,
+        filename: item.filename,
+        size: item.size,
+      },
+    })
+  );
+}
 
 function showSoonToast(key = 'beacon.soon_feature') {
   showAppToast({ title: t(key), durationMs: 4200 });
@@ -28,13 +245,18 @@ function computeStats() {
   const mine = items.filter((i) => i.mine || i.canSave).length;
   const mesh = items.length;
   const seeders = items.reduce((n, i) => n + i.seederCount, 0);
-  const active = items.filter((i) => i.canSave && !i.paused).length;
+  const active = items.filter((i) => i.canSave && !i.paused && !i.stopped).length;
   return { mine, mesh, seeders, active };
 }
 
 function refreshStats() {
   if (!statsRootEl) return;
   const s = computeStats();
+  const rates = getBandwidthRates();
+  const downEl = statsRootEl.querySelector('[data-stat="down"] strong');
+  if (downEl) downEl.textContent = formatTransferSpeed(rates.downBps);
+  const upEl = statsRootEl.querySelector('[data-stat="up"] strong');
+  if (upEl) upEl.textContent = formatTransferSpeed(rates.upBps);
   const meshEl = statsRootEl.querySelector('[data-stat="mesh"] strong');
   if (meshEl) meshEl.textContent = String(s.mesh);
   const mineEl = statsRootEl.querySelector('[data-stat="mine"] strong');
@@ -46,6 +268,10 @@ function refreshStats() {
 }
 
 function statusLabel(item) {
+  const job = getBeaconJobProgress(item.seedId);
+  if (item.phase === 'downloading' && job?.speedBps) {
+    return formatTransferSpeed(job.speedBps);
+  }
   if (item.stopped) return t('beacon.status_stopped');
   if (item.paused) return t('beacon.status_paused');
   if (item.phase === 'hashing') return t('beacon.status_hashing');
@@ -56,9 +282,23 @@ function statusLabel(item) {
 }
 
 function filterItems(tab) {
-  const all = getBeaconCatalog();
+  const q = searchQuery.trim().toLowerCase();
+  const match = (i) =>
+    !q ||
+    i.filename.toLowerCase().includes(q) ||
+    i.seedId.toLowerCase().includes(q);
+
+  const all = getBeaconCatalog().filter(match);
   if (tab === 'mine') return all.filter((i) => i.mine || i.canSave);
-  if (tab === 'downloads') return all.filter((i) => i.phase === 'downloading');
+  if (tab === 'downloads') {
+    return all.filter(
+      (i) =>
+        i.phase === 'downloading' ||
+        i.phase === 'publishing' ||
+        i.phase === 'hashing' ||
+        (i.progress > 0 && i.progress < 100)
+    );
+  }
   return all;
 }
 
@@ -78,11 +318,34 @@ function mkBtn(labelKey, className, onClick, { disabled = false, soon = false } 
   return btn;
 }
 
-function mkActionGroup(buttons) {
-  const g = document.createElement('div');
-  g.className = 'beacon-action-group';
-  for (const b of buttons) g.appendChild(b);
-  return g;
+
+function createPreviewThumb(item) {
+  const thumb = document.createElement('div');
+  thumb.className = 'beacon-preview-thumb';
+  const img = document.createElement('img');
+  img.className = 'beacon-preview-img hidden';
+  img.alt = '';
+  img.loading = 'lazy';
+  const glyph = document.createElement('span');
+  glyph.className = 'beacon-preview-glyph pixel-glyph--file';
+  glyph.setAttribute('aria-hidden', 'true');
+  thumb.appendChild(img);
+  thumb.appendChild(glyph);
+
+  const url = item.previewUrl;
+  if (url) {
+    img.src = url;
+    img.classList.remove('hidden');
+    glyph.classList.add('hidden');
+  } else {
+    void resolveBeaconPreviewUrl(item.seedId, item.previewB64).then((resolved) => {
+      if (!resolved || !thumb.isConnected) return;
+      img.src = resolved;
+      img.classList.remove('hidden');
+      glyph.classList.add('hidden');
+    });
+  }
+  return thumb;
 }
 
 function renderTableRows() {
@@ -90,38 +353,39 @@ function renderTableRows() {
   tableBodyEl.innerHTML = '';
   refreshStats();
 
-  if (activeTab === 'downloads') {
-    const soon = document.createElement('div');
-    soon.className = 'beacon-soon-panel glass';
-    soon.dataset.i18n = 'beacon.soon_downloads';
-    soon.textContent = t('beacon.soon_downloads');
-    tableBodyEl.appendChild(soon);
-    return;
-  }
-
   const items = filterItems(activeTab);
   if (!items.length) {
     const empty = document.createElement('p');
     empty.className = 'beacon-empty';
-    empty.dataset.i18n = activeTab === 'mine' ? 'beacon.empty_mine' : 'beacon.empty';
-    empty.textContent = t(activeTab === 'mine' ? 'beacon.empty_mine' : 'beacon.empty');
+    const key =
+      activeTab === 'mine'
+        ? 'beacon.empty_mine'
+        : activeTab === 'downloads'
+          ? 'beacon.empty_downloads'
+          : 'beacon.empty';
+    empty.dataset.i18n = key;
+    empty.textContent = t(key);
     tableBodyEl.appendChild(empty);
     return;
   }
 
   for (const item of items) {
     const row = document.createElement('div');
-    row.className = `beacon-table-row glass${item.paused ? ' beacon-table-row--paused' : ''}`;
+    row.className = `beacon-table-row glass${item.paused ? ' beacon-table-row--paused' : ''}${item.phase === 'downloading' || item.phase === 'publishing' ? ' beacon-table-row--active' : ''}`;
 
     const nameCell = document.createElement('div');
     nameCell.className = 'beacon-col beacon-col-name';
+    nameCell.appendChild(createPreviewThumb(item));
+    const nameText = document.createElement('div');
+    nameText.className = 'beacon-col-name-text';
     const nameStrong = document.createElement('strong');
     nameStrong.textContent = item.filename;
     const nameSub = document.createElement('span');
     nameSub.className = 'beacon-sub';
-    nameSub.textContent = `${item.seedId.slice(0, 8)}… · ${item.mine ? t('beacon.mine') : ''}`;
-    nameCell.appendChild(nameStrong);
-    nameCell.appendChild(nameSub);
+    nameSub.textContent = `${item.seedId.slice(0, 8)}…${item.mine ? ` · ${t('beacon.mine')}` : ''}`;
+    nameText.appendChild(nameStrong);
+    nameText.appendChild(nameSub);
+    nameCell.appendChild(nameText);
 
     const sizeCell = document.createElement('div');
     sizeCell.className = 'beacon-col beacon-col-size';
@@ -130,10 +394,15 @@ function renderTableRows() {
     const progCell = document.createElement('div');
     progCell.className = 'beacon-col beacon-col-progress';
     const track = document.createElement('div');
-    track.className = 'beacon-progress-track';
+    track.className = 'beacon-progress-track beacon-progress-track--pixel';
     const fill = document.createElement('div');
     fill.className = 'beacon-progress-fill';
-    const pctVal = item.progress > 0 && item.progress < 100 && item.phase ? item.progress : item.canSave ? 100 : 0;
+    const pctVal =
+      item.progress > 0 && item.progress < 100 && item.phase
+        ? item.progress
+        : item.canSave
+          ? 100
+          : 0;
     fill.style.width = `${pctVal}%`;
     track.appendChild(fill);
     progCell.appendChild(track);
@@ -144,112 +413,31 @@ function renderTableRows() {
 
     const seedsCell = document.createElement('div');
     seedsCell.className = 'beacon-col beacon-col-seeds';
-    seedsCell.textContent = String(item.seederCount);
+    seedsCell.innerHTML = `<span class="beacon-seed-pip">${item.seederCount}</span>`;
 
     const statusCell = document.createElement('div');
     statusCell.className = 'beacon-col beacon-col-status';
     const badge = document.createElement('span');
-    badge.className = `beacon-status-badge beacon-status-badge--${item.paused ? 'paused' : item.canSave ? 'seed' : 'avail'}`;
+    badge.className = `beacon-status-badge beacon-status-badge--${item.paused ? 'paused' : item.canSave ? 'seed' : item.phase ? 'active' : 'avail'}`;
     badge.textContent = statusLabel(item);
     statusCell.appendChild(badge);
 
-    const actionsCell = document.createElement('div');
-    actionsCell.className = 'beacon-col beacon-col-actions';
+    const menuCell = document.createElement('div');
+    menuCell.className = 'beacon-col beacon-col-menu';
+    const menuBtn = createBeaconRowMenuButton((anchor) => openRowActions(anchor, item));
+    menuCell.appendChild(menuBtn);
 
-    if (item.phase === 'hashing' || item.phase === 'publishing' || item.phase === 'downloading') {
-      actionsCell.appendChild(mkActionGroup([]));
-    } else if (item.canSave) {
-      const actionBtns = [];
-      if (item.stopped) {
-        actionBtns.push(
-          mkBtn('beacon.resume_seed', 'btn btn-accent beacon-row-btn', () => {
-            void resumeBeaconSeeding(item.seedId)
-              .then(() => renderTableRows())
-              .catch((err) => {
-                showAppToast({
-                  title: t('beacon.failed'),
-                  body: err?.message || '',
-                  variant: 'danger',
-                  durationMs: 5000,
-                });
-              });
-          })
-        );
-      } else {
-        actionBtns.push(
-          mkBtn(
-            item.paused ? 'beacon.resume' : 'beacon.pause',
-            'btn btn-lang beacon-row-btn',
-            () => {
-              setSeedPaused(item.seedId, !item.paused);
-              renderTableRows();
-            }
-          ),
-          mkBtn('beacon.stop', 'btn btn-lang beacon-row-btn', () => {
-            void stopBeaconSeed(item.seedId)
-              .then(() => renderTableRows())
-              .catch((err) => {
-                showAppToast({
-                  title: t('beacon.failed'),
-                  body: err?.message || '',
-                  variant: 'danger',
-                  durationMs: 5000,
-                });
-              });
-          })
-        );
-      }
-      const saveBtn = mkBtn('beacon.save', 'btn btn-accent beacon-row-btn', () => {
-        void downloadBeaconSeed(item.seedId)
-          .then((res) => {
-            if (res?.cancelled) return;
-            showAppToast({ title: t('beacon.saved'), durationMs: 4000 });
-          })
-          .catch((err) => {
-            showAppToast({
-              title: t('beacon.failed'),
-              body: err?.message || '',
-              variant: 'danger',
-              durationMs: 5000,
-            });
-            void refreshBeaconLocalState().then(renderTableRows);
-          });
-      });
-      actionBtns.push(saveBtn);
-      actionsCell.appendChild(mkActionGroup(actionBtns));
-    } else {
-      const dlBtn = mkBtn('beacon.download', 'btn btn-accent beacon-row-btn', () => {
-        dlBtn.disabled = true;
-        void downloadBeaconSeed(item.seedId)
-          .then((res) => {
-            if (res?.cancelled) return;
-            showAppToast({ title: t('beacon.saved'), durationMs: 4000 });
-          })
-          .catch((err) => {
-            showAppToast({
-              title: t('beacon.failed'),
-              body: err?.message || '',
-              variant: 'danger',
-              durationMs: 5000,
-            });
-          })
-          .finally(() => {
-            dlBtn.disabled = false;
-            renderTableRows();
-          });
-      });
-      const linkBtn = mkBtn('beacon.copy_link', 'btn btn-lang beacon-row-btn beacon-soon-btn', null, {
-        soon: true,
-      });
-      actionsCell.appendChild(mkActionGroup([dlBtn, linkBtn]));
-    }
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openRowActions(menuBtn, item);
+    });
 
     row.appendChild(nameCell);
     row.appendChild(sizeCell);
     row.appendChild(progCell);
     row.appendChild(seedsCell);
     row.appendChild(statusCell);
-    row.appendChild(actionsCell);
+    row.appendChild(menuCell);
     tableBodyEl.appendChild(row);
   }
 }
@@ -260,6 +448,68 @@ function setActiveTab(tab, wrap) {
     btn.classList.toggle('beacon-tab--active', btn.dataset.tab === tab);
   });
   renderTableRows();
+}
+
+function handleBlipFile(file) {
+  if (!file) return false;
+  const name = String(file.name || '').toLowerCase();
+  if (!name.endsWith('.blip')) return false;
+  const reader = new FileReader();
+  reader.onload = () => {
+    void (async () => {
+      try {
+        const doc = await openBlipSeedFileContent(String(reader.result || ''));
+        window.dispatchEvent(
+          new CustomEvent('blip-open-beacon-seed', { detail: { seedId: doc.seedId } })
+        );
+        showAppToast({
+          title: t('beacon.blip_opened'),
+          body: doc.filename,
+          durationMs: 4500,
+        });
+      } catch {
+        showAppToast({ title: t('beacon.blip_invalid'), variant: 'danger', durationMs: 5000 });
+      }
+    })();
+  };
+  reader.readAsText(file);
+  return true;
+}
+
+function runPublish(file, wrap) {
+  if (handleBlipFile(file)) return;
+  const btn = wrap.querySelector('.beacon-publish-btn');
+  if (!file || publishBusy) return;
+  publishBusy = true;
+  if (btn) btn.disabled = true;
+  void publishBeaconFile(file)
+    .then(() => {
+      showAppToast({ title: t('beacon.published'), body: file.name, durationMs: 4500 });
+      activeTab = 'mine';
+      setActiveTab('mine', wrap);
+    })
+    .catch((err) => {
+      const code = err?.message || '';
+      let body = code;
+      if (code === 'not_readable' || /could not be read/i.test(code)) {
+        body = t('beacon.err_not_readable');
+      } else if (code === 'no_path') {
+        body = t('beacon.err_no_path');
+      } else if (code === 'too_large') {
+        body = t('beacon.err_too_large');
+      }
+      showAppToast({
+        title: t('beacon.failed'),
+        body,
+        variant: 'danger',
+        durationMs: 7000,
+      });
+    })
+    .finally(() => {
+      publishBusy = false;
+      if (btn) btn.disabled = false;
+      renderTableRows();
+    });
 }
 
 function wirePublishInput(wrap) {
@@ -275,34 +525,43 @@ function wirePublishInput(wrap) {
   input.addEventListener('change', () => {
     const file = input.files?.[0];
     input.value = '';
-    if (!file || publishBusy) return;
-    publishBusy = true;
-    btn.disabled = true;
-    void publishBeaconFile(file)
-      .then(() => {
-        showAppToast({ title: t('beacon.published'), body: file.name, durationMs: 4500 });
-        activeTab = 'mine';
-        setActiveTab('mine', wrap);
-      })
-      .catch((err) => {
-        showAppToast({
-          title: t('beacon.failed'),
-          body: err?.message || '',
-          variant: 'danger',
-          durationMs: 5000,
-        });
-      })
-      .finally(() => {
-        publishBusy = false;
-        btn.disabled = false;
-        renderTableRows();
-      });
+    runPublish(file, wrap);
   });
 }
 
-function buildStatCard(statKey, labelKey, value, { muted = false } = {}) {
+function wireBeaconDrop(wrap, dropEl) {
+  if (!dropEl) return;
+  dropEl.addEventListener('click', () => {
+    if (publishBusy) return;
+    wrap.querySelector('.beacon-file-input')?.click();
+  });
+  let depth = 0;
+  dropEl.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    depth += 1;
+    dropEl.classList.add('beacon-drop--active');
+  });
+  dropEl.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) dropEl.classList.remove('beacon-drop--active');
+  });
+  dropEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  dropEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    depth = 0;
+    dropEl.classList.remove('beacon-drop--active');
+    const file = e.dataTransfer?.files?.[0];
+    runPublish(file, wrap);
+  });
+}
+
+function buildStatCard(statKey, labelKey, value, { accent = false } = {}) {
   const card = document.createElement('div');
-  card.className = `beacon-stat-card glass${muted ? ' beacon-stat-card--muted' : ''}`;
+  card.className = `beacon-stat-card glass${accent ? ' beacon-stat-card--accent' : ''}`;
   card.dataset.stat = statKey;
   const label = document.createElement('span');
   label.className = 'beacon-stat-label';
@@ -319,13 +578,40 @@ function buildStatsBar() {
   const bar = document.createElement('div');
   bar.className = 'beacon-stats-grid';
   statsRootEl = bar;
-  bar.appendChild(buildStatCard('down', 'beacon.stat_down_label', '0 B/s', { muted: true }));
-  bar.appendChild(buildStatCard('up', 'beacon.stat_up_label', '0 B/s', { muted: true }));
+  bar.appendChild(buildStatCard('down', 'beacon.stat_down_label', '0 B/s', { accent: true }));
+  bar.appendChild(buildStatCard('up', 'beacon.stat_up_label', '0 B/s', { accent: true }));
   bar.appendChild(buildStatCard('mesh', 'beacon.stat_mesh_label', '0'));
   bar.appendChild(buildStatCard('mine', 'beacon.stat_mine_label', '0'));
   bar.appendChild(buildStatCard('seeders', 'beacon.stat_seeders_label', '0'));
   bar.appendChild(buildStatCard('active', 'beacon.stat_active_label', '0'));
   return bar;
+}
+
+function buildSliderRow(labelKey, value, { min, max, onChange }) {
+  const row = document.createElement('label');
+  row.className = 'beacon-slider-row';
+  const span = document.createElement('span');
+  span.dataset.i18n = labelKey;
+  span.textContent = t(labelKey);
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = String(min);
+  range.max = String(max);
+  range.value = String(value);
+  range.className = 'beacon-range';
+  const val = document.createElement('span');
+  val.className = 'beacon-slider-val';
+  val.textContent = String(value);
+  range.addEventListener('input', () => {
+    val.textContent = range.value;
+  });
+  range.addEventListener('change', () => {
+    onChange?.(Number(range.value));
+  });
+  row.appendChild(span);
+  row.appendChild(range);
+  row.appendChild(val);
+  return row;
 }
 
 function buildControlSection(titleKey, controls) {
@@ -340,45 +626,26 @@ function buildControlSection(titleKey, controls) {
   return sec;
 }
 
-function buildSliderRow(labelKey, value, { disabled = true, min = 1, max = 8 } = {}) {
-  const row = document.createElement('label');
-  row.className = `beacon-slider-row${disabled ? ' beacon-slider-row--soon' : ''}`;
-  const span = document.createElement('span');
-  span.dataset.i18n = labelKey;
-  span.textContent = t(labelKey);
-  const range = document.createElement('input');
-  range.type = 'range';
-  range.min = String(min);
-  range.max = String(max);
-  range.value = String(value);
-  range.disabled = disabled;
-  range.className = 'beacon-range';
-  const val = document.createElement('span');
-  val.className = 'beacon-slider-val';
-  val.textContent = String(value);
-  if (disabled) {
-    range.addEventListener('click', (e) => {
-      e.preventDefault();
-      showSoonToast();
-    });
-  } else {
-    range.addEventListener('input', () => {
-      val.textContent = range.value;
-    });
-  }
-  row.appendChild(span);
-  row.appendChild(range);
-  row.appendChild(val);
-  return row;
-}
-
 function buildAside(wrap) {
   const aside = document.createElement('aside');
   aside.className = 'beacon-aside';
+  const cfg = getUiConfig();
 
   const transfer = buildControlSection('beacon.panel_transfer', [
-    buildSliderRow('beacon.slider_peers', 3),
-    buildSliderRow('beacon.slider_up_cap', 50, { min: 10, max: 100 }),
+    buildSliderRow('beacon.slider_peers', cfg.beaconParallelPeers ?? 6, {
+      min: 1,
+      max: 8,
+      onChange: (v) => {
+        void window.blip?.saveConfig?.({ beaconParallelPeers: v });
+      },
+    }),
+    buildSliderRow('beacon.slider_up_cap', cfg.beaconUploadCapPercent ?? 100, {
+      min: 10,
+      max: 100,
+      onChange: (v) => {
+        void window.blip?.saveConfig?.({ beaconUploadCapPercent: v });
+      },
+    }),
   ]);
 
   const seeding = buildControlSection('beacon.panel_seeding', [
@@ -397,21 +664,24 @@ function buildAside(wrap) {
       },
       { disabled: false }
     ),
-    mkBtn('beacon.stop_all', 'btn btn-lang beacon-aside-btn beacon-soon-btn', null, { soon: true }),
+    mkBtn('beacon.stop_all', 'btn btn-lang beacon-aside-btn', () => {
+      void stopAllBeaconSeeds()
+        .then(() => renderTableRows())
+        .catch(() => showSoonToast('beacon.soon_stop'));
+    }),
   ]);
 
-  const filters = buildControlSection('beacon.panel_filters', [
-    (() => {
-      const search = document.createElement('input');
-      search.type = 'search';
-      search.className = 'input beacon-search beacon-soon-input';
-      search.disabled = true;
-      search.placeholder = t('beacon.search_ph');
-      search.addEventListener('click', () => showSoonToast());
-      return search;
-    })(),
-    mkBtn('beacon.sort_name', 'btn btn-lang beacon-aside-btn beacon-soon-btn', null, { soon: true }),
-  ]);
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'input beacon-search';
+  search.placeholder = t('beacon.search_ph');
+  search.value = searchQuery;
+  search.addEventListener('input', () => {
+    searchQuery = search.value;
+    renderTableRows();
+  });
+
+  const filters = buildControlSection('beacon.panel_filters', [search]);
 
   const refreshBtn = mkBtn(
     'beacon.refresh',
@@ -449,7 +719,7 @@ function buildTabs(wrap) {
 
 function buildToolbar(main, wrap) {
   const bar = document.createElement('div');
-  bar.className = 'beacon-toolbar';
+  bar.className = 'beacon-toolbar glass';
 
   const input = document.createElement('input');
   input.type = 'file';
@@ -465,25 +735,47 @@ function buildToolbar(main, wrap) {
   publishBtn.dataset.i18n = 'beacon.publish';
   publishBtn.textContent = t('beacon.publish');
   primary.appendChild(publishBtn);
-  primary.appendChild(mkBtn('beacon.add_folder', 'btn btn-lang beacon-soon-btn', null, { soon: true }));
-  primary.appendChild(mkBtn('beacon.clear_done', 'btn btn-lang beacon-soon-btn', null, { soon: true }));
+  const openBlipBtn = document.createElement('button');
+  openBlipBtn.type = 'button';
+  openBlipBtn.className = 'btn btn-lang';
+  openBlipBtn.dataset.i18n = 'beacon.open_blip_file';
+  openBlipBtn.textContent = t('beacon.open_blip_file');
+  const blipInput = document.createElement('input');
+  blipInput.type = 'file';
+  blipInput.accept = '.blip,application/vnd.blip.seed+json';
+  blipInput.className = 'beacon-file-input hidden';
+  blipInput.setAttribute('aria-hidden', 'true');
+  openBlipBtn.addEventListener('click', () => blipInput.click());
+  blipInput.addEventListener('change', () => {
+    const file = blipInput.files?.[0];
+    blipInput.value = '';
+    handleBlipFile(file);
+  });
+  primary.appendChild(openBlipBtn);
+  primary.appendChild(blipInput);
 
   const drop = document.createElement('div');
-  drop.className = 'beacon-drop-compact beacon-soon-block';
-  drop.dataset.i18n = 'beacon.drop_hint';
-  drop.textContent = t('beacon.drop_hint');
-  drop.addEventListener('click', () => showSoonToast('beacon.soon_drop'));
+  drop.className = 'beacon-drop-zone';
+  const dropIcon = document.createElement('span');
+  dropIcon.className = 'beacon-drop-icon pixel-glyph--upload';
+  dropIcon.setAttribute('aria-hidden', 'true');
+  const dropText = document.createElement('span');
+  dropText.dataset.i18n = 'beacon.drop_hint';
+  dropText.textContent = t('beacon.drop_hint');
+  drop.appendChild(dropIcon);
+  drop.appendChild(dropText);
 
   bar.appendChild(primary);
   bar.appendChild(drop);
   const table = main.querySelector('.beacon-table-wrap');
   if (table) main.insertBefore(bar, table);
   wirePublishInput(wrap);
+  wireBeaconDrop(wrap, drop);
 }
 
 function buildTable() {
   const wrap = document.createElement('div');
-  wrap.className = 'beacon-table-wrap';
+  wrap.className = 'beacon-table-wrap glass';
 
   const head = document.createElement('div');
   head.className = 'beacon-table-head';
@@ -493,7 +785,7 @@ function buildTable() {
     'beacon.col_progress',
     'beacon.col_seeders',
     'beacon.col_status',
-    'beacon.col_actions',
+    'beacon.col_menu',
   ]) {
     const cell = document.createElement('span');
     cell.className = 'beacon-table-head-cell';
@@ -514,13 +806,22 @@ function onCatalogUpdate() {
   renderTableRows();
 }
 
+function teardownBeaconView() {
+  bwUnsub?.();
+  bwUnsub = null;
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('blip-beacon-catalog', onCatalogUpdate);
   window.addEventListener('blip-beacon-progress', onCatalogUpdate);
 }
 
-export function renderBeaconView() {
+export function renderBeaconView(config) {
+  teardownBeaconView();
+  getUiConfig = () => config || {};
   activeTab = 'mesh';
+  searchQuery = '';
+
   const wrap = document.createElement('div');
   wrap.className = 'view beacon-view';
 
@@ -533,6 +834,9 @@ export function renderBeaconView() {
   titleRow.appendChild(title);
   titleRow.appendChild(createPixelHintIcon('beacon.hint'));
 
+  wrap.appendChild(titleRow);
+  wrap.appendChild(buildStatsBar());
+
   const body = document.createElement('div');
   body.className = 'beacon-body';
 
@@ -544,18 +848,16 @@ export function renderBeaconView() {
   body.appendChild(buildAside(wrap));
   body.appendChild(main);
 
-  wrap.appendChild(titleRow);
-  wrap.appendChild(buildStatsBar());
   wrap.appendChild(body);
-
   buildToolbar(main, wrap);
+
+  bwUnsub = subscribeBandwidth(refreshStats);
 
   void refreshBeaconLocalState().then(renderTableRows);
   renderTableRows();
   return wrap;
 }
 
-export function mountBeaconPanel() {
-  return renderBeaconView();
+export function mountBeaconPanel(config) {
+  return renderBeaconView(config);
 }
-

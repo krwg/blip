@@ -28,6 +28,87 @@ export function getGithubPublishConfig() {
   return { provider: 'github', owner: owner || 'krwg', repo: repo || 'BLIP' };
 }
 
+/** @param {string} tag */
+export function releaseTagCandidates(tag) {
+  const raw = String(tag || '').trim();
+  if (!raw) return [];
+  /** @type {string[]} */
+  const out = [];
+  const add = (t) => {
+    if (t && !out.includes(t)) out.push(t);
+  };
+  add(raw);
+  const bare = raw.replace(/^v/i, '');
+  add(bare);
+  if (bare) add(`v${bare}`);
+  return out;
+}
+
+/**
+ * GitHub asset URLs must use the release tag exactly (1.1.0 vs v1.1.0).
+ * @param {string} tag
+ * @returns {Promise<string | null>} tag string that has latest.yml
+ */
+export async function releaseHasUpdateManifest(tag) {
+  const repo = loadGithubRepo();
+  for (const t of releaseTagCandidates(tag)) {
+    const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(t)}/latest.yml`;
+    try {
+      const res = await fetch(url, {
+        method: 'HEAD',
+        redirect: 'follow',
+        headers: { 'User-Agent': 'BLIP-Desktop' },
+      });
+      if (res.ok) return t;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return null;
+}
+
+/**
+ * Generic feed URL for electron-updater (latest.yml + Setup on the release).
+ * @param {{ receiveBetaUpdates?: boolean }} [config]
+ * @returns {Promise<{ provider: string, url?: string, owner?: string, repo?: string, channelTag?: string | null }>}
+ */
+export async function resolveUpdateFeedUrl(config = {}) {
+  const receiveBeta = !!config?.receiveBetaUpdates;
+  const repo = loadGithubRepo();
+  const result = await fetchGithubReleases(25);
+
+  if (result.ok && result.releases?.length) {
+    const stable = result.releases.filter((r) => !r.prerelease);
+    const betas = result.releases.filter((r) => r.prerelease);
+    const queues = receiveBeta ? [betas, stable] : [stable];
+
+    for (const list of queues) {
+      for (const release of list) {
+        const tag = await releaseHasUpdateManifest(release.tag);
+        if (tag) {
+          return {
+            provider: 'generic',
+            url: `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/`,
+            channelTag: tag,
+          };
+        }
+      }
+    }
+  }
+
+  return { ...getGithubPublishConfig(), channelTag: null };
+}
+
+function githubApiHeaders() {
+  const token = (process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '').trim();
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'BLIP-Desktop',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 /**
  * @param {number} [limit]
  * @returns {Promise<{ ok: boolean, releases?: object[], error?: string }>}
@@ -36,12 +117,7 @@ export async function fetchGithubReleases(limit = 8) {
   const repo = loadGithubRepo();
   const url = `https://api.github.com/repos/${repo}/releases?per_page=${Math.min(Math.max(limit, 1), 20)}`;
   try {
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'BLIP-Desktop',
-      },
-    });
+    const res = await fetch(url, { headers: githubApiHeaders() });
     if (!res.ok) {
       return { ok: false, error: `HTTP ${res.status}` };
     }

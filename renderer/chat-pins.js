@@ -19,18 +19,35 @@ function saveAll(o) {
   }
 }
 
-function key(peerId) {
+function dmKey(peerId) {
   return String(peerId);
 }
 
+function groupKey(groupId) {
+  return `g:${groupId}`;
+}
+
 export function getPinnedMessageId(peerId) {
-  const id = loadAll()[key(peerId)];
+  const id = loadAll()[dmKey(peerId)];
   return id ? String(id) : null;
 }
 
 export function setPinnedMessageId(peerId, messageId) {
   const o = loadAll();
-  const k = key(peerId);
+  const k = dmKey(peerId);
+  if (!messageId) delete o[k];
+  else o[k] = String(messageId);
+  saveAll(o);
+}
+
+export function getGroupPinnedMessageId(groupId) {
+  const id = loadAll()[groupKey(groupId)];
+  return id ? String(id) : null;
+}
+
+export function setGroupPinnedMessageId(groupId, messageId) {
+  const o = loadAll();
+  const k = groupKey(groupId);
   if (!messageId) delete o[k];
   else o[k] = String(messageId);
   saveAll(o);

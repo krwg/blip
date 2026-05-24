@@ -11,6 +11,7 @@ export function connectToPeer(ip, blipId, tcpPort = DEFAULT_TCP_PORT) {
 
   const promise = new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: ip, port: tcpPort }, () => {
+      socket.setNoDelay(true);
       resolve(socket);
     });
 

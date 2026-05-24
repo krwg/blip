@@ -64,7 +64,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | | |
 |---|---|
 | **What** | Desktop app: text, voice, and video over LAN / Hamachi / Radmin VPN |
-| **Release** | **1.0.3 — Echo** (see [`CHANGELOG.md`](CHANGELOG.md); last GitHub tag: [v0.7.7](https://github.com/krwg/BLIP/releases/tag/v0.7.7)) |
+| **Release** | **1.1.1 — Beacon** (see [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/BLIP/releases)) |
 | **Identity** | BLIP ID **1–64** (8×8 grid, Minecraft-style chunk metaphor) |
 | **Servers** | None — UDP broadcast, TCP, and WebRTC peer-to-peer only |
 | **Sign-up** | None |
@@ -88,6 +88,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | **Themes** | Light/dark palettes + animated backgrounds (EN/RU names) |
 | **Sound** | Chiptune Web Audio — **SIGNAL** / **PULSE** FX packs, **MESH** / **GRID** call melodies; preview in **Settings → Sound**; DND mutes all |
 | **Files** | P2P send in chat (1–100 GB limit in Settings, chunked); drag & drop; group inline ≤768 KB + chunked to all members |
+| **BEACON** | LAN mesh file library (**МАЯК**): publish seeds, multi-peer download, pause/resume seeding, `blip://seed/…`, `.blip` descriptors, transfer hub |
 | **Clipboard** | Optional LAN clipboard sync — **Settings → Network** (off / active chat / trusted peers) |
 | **Status** | Custom status line on LAN (Profile) — “In game”, AFK, etc. |
 | **Handshake** | Ed25519 signed announce + TCP mesh handshake (0.5+); VPN/Tailscale IP routes update discovery; block list enforced in main |
@@ -95,7 +96,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | **Languages** | Full **English / Russian** UI (including group call chrome and badges) |
 | **Settings** | Profile, privacy/block list, appearance, network, shortcuts, call devices, transfers |
 | **Window** | Custom title bar, system tray, close-to-tray (Windows), **launch at login** (Windows) |
-| **Updates** | Auto-check on startup (packaged builds) |
+| **Updates** | Auto-check on startup (NSIS **Setup** builds; attach `latest.yml` on GitHub — see [`CONTRIBUTING.md`](CONTRIBUTING.md)) |
 | **MESH+** | Optional test tier — extra customization, early features, profile badge; keys free from the author ([details](docs/MESH-PLUS.md)) |
 
 <h3 id="en-mesh-plus">MESH+</h3>
@@ -218,9 +219,10 @@ Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico`.
 
 | Command | Output |
 |---------|--------|
-| `npm run electron:build` | **`BLIP-Setup-0.6.0.exe`** — full NSIS installer (version from `app-metadata.json`) |
-| `npm run electron:build:portable` | **`BLIP-0.6.0-Portable.exe`** — single-file portable |
-| `npm run electron:build:all` | Both artifacts |
+| `npm run electron:build` | **`BLIP-Setup-<version>.exe`** — NSIS installer (`app-metadata.json`) |
+| `npm run electron:build:portable` | **`BLIP-<version>-Portable.exe`** — portable (no in-app auto-update) |
+| `npm run electron:build:all` | Installer + portable + `latest.yml` |
+| `npm run electron:publish:win` | Build + upload to GitHub Releases (`GH_TOKEN`) |
 | `npm run electron:build:dir` | `dist-electron/win-unpacked/BLIP.exe` (debug folder) |
 
 - **Installer (NSIS):** choose install folder, Start Menu shortcut, optional desktop shortcut, icon from `icon.svg`.
@@ -237,7 +239,9 @@ Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico`.
 | `npm run build:icons` | `icon.svg` → `build/icon.ico` + PNG |
 | `npm run electron:build` | NSIS installer |
 | `npm run electron:build:portable` | Portable `.exe` |
-| `npm run electron:build:all` | Installer + portable |
+| `npm run electron:build:all` | Installer + portable + `latest.yml` |
+| `npm run electron:publish:win` | Build + publish to GitHub (`GH_TOKEN`) |
+| `npm run release:assets` | List files to attach to a manual release |
 | `npm run electron:build:dir` | Unpacked app folder |
 | `npm run copy-fonts` | Copy Minecraft font from npm package |
 
@@ -311,7 +315,7 @@ blip/
 │   └── assets/fonts/  # Minecraft woff2/ttf
 ├── docs/              # ARCHITECTURE.md + GitHub Pages landing
 ├── build/             # icon.ico, icon.png (generated)
-├── app-metadata.json  # version 1.0.3, codename Echo
+├── app-metadata.json  # version 1.1.1, codename Beacon
 ├── docs/MESH-PLUS.md  # MESH+ feature list
 ├── ach-icons/         # achievement SVGs (bundled in renderer)
 ├── preload.cjs        # IPC bridge
@@ -342,6 +346,8 @@ blip/
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [docs/MESH-PLUS.md](docs/MESH-PLUS.md) | MESH+ tier — what’s included |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical map |
+| [docs/ROADMAP-1.1-BEACON.md](docs/ROADMAP-1.1-BEACON.md) | 1.1.0 Beacon scope |
+| [docs/release-notes-v1.1.1-github.md](docs/release-notes-v1.1.1-github.md) | GitHub Release body (1.1.1) |
 | [Landing site (Pages)](https://krwg.github.io/BLIP/) | Static showcase (`docs/index.html`) |
 
 <h3 id="en-license">License</h3>
@@ -373,7 +379,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | | |
 |---|---|
 | **Что это** | Desktop-приложение: текст, голос и видео по LAN / Hamachi / Radmin VPN |
-| **Релиз** | **1.0.3 — Echo** (см. [`CHANGELOG.md`](CHANGELOG.md); на GitHub: [v0.7.7](https://github.com/krwg/BLIP/releases/tag/v0.7.7)) |
+| **Релиз** | **1.1.1 — Beacon** (см. [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/BLIP/releases)) |
 | **Идентификация** | BLIP ID **1–64** (сетка 8×8) |
 | **Серверы** | Нет — только UDP broadcast, TCP и WebRTC между пирами |
 | **Регистрация** | Нет |
@@ -397,6 +403,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | **Темы** | Светлые/тёмные палитры и анимированные фоны (названия EN/RU) |
 | **Звук** | Chiptune (Web Audio): наборы **СИГНАЛ** / **ПУЛЬС**, мелодии **MESH** / **СЕТКА**; прослушивание в **Настройки → Звук**; DND отключает |
 | **Файлы** | P2P в чате (лимит 1–100 ГБ в настройках, чанки); drag & drop; в группе ≤768 КБ inline + чанки всем |
+| **МАЯК (BEACON)** | Меш-библиотека файлов в LAN: сиды, мульти-загрузка, пауза/стоп раздачи, `blip://seed/…`, дескрипторы `.blip`, хаб передач |
 | **Буфер обмена** | Синхронизация по LAN — **Настройки → Сеть** (выкл / активный чат / доверенные) |
 | **Статус-текст** | Своя строка в LAN (Профиль) — «в игре», AFK и т.д. |
 | **Handshake** | Подписанный announce + TCP mesh-handshake (0.5+); IP VPN/Tailscale обновляет discovery; блокировка в main |
@@ -404,7 +411,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | **Языки** | Полный интерфейс **EN / RU** (включая групповой звонок и бейджи) |
 | **Настройки** | Профиль, конфиденциальность/блок, вид, сеть, горячие клавиши, звонок, передачи |
 | **Окно** | Свой title bar, трей, в трей (Windows), **автозапуск при входе в Windows** |
-| **Обновления** | Проверка при запуске (собранные сборки) |
+| **Обновления** | Автопроверка при запуске (установщик **Setup**; на GitHub нужен `latest.yml` — см. [`CONTRIBUTING.md`](CONTRIBUTING.md)) |
 | **MESH+** | Тестовая подписка — кастомизация, ранний доступ к фичам, бейдж; ключи бесплатно от автора ([подробнее](docs/MESH-PLUS.md)) |
 
 <h3 id="ru-mesh-plus">MESH+</h3>
@@ -497,9 +504,10 @@ npx electron .
 
 | Команда | Результат |
 |---------|-----------|
-| `npm run electron:build` | **`BLIP-Setup-0.6.0.exe`** — установщик NSIS (версия из `app-metadata.json`) |
-| `npm run electron:build:portable` | **`BLIP-0.6.0-Portable.exe`** — portable |
-| `npm run electron:build:all` | Оба файла |
+| `npm run electron:build` | **`BLIP-Setup-<version>.exe`** — установщик NSIS (`app-metadata.json`) |
+| `npm run electron:build:portable` | **`BLIP-<version>-Portable.exe`** — portable (без автообновления в приложении) |
+| `npm run electron:build:all` | Setup + portable + `latest.yml` |
+| `npm run electron:publish:win` | Сборка + выкладка на GitHub Releases (`GH_TOKEN`) |
 | `npm run electron:build:dir` | `dist-electron/win-unpacked/BLIP.exe` |
 
 - **Установщик:** выбор папки, ярлык в «Пуск», опция ярлыка на рабочем столе.
@@ -516,7 +524,9 @@ npx electron .
 | `npm run build:icons` | `icon.svg` → `build/icon.ico` + PNG |
 | `npm run electron:build` | NSIS-установщик |
 | `npm run electron:build:portable` | Portable `.exe` |
-| `npm run electron:build:all` | Установщик + portable |
+| `npm run electron:build:all` | Setup + portable + `latest.yml` |
+| `npm run electron:publish:win` | Сборка + публикация на GitHub (`GH_TOKEN`) |
+| `npm run release:assets` | Список файлов для ручного релиза |
 | `npm run electron:build:dir` | Распакованная папка |
 | `npm run copy-fonts` | Скопировать Minecraft из npm-пакета |
 
@@ -614,6 +624,8 @@ blip/
 | [SECURITY.md](SECURITY.md) | Как сообщить об уязвимости |
 | [CHANGELOG.md](CHANGELOG.md) | История версий |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура кода |
+| [docs/ROADMAP-1.1-BEACON.md](docs/ROADMAP-1.1-BEACON.md) | Скоуп 1.1.0 Beacon |
+| [docs/release-notes-v1.1.1-github.md](docs/release-notes-v1.1.1-github.md) | Текст GitHub Release (1.1.1) |
 | [Landing (Pages)](https://krwg.github.io/BLIP/) | Статический сайт-витрина (`docs/index.html`) |
 
 <h3 id="ru-license">Лицензия</h3>

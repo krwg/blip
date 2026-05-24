@@ -101,7 +101,7 @@ Groups (`groups.js`, voice channels) are beta and gated by `devGroupsEnabled` in
 | Chat history | Renderer `localStorage` key `blip_chat_v1`. |
 | Favorite peer IDs | Renderer `localStorage` key `blip_favorites_v1`. |
 | Avatar seeds (per BLIP ID) | Renderer `localStorage` key `blip_avatar_seed_v1` (`avatar.js`). |
-| Release metadata | `app-metadata.json` (version **1.0.3**, codename **Echo**, repo URL). |
+| Release metadata | `app-metadata.json` (version **1.1.1**, codename **Beacon**, repo URL). |
 | Achievement icons | `ach-icons/*.svg` → `renderer/achievements-icons.js` (Vite `?url` imports). |
 | MESH+ overview | [`MESH-PLUS.md`](MESH-PLUS.md) — tier summary (no phased roadmap file). |
 | Group avatars | Renderer `localStorage` `blip_group_avatar_v1` |
@@ -173,6 +173,23 @@ Legacy peers without `meshProto` appear with `meshLegacy` — TCP mesh with 0.5 
 | Chunked (group) | Same cap | Per-member offers via `group-file-transfer.js` |
 
 Images use `kind: 'image'` (JPEG resize). Group `group-msg` relays inline attachments; large files use chunked mesh to each member.
+
+## BEACON — mesh file library (1.1.0)
+
+Codename **Beacon** / UI **BEACON** (EN) · **МАЯК** (RU). LAN-wide seeds separate from 1:1 chat file offers.
+
+| Piece | Role |
+|--------|------|
+| `renderer/beacon-mesh.js` | Publish, download, `seed-have` rarity scheduler, pause/stop, batch chunk I/O |
+| `renderer/beacon-ui.js` | Library table, tabs, drag-drop, `.blip` open, row menu |
+| `renderer/beacon-seed-file.js` | `.blip` JSON descriptor parse/serialize |
+| `main/beacon-store.js` | Chunk files on disk under `userData` |
+| `main/blip-open.js` | `.blip` / `blip://seed/<id>` routing, single-instance |
+| `discovery.js` | UDP `seed-announce`, `seed-pulse`, `seed-gone` |
+
+Wire: TCP `seed-request`, `seed-chunk`, `seed-chunks-batch`, `seed-have`; default **1 MiB** chunks for new seeds; up to **6** parallel leech peers. Peers on **1.0.3** ignore unknown `seed-*` types (see [`COMPAT-1.0.3.md`](COMPAT-1.0.3.md)).
+
+Updates: packaged **NSIS** builds use `electron-updater` with a **generic** GitHub feed (`latest.yml` per release tag). **Portable** exe does not apply in-app updates.
 
 ## LAN clipboard (0.5.8+)
 
@@ -274,5 +291,5 @@ Static showcase: [`docs/index.html`](index.html) → [krwg.github.io/BLIP](https
 
 ## Future seams
 
-- CI packaging smoke jobs, mobile client, optional STUN/TURN only if LAN host candidates fail across complex VPN topologies (1.0.3 stays host-candidate / no public STUN).
+- CI packaging smoke jobs, mobile client, optional STUN/TURN only if LAN host candidates fail across complex VPN topologies (host-candidate / no public STUN by default).
 - macOS/Linux autostart parity beyond Windows login items.

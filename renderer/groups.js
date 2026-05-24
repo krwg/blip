@@ -250,6 +250,11 @@ export function getGroupMessages(groupId) {
   return g.messages;
 }
 
+export function findGroupMessage(groupId, messageId) {
+  if (!messageId) return null;
+  return getGroupMessages(groupId).find((m) => m.id === messageId) || null;
+}
+
 /** @returns {boolean} true if message was stored */
 export function addGroupMessage(groupId, msg) {
   const g = getGroup(groupId);

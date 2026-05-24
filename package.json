@@ -1,6 +1,6 @@
 {
   "name": "blip",
-  "version": "1.1.0-alpha",
+  "version": "1.1.1",
   "description": "P2P LAN messenger — text, voice, and video. No cloud, no servers, no accounts.",
   "author": "krwg",
   "homepage": "https://krwg.github.io/BLIP/",
@@ -27,6 +27,8 @@
     "electron:build": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win nsis",
     "electron:build:portable": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win portable",
     "electron:build:all": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win",
+    "electron:publish:win": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --publish always",
+    "release:assets": "node scripts/publish-release-notes.mjs",
     "electron:build:dir": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --dir",
     "mesh-plus:keygen": "node scripts/mesh-plus-keygen.mjs",
     "setup:build-secrets": "node scripts/setup-build-secrets.mjs"

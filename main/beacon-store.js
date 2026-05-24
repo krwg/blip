@@ -7,6 +7,7 @@ import {
   readdir,
   access,
   open,
+  rm,
 } from 'fs/promises';
 import { constants } from 'fs';
 
@@ -46,6 +47,22 @@ export async function readSeedMeta(seedId) {
   }
 }
 
+export async function writeSeedPreview(seedId, base64Jpeg) {
+  if (!base64Jpeg) return;
+  const dir = getSeedDir(seedId);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'preview.jpg'), Buffer.from(String(base64Jpeg), 'base64'));
+}
+
+export async function readSeedPreview(seedId) {
+  try {
+    const buf = await readFile(join(getSeedDir(seedId), 'preview.jpg'));
+    return buf.toString('base64');
+  } catch {
+    return null;
+  }
+}
+
 export async function writeSeedChunk(seedId, chunkIndex, base64Data) {
   const dir = getSeedDir(seedId);
   await mkdir(dir, { recursive: true });
@@ -53,9 +70,60 @@ export async function writeSeedChunk(seedId, chunkIndex, base64Data) {
   await writeFile(chunkPath(dir, chunkIndex), buf);
 }
 
+/** Write many chunks in one IPC round-trip. */
+export async function writeSeedChunksBatch(seedId, chunks) {
+  const dir = getSeedDir(seedId);
+  await mkdir(dir, { recursive: true });
+  await Promise.all(
+    (chunks || []).map(async ({ chunkIndex, data }) => {
+      if (chunkIndex == null || !data) return;
+      const buf = Buffer.from(String(data), 'base64');
+      await writeFile(chunkPath(dir, chunkIndex), buf);
+    })
+  );
+}
+
 export async function readSeedChunk(seedId, chunkIndex) {
   const buf = await readFile(chunkPath(getSeedDir(seedId), chunkIndex));
   return buf.toString('base64');
+}
+
+export async function readSeedChunksBatch(seedId, chunkIndices) {
+  const dir = getSeedDir(seedId);
+  const out = [];
+  await Promise.all(
+    (chunkIndices || []).map(async (chunkIndex) => {
+      try {
+        const buf = await readFile(chunkPath(dir, chunkIndex));
+        out.push({ chunkIndex, data: buf.toString('base64'), ok: true });
+      } catch {
+        out.push({ chunkIndex, ok: false });
+      }
+    })
+  );
+  return out;
+}
+
+export async function buildSeedHaveBitmap(seedId, totalChunks) {
+  const total = Number(totalChunks) || 0;
+  if (total <= 0) return '';
+  const dir = getSeedDir(seedId);
+  const bytes = Math.ceil(total / 8);
+  const bitmap = new Uint8Array(bytes);
+  let entries = [];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return Buffer.from(bitmap).toString('base64');
+  }
+  for (const name of entries) {
+    const m = /^chunk-(\d+)$/.exec(name);
+    if (!m) continue;
+    const i = Number(m[1]);
+    if (!Number.isFinite(i) || i < 0 || i >= total) continue;
+    bitmap[i >> 3] |= 1 << (i & 7);
+  }
+  return Buffer.from(bitmap).toString('base64');
 }
 
 export async function chunkExists(seedId, chunkIndex) {
@@ -125,4 +193,19 @@ export async function promptSaveAssembledSeed(seedId, defaultName) {
   if (canceled || !filePath) return { ok: false, cancelled: true };
   await assembleSeedToPath(seedId, filePath);
   return { ok: true, filePath };
+}
+
+export async function localSeedExists(seedId) {
+  try {
+    await access(getSeedDir(seedId), constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Remove seed directory (chunks, meta, preview). */
+export async function deleteLocalSeed(seedId) {
+  const dir = getSeedDir(seedId);
+  await rm(dir, { recursive: true, force: true });
 }

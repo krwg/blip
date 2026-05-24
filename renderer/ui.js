@@ -1,6 +1,6 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
 import { createIdGrid } from './grid.js';
-import { createChatView, getMessages } from './chat.js';
+import { createChatView, getMessages, addMessage } from './chat.js';
 import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
 import {
   getGroup,
@@ -26,6 +26,7 @@ import {
   handleGroupTcpMessage,
   migrateGroupsHostOnPeerOffline,
   sendGroupChatMessage,
+  sendGroupPin,
   leaveGroup,
   acceptGroupInvite,
   declineGroupInviteFlow,
@@ -134,7 +135,10 @@ import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
 import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
+import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
+import { setDefaultToastDurationMs } from './toast-config.js';
+import { appendBandwidthGraphSection } from './beacon-bandwidth-graph.js';
 import { openConfirmDialog } from './confirm-dialog.js';
 import {
   clearRendererLocalStorage,
@@ -170,6 +174,7 @@ import {
   normalizeThemeMode,
   normalizeAccentId,
   normalizeBgId,
+  applyUiPreferences,
 } from './appearance.js';
 import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
 
@@ -443,7 +448,39 @@ function ensureGroupChatView(groupId) {
           },
         });
       },
-      api
+      api,
+      {
+        onPin: (gid, payload) => sendGroupPin(api, state.config, gid, payload),
+        getForwardTargets: () =>
+          state.peers
+            .filter((p) => p.online && !isBlocked(p.blipId))
+            .map((p) => ({
+              id: p.blipId,
+              label: formatPeerDisplayName(p, p.blipId),
+            })),
+        onForwardToPeer: async (targetId, { forwardFrom }) => {
+          ensureChatView(targetId);
+          const outMsg = {
+            id: createMessageId(),
+            from: state.config.blipId,
+            to: targetId,
+            text: '',
+            timestamp: Date.now(),
+            outgoing: true,
+            forwardFrom,
+          };
+          addMessage(targetId, outMsg);
+          await api.sendTcpMessage({
+            to: targetId,
+            type: 'message',
+            text: outMsg.text,
+            id: outMsg.id,
+            timestamp: outMsg.timestamp,
+            forwardFrom: outMsg.forwardFrom,
+          });
+          state.chatViews.get(targetId)?.renderMessages?.();
+        },
+      }
     );
     state.groupChatViews.set(groupId, view);
   }
@@ -1762,6 +1799,68 @@ function buildAppearanceSection() {
   motionRow.appendChild(createPixelHintIcon('settings.motion_hint'));
   block.appendChild(motionRow);
 
+  const compactToggle = createPixelToggle({
+    checked: state.config.uiDensity === 'compact',
+    labelKey: 'settings.ui_compact',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ uiDensity: checked ? 'compact' : 'comfortable' });
+      applyAppearance(state.config);
+    },
+  });
+  block.appendChild(compactToggle.el);
+
+  block.appendChild(buildSectionSubtitleRow('settings.ui_font_scale'));
+  const uiFontRow = document.createElement('div');
+  uiFontRow.className = 'settings-sound-volume-row';
+  const uiFontRange = document.createElement('input');
+  uiFontRange.type = 'range';
+  uiFontRange.min = '85';
+  uiFontRange.max = '125';
+  uiFontRange.step = '5';
+  uiFontRange.className = 'settings-sound-range';
+  const uiFontPct = Math.round((Number(state.config.uiFontScale) || 1) * 100);
+  uiFontRange.value = String(uiFontPct);
+  const uiFontVal = document.createElement('span');
+  uiFontVal.className = 'settings-sound-volume-val';
+  uiFontVal.textContent = `${uiFontPct}%`;
+  uiFontRange.addEventListener('input', () => {
+    uiFontVal.textContent = `${uiFontRange.value}%`;
+    applyUiPreferences({ ...state.config, uiFontScale: Number(uiFontRange.value) / 100 });
+  });
+  uiFontRange.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ uiFontScale: Number(uiFontRange.value) / 100 });
+    applyAppearance(state.config);
+  });
+  uiFontRow.appendChild(uiFontRange);
+  uiFontRow.appendChild(uiFontVal);
+  appendAppearanceControl(block, uiFontRow);
+
+  block.appendChild(buildSectionSubtitleRow('settings.chat_font_scale'));
+  const chatFontRow = document.createElement('div');
+  chatFontRow.className = 'settings-sound-volume-row';
+  const chatFontRange = document.createElement('input');
+  chatFontRange.type = 'range';
+  chatFontRange.min = '85';
+  chatFontRange.max = '135';
+  chatFontRange.step = '5';
+  chatFontRange.className = 'settings-sound-range';
+  const chatFontPct = Math.round((Number(state.config.chatFontScale) || 1) * 100);
+  chatFontRange.value = String(chatFontPct);
+  const chatFontVal = document.createElement('span');
+  chatFontVal.className = 'settings-sound-volume-val';
+  chatFontVal.textContent = `${chatFontPct}%`;
+  chatFontRange.addEventListener('input', () => {
+    chatFontVal.textContent = `${chatFontRange.value}%`;
+    applyUiPreferences({ ...state.config, chatFontScale: Number(chatFontRange.value) / 100 });
+  });
+  chatFontRange.addEventListener('change', async () => {
+    state.config = await api.saveConfig({ chatFontScale: Number(chatFontRange.value) / 100 });
+    applyAppearance(state.config);
+  });
+  chatFontRow.appendChild(chatFontRange);
+  chatFontRow.appendChild(chatFontVal);
+  appendAppearanceControl(block, chatFontRow);
+
   appendAppIconPickerSections(block, state, (patch) => api.saveConfig(patch));
 
   return block;
@@ -1897,6 +1996,10 @@ async function runStartupUpdateCheck() {
   showUpdateStatusToast({ state: 'checking' });
 
   if (meta?.isPackaged && window.blip.checkForUpdates) {
+    if (meta?.isPortable) {
+      await checkUpdatesViaGithub(current);
+      return;
+    }
     const r = await window.blip.checkForUpdates();
     if (r?.skipped) {
       await checkUpdatesViaGithub(current);
@@ -2087,6 +2190,35 @@ function buildSettingsNotificationsPanel() {
   dndRow.appendChild(dndToggle.el);
   dndRow.appendChild(createPixelHintIcon('settings.notifications_dnd_hint'));
   frag.appendChild(dndRow);
+
+  const toastSec = Math.max(2, Math.min(60, Number(state.config.toastDurationSec) || 9));
+  const toastRow = document.createElement('label');
+  toastRow.className = 'settings-range-row';
+  const toastLab = document.createElement('span');
+  toastLab.dataset.i18n = 'settings.toast_duration';
+  toastLab.textContent = t('settings.toast_duration');
+  const toastRange = document.createElement('input');
+  toastRange.type = 'range';
+  toastRange.min = '2';
+  toastRange.max = '60';
+  toastRange.step = '1';
+  toastRange.value = String(toastSec);
+  toastRange.className = 'settings-range';
+  const toastVal = document.createElement('span');
+  toastVal.className = 'settings-range-val';
+  toastVal.textContent = `${toastSec}s`;
+  toastRange.addEventListener('input', () => {
+    toastVal.textContent = `${toastRange.value}s`;
+  });
+  toastRange.addEventListener('change', async () => {
+    const sec = Number(toastRange.value) || 9;
+    state.config = await api.saveConfig({ toastDurationSec: sec });
+    setDefaultToastDurationMs(sec * 1000);
+  });
+  toastRow.appendChild(toastLab);
+  toastRow.appendChild(toastRange);
+  toastRow.appendChild(toastVal);
+  frag.appendChild(toastRow);
 
   return frag;
 }
@@ -2319,6 +2451,16 @@ function buildSettingsSoundPanel() {
   );
 
   frag.appendChild(enableToggle.el);
+
+  const typingToggle = createPixelToggle({
+    checked: !!state.config.typingSoundEnabled,
+    labelKey: 'settings.typing_sound',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ typingSoundEnabled: checked });
+    },
+  });
+  frag.appendChild(typingToggle.el);
+
   frag.appendChild(volLabel);
   frag.appendChild(volRow);
   frag.appendChild(
@@ -2650,6 +2792,7 @@ function buildSettingsNetworkPanel() {
   frag.appendChild(projClipRow);
 
   const statsUi = appendSessionStatsSection(frag);
+  appendBandwidthGraphSection(frag);
 
   const actions = document.createElement('div');
   actions.className = 'settings-network-actions';
@@ -3378,8 +3521,15 @@ function buildSettingsUpdatesPanel() {
     const r = await window.blip.checkForUpdates();
     if (r?.skipped) {
       lastUpdateStatus = null;
-      statusLine.dataset.i18n = 'settings.updates_dev_only';
-      statusLine.textContent = t('settings.updates_dev_only');
+      if (r.reason === 'portable') {
+        statusLine.dataset.i18n = 'settings.updates_portable_only';
+        statusLine.textContent = t('settings.updates_portable_only');
+        const meta = await window.blip.getAppMetadata?.().catch(() => null);
+        if (meta?.version) void checkUpdatesViaGithub(meta.version);
+      } else {
+        statusLine.dataset.i18n = 'settings.updates_dev_only';
+        statusLine.textContent = t('settings.updates_dev_only');
+      }
     } else {
       statusLine.textContent = formatUpdateStatusText();
     }
@@ -3509,6 +3659,11 @@ function buildSettingsUpdatesPanel() {
       statusLine.dataset.i18n = 'settings.updates_dev_only';
       statusLine.textContent = t('settings.updates_dev_only');
       checkBtn.disabled = true;
+      installBtn.disabled = true;
+    } else if (meta?.isPortable) {
+      statusLine.dataset.i18n = 'settings.updates_portable_only';
+      statusLine.textContent = t('settings.updates_portable_only');
+      checkBtn.disabled = false;
       installBtn.disabled = true;
     } else {
       checkBtn.disabled = false;
@@ -4154,7 +4309,7 @@ function renderView(viewName, options = {}) {
       view = renderProjectsView();
       break;
     case 'beacon':
-      view = renderBeaconView();
+      view = renderBeaconView(state.config);
       break;
     case 'profile': {
       view = renderPeerProfileView();
@@ -4280,6 +4435,7 @@ export function initUI(config, blipApi) {
   initPeerTrust(config, blipApi);
   purgeGroupsFor(config.blipId);
   setLang(config.language || localStorage.getItem('blip_lang') || 'en');
+  setDefaultToastDurationMs((Number(config.toastDurationSec) || 9) * 1000);
   applySoundPrefsFromConfig(config);
   applyAppearance(state.config);
   applyReactiveWallpaperConfig(state.config);
@@ -4308,16 +4464,108 @@ export function initUI(config, blipApi) {
       beaconSendUdp: (payload) => window.blip?.beaconSendUdp?.(payload),
       beaconWriteMeta: (payload) => window.blip?.beaconWriteMeta?.(payload),
       beaconReadMeta: (payload) => window.blip?.beaconReadMeta?.(payload),
+      beaconReadPreview: (payload) => window.blip?.beaconReadPreview?.(payload),
+      beaconWritePreview: (payload) => window.blip?.beaconWritePreview?.(payload),
+      setTrayTransferProgress: (info) => window.blip?.setTrayTransferProgress?.(info),
       beaconWriteChunk: (payload) => window.blip?.beaconWriteChunk?.(payload),
+      beaconWriteChunksBatch: (payload) => window.blip?.beaconWriteChunksBatch?.(payload),
       beaconReadChunk: (payload) => window.blip?.beaconReadChunk?.(payload),
+      beaconReadChunksBatch: (payload) => window.blip?.beaconReadChunksBatch?.(payload),
+      beaconHaveBitmap: (payload) => window.blip?.beaconHaveBitmap?.(payload),
       beaconChunkExists: (payload) => window.blip?.beaconChunkExists?.(payload),
       beaconCountChunks: (payload) => window.blip?.beaconCountChunks?.(payload),
       beaconListLocal: () => window.blip?.beaconListLocal?.(),
       beaconSaveAssembled: (payload) => window.blip?.beaconSaveAssembled?.(payload),
+      beaconDeleteSeed: (payload) => window.blip?.beaconDeleteSeed?.(payload),
     },
     getConfig: () => state.config,
     getPeers: () => state.peers,
     getPeerLatency: (id) => peerLatencyMs.get(id) ?? 9999,
+  });
+
+  initIdleAway({
+    getConfig: () => state.config,
+    saveConfig: (patch) => api.saveConfig(patch),
+  });
+
+  window.addEventListener('blip-open-beacon-seed', (ev) => {
+    const seedId = String(ev.detail?.seedId || '').trim();
+    if (!seedId) return;
+    state.view = 'beacon';
+    renderView('beacon');
+    void import('./beacon-mesh.js').then(({ downloadBeaconSeed }) =>
+      downloadBeaconSeed(seedId).catch(() => {})
+    );
+  });
+
+  window.blip?.onBeaconOpenSeed?.((data) => {
+    const seedId = String(data?.seedId || '').trim();
+    if (!seedId) return;
+    window.dispatchEvent(
+      new CustomEvent('blip-open-beacon-seed', { detail: { seedId } })
+    );
+  });
+
+  window.blip?.onBeaconOpenBlipFile?.((data) => {
+    const doc = data?.doc;
+    const seedId = String(doc?.seedId || '').trim();
+    if (!seedId) {
+      showAppToast({
+        title: t('beacon.blip_invalid'),
+        variant: 'danger',
+        durationMs: 5000,
+      });
+      return;
+    }
+    void import('./beacon-mesh.js').then(({ registerBlipSeedDescriptor }) => {
+      registerBlipSeedDescriptor(doc);
+      state.view = 'beacon';
+      renderView('beacon');
+      window.dispatchEvent(
+        new CustomEvent('blip-open-beacon-seed', { detail: { seedId } })
+      );
+    });
+  });
+
+  window.addEventListener('blip-beacon-share-chat', (ev) => {
+    const seedId = String(ev.detail?.seedId || '').trim();
+    if (!seedId) return;
+    const targets = state.peers
+      .filter((p) => p.online && !isBlocked(p.blipId))
+      .map((p) => ({ id: p.blipId, label: formatPeerDisplayName(p, p.blipId) }));
+    void import('./chat-forward-picker.js').then(async ({ openForwardPeerPicker }) => {
+      const peerId = await openForwardPeerPicker(targets);
+      if (peerId == null) return;
+      const { buildBeaconSeedLink, buildBeaconAttachment } = await import('./beacon-mesh.js');
+      const { addMessage } = await import('./chat.js');
+      const { createMessageId } = await import('./message-id.js');
+      const link = buildBeaconSeedLink(seedId);
+      const outMsg = {
+        id: createMessageId(),
+        from: state.config.blipId,
+        to: peerId,
+        text: link,
+        timestamp: Date.now(),
+        outgoing: true,
+        attachment: buildBeaconAttachment({
+          seedId,
+          filename: ev.detail?.filename,
+          size: ev.detail?.size,
+        }),
+      };
+      ensureChatView(peerId);
+      addMessage(peerId, outMsg);
+      state.chatViews.get(peerId)?.renderMessages?.();
+      await api.sendTcpMessage({
+        to: peerId,
+        type: 'message',
+        text: outMsg.text,
+        id: outMsg.id,
+        timestamp: outMsg.timestamp,
+        attachment: outMsg.attachment,
+      });
+      openChat(peerId);
+    });
   });
 
   const titleBar = createTitleBar();
@@ -4618,7 +4866,6 @@ export function handleTcpMessage(msg) {
       config: state.config,
       onProgress: (peerId, transferId, pct) => {
         trackTransferProgress(peerId, transferId, pct, { direction: 'in' });
-        if (pct >= 100) trackTransferEnd(peerId, transferId);
       },
       onComplete: (peerId, payload) => {
         if (payload?.transferId) trackTransferEnd(peerId, payload.transferId);

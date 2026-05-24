@@ -9,13 +9,24 @@ import {
   getBeaconSeedsRoot,
   writeSeedMeta,
   readSeedMeta,
+  writeSeedPreview,
+  readSeedPreview,
   writeSeedChunk,
   readSeedChunk,
+  readSeedChunksBatch,
+  writeSeedChunksBatch,
+  buildSeedHaveBitmap,
   chunkExists,
   countLocalChunks,
   listLocalSeedMetas,
   promptSaveAssembledSeed,
+  deleteLocalSeed,
+  localSeedExists,
 } from './beacon-store.js';
+import {
+  ingestPublishFromPath,
+  tryReadImagePreviewB64,
+} from './beacon-ingest.js';
 import { createTcpServer } from './tcp-server.js';
 import { connectToPeer, sendOnSocket, pingPeer } from './tcp-client.js';
 import { createTcpLineReader } from './tcp-framing.js';
@@ -48,12 +59,13 @@ import {
   initInboundSession,
 } from './mesh-handshake.js';
 import { isPeerBlocked } from './trust-policy.js';
-import { createTray, destroyTray } from './tray.js';
+import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
 import {
   setupAutoUpdater,
   checkForUpdatesNow,
   quitAndInstallUpdater,
   configureAutoUpdater,
+  isPortableInstall,
 } from './updater.js';
 import { resolveBuildAsset } from './paths.js';
 import { resolvePorts } from './ports.js';
@@ -90,6 +102,11 @@ import {
   setPendingDisplaySource,
 } from './display-capture.js';
 import { performFactoryReset } from './factory-reset.js';
+import {
+  extractBlipFileFromArgv,
+  extractBlipSeedIdFromArgv,
+  readBlipSeedFile,
+} from './blip-open.js';
 import os from 'os';
 
 if (process.env.BLIP_USER_DATA_DIR) {
@@ -138,6 +155,91 @@ const peerSockets = new Map();
 const peerSocketConnectInflight = new Map();
 /** Set in `before-quit` so the main window can distinguish Quit from close-to-tray hide. */
 let appIsQuitting = false;
+/** @type {Array<() => void>} */
+const pendingRendererDeliveries = [];
+/** macOS: .blip opened before app.ready */
+let pendingBlipFilePath = null;
+
+function queueRendererDelivery(fn) {
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isLoading()
+  ) {
+    fn();
+    return;
+  }
+  pendingRendererDeliveries.push(fn);
+}
+
+function flushPendingRendererDeliveries() {
+  while (pendingRendererDeliveries.length) {
+    const fn = pendingRendererDeliveries.shift();
+    try {
+      fn();
+    } catch (e) {
+      console.warn('[BLIP] pending delivery', e);
+    }
+  }
+}
+
+function deliverBeaconOpenSeed(seedId) {
+  if (!seedId) return;
+  queueRendererDelivery(() => {
+    sendToRenderer('beacon-open-seed', { seedId: String(seedId) });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+function deliverBeaconOpenBlipFile(filePath) {
+  try {
+    const { text, doc } = readBlipSeedFile(filePath);
+    queueRendererDelivery(() => {
+      sendToRenderer('beacon-open-blip-file', { filePath, text, doc });
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (e) {
+    console.warn('[BLIP] open .blip file', filePath, e?.message || e);
+  }
+}
+
+function handleOpenRequestFromArgv(argv) {
+  const blipFile = extractBlipFileFromArgv(argv);
+  if (blipFile) {
+    deliverBeaconOpenBlipFile(blipFile);
+    return;
+  }
+  const seedId = extractBlipSeedIdFromArgv(argv);
+  if (seedId) deliverBeaconOpenSeed(seedId);
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    handleOpenRequestFromArgv(argv);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!extractBlipFileFromArgv(argv) && !extractBlipSeedIdFromArgv(argv)) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+}
+
+app.on('open-file', (event, filePath) => {
+  if (!/\.blip$/i.test(filePath || '')) return;
+  event.preventDefault();
+  if (app.isReady()) deliverBeaconOpenBlipFile(filePath);
+  else pendingBlipFilePath = filePath;
+});
 
 function getRendererUrl() {
   if (useViteDev) return 'http://localhost:5173';
@@ -218,6 +320,7 @@ function createWindow() {
 
   mainWindow.webContents.once('did-finish-load', () => {
     refreshGlobalShortcuts();
+    flushPendingRendererDeliveries();
   });
 }
 
@@ -670,7 +773,9 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     case 'seed-request':
     case 'seed-chunk':
+    case 'seed-chunks-batch':
     case 'seed-have':
+    case 'seed-have-request':
     case 'file-offer':
     case 'file-chunk':
     case 'file-done':
@@ -1013,6 +1118,35 @@ function setupIpc() {
     return true;
   });
 
+  ipcMain.handle('beacon-publish-from-path', async (event, { filePath, maxBytes, chunkSize }) => {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      return { ok: false, error: 'no_path' };
+    }
+    const wc = event.sender;
+    try {
+      const meta = await ingestPublishFromPath(filePath.trim(), {
+        maxBytes: Number(maxBytes) || undefined,
+        chunkSize: Number(chunkSize) || 1048576,
+        onProgress: (p) => {
+          try {
+            wc.send('beacon-ingest-progress', p);
+          } catch {
+            /* window gone */
+          }
+        },
+      });
+      const previewB64 = await tryReadImagePreviewB64(filePath.trim());
+      if (previewB64) {
+        meta.previewB64 = previewB64.length > 14000 ? previewB64.slice(0, 14000) : previewB64;
+        await writeSeedPreview(meta.seedId, meta.previewB64);
+      }
+      return { ok: true, meta };
+    } catch (e) {
+      const msg = e?.message || String(e);
+      return { ok: false, error: msg };
+    }
+  });
+
   ipcMain.handle('beacon-write-meta', async (_, { seedId, meta }) => {
     if (!seedId || !meta) return { ok: false };
     await writeSeedMeta(seedId, meta);
@@ -1024,10 +1158,33 @@ function setupIpc() {
     return readSeedMeta(seedId);
   });
 
+  ipcMain.handle('beacon-read-preview', async (_, { seedId }) => {
+    if (!seedId) return { ok: false };
+    const data = await readSeedPreview(seedId);
+    return data ? { ok: true, data } : { ok: false };
+  });
+
+  ipcMain.handle('beacon-write-preview', async (_, { seedId, data }) => {
+    if (!seedId || !data) return { ok: false };
+    await writeSeedPreview(seedId, data);
+    return { ok: true };
+  });
+
+  ipcMain.handle('set-tray-transfer-progress', (_, info) => {
+    setTrayTransferProgress(info);
+    return { ok: true };
+  });
+
   ipcMain.handle('beacon-write-chunk', async (_, { seedId, chunkIndex, data }) => {
     if (!seedId || chunkIndex == null || !data) return { ok: false };
     await writeSeedChunk(seedId, Number(chunkIndex), data);
     return { ok: true };
+  });
+
+  ipcMain.handle('beacon-write-chunks-batch', async (_, { seedId, chunks }) => {
+    if (!seedId || !Array.isArray(chunks) || !chunks.length) return { ok: false };
+    await writeSeedChunksBatch(seedId, chunks);
+    return { ok: true, count: chunks.length };
   });
 
   ipcMain.handle('beacon-read-chunk', async (_, { seedId, chunkIndex }) => {
@@ -1038,6 +1195,18 @@ function setupIpc() {
     } catch {
       return { ok: false };
     }
+  });
+
+  ipcMain.handle('beacon-read-chunks-batch', async (_, { seedId, chunkIndices }) => {
+    if (!seedId || !Array.isArray(chunkIndices)) return { ok: false, chunks: [] };
+    const chunks = await readSeedChunksBatch(seedId, chunkIndices.map(Number));
+    return { ok: true, chunks };
+  });
+
+  ipcMain.handle('beacon-have-bitmap', async (_, { seedId, totalChunks }) => {
+    if (!seedId) return { ok: false, bitmap: '' };
+    const bitmap = await buildSeedHaveBitmap(seedId, Number(totalChunks) || 0);
+    return { ok: true, bitmap };
   });
 
   ipcMain.handle('beacon-chunk-exists', async (_, { seedId, chunkIndex }) => {
@@ -1057,6 +1226,31 @@ function setupIpc() {
       return await promptSaveAssembledSeed(seedId, defaultName);
     } catch (err) {
       return { ok: false, error: err?.message || 'save_failed' };
+    }
+  });
+
+  ipcMain.handle('beacon-delete-seed', async (_, { seedId }) => {
+    if (!seedId) return { ok: false };
+    try {
+      if (await localSeedExists(seedId)) await deleteLocalSeed(seedId);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'delete_failed' };
+    }
+  });
+
+  ipcMain.handle('beacon-seed-exists', async (_, { seedId }) => {
+    if (!seedId) return { exists: false };
+    return { exists: await localSeedExists(seedId) };
+  });
+
+  ipcMain.handle('beacon-read-blip-file', async (_, { filePath }) => {
+    if (!filePath || typeof filePath !== 'string') return { ok: false };
+    try {
+      const raw = readFileSync(filePath, 'utf8');
+      return { ok: true, text: raw };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'read_failed' };
     }
   });
 
@@ -1251,6 +1445,7 @@ function setupIpc() {
   ipcMain.handle('get-app-metadata', () => ({
     ...loadAppMetadata(),
     isPackaged: app.isPackaged,
+    isPortable: isPortableInstall(),
   }));
 
   ipcMain.handle('get-app-icon-url', () => {
@@ -1428,6 +1623,16 @@ function setupIpc() {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false };
     await shell.openExternal(url);
     return { ok: true };
+  });
+
+  ipcMain.handle('show-item-in-folder', async (_, filePath) => {
+    if (typeof filePath !== 'string' || !filePath.trim()) return { ok: false };
+    try {
+      shell.showItemInFolder(filePath);
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   });
 
   ipcMain.handle('get-group-for-call', async (_, groupId) => readGroupFromMainWindow(groupId));
@@ -1645,6 +1850,20 @@ app.whenReady().then(async () => {
   void ensureCallWindow().catch((e) => console.warn('[BLIP] prewarm call window', e));
   void ensureGroupCallWindow().catch((e) => console.warn('[BLIP] prewarm group call window', e));
   setupAutoUpdater(() => mainWindow, () => config);
+
+  if (!app.isPackaged || process.platform === 'win32') {
+    try {
+      app.setAsDefaultProtocolClient('blip');
+    } catch (e) {
+      console.warn('[BLIP] protocol client', e?.message || e);
+    }
+  }
+
+  handleOpenRequestFromArgv(process.argv);
+  if (pendingBlipFilePath) {
+    deliverBeaconOpenBlipFile(pendingBlipFilePath);
+    pendingBlipFilePath = null;
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

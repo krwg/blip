@@ -55,9 +55,26 @@ Requires Windows for the current electron-builder targets:
 ```bash
 npm run electron:build        # NSIS installer
 npm run electron:build:portable
+npm run electron:build:all    # Setup + portable + latest.yml (auto-update manifest)
 ```
 
 Outputs go to `dist-electron/` (see `electron-builder.yml`).
+
+### Publishing a GitHub Release
+
+In-app updates need **`latest.yml`** and **`BLIP-Setup-<version>.exe`** on the **same** release tag as `app-metadata.json` (e.g. tag `1.1.1`, not `v1.1.1`, unless you use that tag consistently).
+
+| Method | Command |
+|--------|---------|
+| **CI (recommended)** | Push git tag `1.1.1` → [`.github/workflows/release.yml`](.github/workflows/release.yml) runs `electron:publish:win` |
+| **Local publish** | `$env:GH_TOKEN = "ghp_…"; npm run electron:publish:win` |
+| **Manual upload** | `npm run electron:build:all` then `npm run release:assets` — attach listed files to the GitHub Release |
+
+Copy release notes from [`docs/release-notes-v1.1.1-github.md`](docs/release-notes-v1.1.1-github.md) (update per version).
+
+**Portable** builds do not receive in-app updates — users must download a new portable or install Setup once.
+
+**Dev vs packaged UI:** `npm run electron:dev` loads live sources from Vite; `electron:build:all` snapshots `dist/` into the exe. Always run `npm run build` before shipping (the build scripts do this automatically).
 
 ## Release metadata
 
@@ -69,7 +86,7 @@ Release builds: run `npm run setup:build-secrets` once, then configure maintaine
 
 ## TCP payloads (renderer ↔ main)
 
-Chat and signalling use newline-delimited JSON on TCP port **42070**. Common `type` values: `message`, `typing`, `ping`/`pong`, `call-*`, `group-*`, `group-call-*`, `file-*`, `clipboard-push`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Chat and signalling use newline-delimited JSON on TCP port **42070**. Common `type` values: `message`, `typing`, `ping`/`pong`, `call-*`, `group-*`, `group-call-*`, `file-*`, `clipboard-push`, `seed-*` (BEACON). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 The renderer Vite build produces three HTML entry points: `index.html`, `call-window.html`, `group-call-window.html`.
 

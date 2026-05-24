@@ -7,6 +7,7 @@ const connections = new Map();
 
 export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
   const server = net.createServer((socket) => {
+    socket.setNoDelay(true);
     const remoteIp = socket.remoteAddress?.replace('::ffff:', '') || '';
     initInboundSession(socket, remoteIp);
 

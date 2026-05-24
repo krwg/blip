@@ -16,6 +16,7 @@ import {
   MESH_PLUS_FEATURES,
 } from '../shared/mesh-plus-gates.js';
 import { showAppToast } from './toasts.js';
+import { notePresenceManualChange } from './idle-away.js';
 import {
   buildSettingsField,
   buildThemedSelect,
@@ -115,7 +116,8 @@ export function buildSettingsProfilePanel(state, api, deps = {}) {
     state.config.presenceStatus || 'online',
     async (id) => {
       state.config.presenceStatus = id;
-      await api.saveConfig({ presenceStatus: id });
+      notePresenceManualChange(id);
+      await api.saveConfig({ presenceStatus: id, idleAwayActive: false });
       refreshPreview();
     }
   );
@@ -123,6 +125,23 @@ export function buildSettingsProfilePanel(state, api, deps = {}) {
   namePresenceRow.appendChild(buildSettingsField('settings.name', nameInput));
   namePresenceRow.appendChild(buildSettingsField('settings.presence', presenceSelect));
   editorCard.appendChild(namePresenceRow);
+
+  const idleRow = document.createElement('div');
+  idleRow.className = 'settings-profile-field--full';
+  const idleInput = document.createElement('input');
+  idleInput.type = 'number';
+  idleInput.min = '0';
+  idleInput.max = '120';
+  idleInput.step = '1';
+  idleInput.className = 'input';
+  idleInput.value = String(Number(state.config.idleAwayMinutes ?? 5));
+  idleInput.addEventListener('change', async () => {
+    const n = Math.max(0, Math.min(120, Number(idleInput.value) || 0));
+    idleInput.value = String(n);
+    state.config = await api.saveConfig({ idleAwayMinutes: n });
+  });
+  idleRow.appendChild(buildSettingsField('settings.idle_away_minutes', idleInput));
+  editorCard.appendChild(idleRow);
 
   const statusInput = document.createElement('input');
   statusInput.type = 'text';

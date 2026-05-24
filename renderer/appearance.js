@@ -169,6 +169,24 @@ export function applyAppearance(config) {
     config?.reactiveBackground === true && bg !== 'none' ? '1' : '0';
   applyCustomAccentVars(html, config);
   syncReducedMotion(config);
+  applyUiPreferences(config);
+}
+
+function clampScale(n, min, max, fallback = 1) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(max, Math.max(min, v));
+}
+
+/** Density + font scales (#21, #22). */
+export function applyUiPreferences(config) {
+  const html = document.documentElement;
+  const density = config?.uiDensity === 'compact' ? 'compact' : 'comfortable';
+  html.dataset.uiDensity = density;
+  const uiScale = clampScale(config?.uiFontScale, 0.85, 1.25, 1);
+  const chatScale = clampScale(config?.chatFontScale, 0.85, 1.35, 1);
+  html.style.setProperty('--ui-font-scale', String(uiScale));
+  html.style.setProperty('--chat-font-scale', String(chatScale));
 }
 
 export function applyCallWindowAppearance(config) {
