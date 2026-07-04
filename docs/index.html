@@ -753,7 +753,7 @@
         </p>
 
         <div class="code-box">
-          <code class="code-text" id="clone-line">git clone https:
+          <code class="code-text" id="clone-line"></code>
           <button
             type="button"
             class="copy-btn"
@@ -919,6 +919,7 @@
 
         const LANG_KEY = 'blip_pages_lang';
         const TYPEWRITER_SPEED = 60;
+        const CLONE_CMD = 'git clone https://github.com/krwg/BLIP.git';
 
         const header = document.getElementById('header');
         const ruBtn = document.getElementById('lang-ru');
@@ -1070,6 +1071,8 @@
         document.querySelectorAll('.feature').forEach(f => {
           featureObserver.observe(f);
         });
+
+        if (cloneLine) cloneLine.textContent = CLONE_CMD;
 
         apply(getLang());
 
