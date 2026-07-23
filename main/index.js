@@ -1687,7 +1687,7 @@ function setupIpc() {
   });
 
   ipcMain.handle('open-external', async (_, url) => {
-    if (typeof url !== 'string' || !/^https?:\/\
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false };
     await shell.openExternal(url);
     return { ok: true };
   });
