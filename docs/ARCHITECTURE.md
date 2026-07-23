@@ -287,7 +287,7 @@ All user-visible chrome in `renderer/i18n.js` (**EN + RU**), including group cal
 
 ## Landing (GitHub Pages)
 
-Static showcase: [`docs/index.html`](index.html) → [krwg.github.io/BLIP](https://krwg.github.io/BLIP/). Uses the **Slate** accent (`#94a3b8`) to match the app; deploy via **Settings → Pages → branch `main`, folder `/docs`**.
+Static showcase: [`docs/index.html`](index.html) → [krwg.github.io/blip](https://krwg.github.io/blip/). Uses the **Slate** accent (`#94a3b8`) to match the app; deploy via **Settings → Pages → branch `main`, folder `/docs`**.
 
 ## Future seams
 
