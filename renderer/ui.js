@@ -3306,7 +3306,7 @@ function showAboutIconContextMenu(e) {
 }
 
 function githubRepoBase(meta) {
-  const raw = meta?.githubUrl || 'https://github.com/krwg/BLIP';
+  const raw = meta?.githubUrl || 'https://github.com/krwg/blip';
   return String(raw).replace(/\/$/, '');
 }
 

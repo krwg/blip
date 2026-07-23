@@ -10,22 +10,22 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-1.1.1_Beacon-00ffc8?style=for-the-badge&labelColor=0a0a0a)](https://github.com/krwg/BLIP/releases)
+[![Version](https://img.shields.io/badge/version-1.1.1_Beacon-00ffc8?style=for-the-badge&labelColor=0a0a0a)](https://github.com/krwg/blip/releases)
 [![Electron](https://img.shields.io/badge/Electron-35-47848F?style=for-the-badge&logo=electron&logoColor=white&labelColor=0a0a0a)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-00ffc8?style=for-the-badge&labelColor=0a0a0a)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=0a0a0a)]()
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20RU-e0e0e0?style=for-the-badge&labelColor=0a0a0a)]()
 
 <!-- Dynamic stats row -->
-[![Stars](https://img.shields.io/github/stars/krwg/BLIP?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/BLIP/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/krwg/BLIP/total?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/BLIP/releases)
-[![Last Commit](https://img.shields.io/github/last-commit/krwg/BLIP?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/BLIP/commits/main)
-[![Issues](https://img.shields.io/github/issues/krwg/BLIP?style=for-the-badge&labelColor=0a0a0a&color=ff3366&logo=github)](https://github.com/krwg/BLIP/issues)
+[![Stars](https://img.shields.io/github/stars/krwg/blip?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/blip/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/krwg/blip/total?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/blip/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/krwg/blip?style=for-the-badge&labelColor=0a0a0a&color=00ffc8&logo=github)](https://github.com/krwg/blip/commits/main)
+[![Issues](https://img.shields.io/github/issues/krwg/blip?style=for-the-badge&labelColor=0a0a0a&color=ff3366&logo=github)](https://github.com/krwg/blip/issues)
 
 <br>
  
 *You're on the grid. You're the signal.*
-[**English**](#english) · [**Русский**](#russian) · [**Сайт**](https://github.com/krwg/BLIP/)
+[**English**](#english) · [**Русский**](#russian) · [**Сайт**](https://krwg.github.io/blip/)
  
 </div> 
 
@@ -50,7 +50,8 @@
 | Design tokens | [Design](#en-design) | [Дизайн](#ru-design) |
 | License | [License](#en-license) | [Лицензия](#ru-license) |
 | Community | [Community](#en-community) | [Сообщество](#ru-community) |
-| Landing | [GitHub](https://github.com/krwg/BLIP) | [Репозиторий](https://github.com/krwg/BLIP) |
+| Landing | [Pages](https://krwg.github.io/blip/) | [Сайт](https://krwg.github.io/blip/) |
+| Troubleshooting | [Troubleshooting](#en-troubleshooting) | [Устранение неполадок](#ru-troubleshooting) |
 
 ---
 
@@ -74,7 +75,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | | |
 |---|---|
 | **What** | Desktop app: text, voice, and video over LAN / Hamachi / Radmin VPN |
-| **Release** | **1.1.1 — Beacon** (see [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/BLIP/releases)) |
+| **Release** | **1.1.1 — Beacon** (see [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/blip/releases)) |
 | **Identity** | BLIP ID **1–64** (8×8 grid, Minecraft-style chunk metaphor) |
 | **Servers** | None — UDP broadcast, TCP, and WebRTC peer-to-peer only |
 | **Sign-up** | None |
@@ -199,7 +200,7 @@ flowchart LR
 **Install**
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/krwg/blip.git
 cd blip
 npm install
 ```
@@ -358,7 +359,28 @@ blip/
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical map |
 | [docs/ROADMAP-1.1-BEACON.md](docs/ROADMAP-1.1-BEACON.md) | 1.1.0 Beacon scope |
 | [docs/release-notes-v1.1.1-github.md](docs/release-notes-v1.1.1-github.md) | GitHub Release body (1.1.1) |
-| [Landing site (Pages)](https://github.com/krwg/BLIP/) | Static showcase (`docs/index.html`) |
+| [Landing site (Pages)](https://krwg.github.io/blip/) | Static showcase (`docs/index.html`) |
+
+<h3 id="en-troubleshooting">Troubleshooting</h3>
+
+### Peers not visible
+1. Confirm both PCs are on the **same subnet** (or the same Hamachi / Radmin / Tailscale network).
+2. Allow **UDP 42069** and **TCP 42070** in the firewall (Windows: Start → Windows Defender Firewall → Allow an app).
+3. Do not run two BLIP windows on one PC — ports collide; use a VM or a second device.
+4. If you are not using a mesh VPN, try disabling unrelated VPN clients that isolate broadcast.
+
+### Call does not connect
+1. BLIP WebRTC uses **host candidates only** (no public STUN/TURN by default) — same LAN/VPN segment required.
+2. Check that no corporate firewall blocks peer-to-peer UDP between the devices.
+3. Retry after both peers show online in **Peers** with a fresh Mesh Pulse latency.
+
+### File transfer fails
+1. Check **Settings → Network** size limit (1–100 GB).
+2. Receiver must be online and not blocked under **Privacy**.
+3. For BEACON seeds, confirm the publisher is still seeding and the `blip://seed/…` link is intact.
+
+### Clipboard sync
+LAN clipboard sync can forward **secrets** (passwords, tokens). Keep it **off** unless you need it; prefer **trusted peers** / active chat only, and treat the channel as shared with everyone who can see your mesh.
 
 <h3 id="en-license">License</h3>
 
@@ -389,7 +411,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | | |
 |---|---|
 | **Что это** | Desktop-приложение: текст, голос и видео по LAN / Hamachi / Radmin VPN |
-| **Релиз** | **1.1.1 — Beacon** (см. [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/BLIP/releases)) |
+| **Релиз** | **1.1.1 — Beacon** (см. [`CHANGELOG.md`](CHANGELOG.md); [Releases](https://github.com/krwg/blip/releases)) |
 | **Идентификация** | BLIP ID **1–64** (сетка 8×8) |
 | **Серверы** | Нет — только UDP broadcast, TCP и WebRTC между пирами |
 | **Регистрация** | Нет |
@@ -484,7 +506,7 @@ FREE: чат, звонки, группы (бета), блокнот, Mesh Pulse,
 **Установка**
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/krwg/blip.git
 cd blip
 npm install
 ```
@@ -609,7 +631,7 @@ blip/
 │   ├── group-call-roster.js · group-call-client.js
 │   └── assets/fonts/
 ├── docs/              # ARCHITECTURE.md + лендинг Pages
-├── app-metadata.json  # 0.6.1 Portrait
+├── app-metadata.json  # version 1.1.1, codename Beacon
 ├── build/ · preload.cjs · scripts/ · icon.svg · dist/
 ```
 
@@ -636,7 +658,28 @@ blip/
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура кода |
 | [docs/ROADMAP-1.1-BEACON.md](docs/ROADMAP-1.1-BEACON.md) | Скоуп 1.1.0 Beacon |
 | [docs/release-notes-v1.1.1-github.md](docs/release-notes-v1.1.1-github.md) | Текст GitHub Release (1.1.1) |
-| [Landing (Pages)](https://github.com/krwg/BLIP/) | Статический сайт-витрина (`docs/index.html`) |
+| [Landing (Pages)](https://krwg.github.io/blip/) | Статический сайт-витрина (`docs/index.html`) |
+
+<h3 id="ru-troubleshooting">Устранение неполадок</h3>
+
+### Пиры не видны
+1. Оба ПК в **одной подсети** (или в одной сети Hamachi / Radmin / Tailscale).
+2. Откройте порты **UDP 42069** и **TCP 42070** в брандмауэре (Пуск → Брандмауэр Windows → Разрешить приложение).
+3. Не запускайте два окна BLIP на одном ПК — порты заняты; используйте VM или второе устройство.
+4. Если mesh-VPN не нужен — отключите посторонние VPN, которые режут broadcast.
+
+### Звонок не устанавливается
+1. WebRTC в BLIP — **только host-кандидаты** (публичный STUN/TURN по умолчанию выключен): нужна одна LAN/VPN-сегмент.
+2. Проверьте, что корпоративный firewall не блокирует P2P UDP между устройствами.
+3. Убедитесь, что оба пира online в **Абоненты** и есть свежий Mesh Pulse.
+
+### Файл не передаётся
+1. Проверьте лимит в **Настройки → Сеть** (1–100 ГБ).
+2. Получатель должен быть online и не в блоке (**Конфиденциальность**).
+3. Для сидов BEACON — раздающий ещё сидит, ссылка `blip://seed/…` цела.
+
+### Синхронизация буфера обмена
+По LAN можно утащить **пароли и токены**. Держите опцию **выкл**, пока она реально не нужна; лучше режим «доверенные» / активный чат — считайте канал общим для всей вашей mesh-сети.
 
 <h3 id="ru-license">Лицензия</h3>
 
