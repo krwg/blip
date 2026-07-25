@@ -3,15 +3,22 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
   detectForegroundApp,
-  formatPresenceActivity,
+  classifyActivity,
 } from './presence-detect.js';
 
 let overlayWindow = null;
 let presenceTimer = null;
 let lastSharedText = '';
+/** Runtime visibility — hotkey toggles; settings only enable the feature. */
+let overlayShown = false;
+let lastPayload = null;
 
 export function getOverlayWindow() {
   return overlayWindow;
+}
+
+export function isOverlayShown() {
+  return overlayShown;
 }
 
 function resolveOverlayUrl(rootDir, useViteDev) {
@@ -27,13 +34,13 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
   }
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
-  const width = 280;
-  const height = 120;
+  const width = 340;
+  const height = 200;
   overlayWindow = new BrowserWindow({
     width,
     height,
-    x: work.x + work.width - width - 16,
-    y: work.y + 16,
+    x: work.x + work.width - width - 20,
+    y: work.y + 20,
     frame: false,
     transparent: true,
     resizable: false,
@@ -44,6 +51,7 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
     alwaysOnTop: true,
     hasShadow: false,
     show: false,
+    focusable: false,
     backgroundColor: '#00000000',
     icon,
     webPreferences: {
@@ -53,8 +61,13 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
       sandbox: false,
     },
   });
-  overlayWindow.setAlwaysOnTop(true, 'floating');
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  try {
+    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  } catch {
+
+  }
 
   const url = resolveOverlayUrl(rootDir, useViteDev);
   if (url.startsWith('http')) overlayWindow.loadURL(url);
@@ -62,12 +75,15 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
 
   overlayWindow.on('closed', () => {
     overlayWindow = null;
+    overlayShown = false;
   });
   return overlayWindow;
 }
 
-export function destroyOverlayWindow() {
-  stopPresenceLoop();
+export function destroyOverlayWindow({ keepLoop = false } = {}) {
+  if (!keepLoop) stopPresenceLoop();
+  overlayShown = false;
+  lastPayload = null;
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     try {
       overlayWindow.destroy();
@@ -79,6 +95,7 @@ export function destroyOverlayWindow() {
 }
 
 export function setOverlayVisible(show, deps) {
+  overlayShown = !!show;
   if (!show) {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
@@ -88,16 +105,35 @@ export function setOverlayVisible(show, deps) {
   const win = createOverlayWindow(deps);
   if (!win.isDestroyed()) {
     win.showInactive();
+    if (lastPayload) pushOverlayUpdate(lastPayload);
   }
 }
 
+export function toggleOverlayVisible(deps) {
+  const cfg = deps?.getConfig?.() || {};
+  if (!cfg.overlayEnabled) return false;
+  setOverlayVisible(!overlayShown, deps.windowDeps || deps);
+  return overlayShown;
+}
+
 export function pushOverlayUpdate(payload) {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return;
+  lastPayload = payload || {};
+  if (!overlayWindow || overlayWindow.isDestroyed() || !overlayShown) return;
   try {
-    overlayWindow.webContents.send('overlay-update', payload || {});
+    overlayWindow.webContents.send('overlay-update', lastPayload);
   } catch {
 
   }
+}
+
+function formatCallElapsed(startedAt) {
+  if (!startedAt) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 export function startPresenceLoop({
@@ -105,6 +141,7 @@ export function startPresenceLoop({
   patchConfig,
   getPeersOnline,
   getUnreadTotal,
+  getCallInfo,
   onOverlayPayload,
 }) {
   stopPresenceLoop();
@@ -112,28 +149,42 @@ export function startPresenceLoop({
     const cfg = getConfig?.() || {};
     if (!cfg.presenceDetectEnabled && !cfg.overlayEnabled) return;
 
-    let activity = '';
+    let activity = null;
     if (cfg.presenceDetectEnabled) {
       const snap = await detectForegroundApp();
-      activity = formatPresenceActivity(snap) || '';
-      if (cfg.presenceShareEnabled && activity && activity !== lastSharedText) {
-        lastSharedText = activity;
-        patchConfig?.({ presenceText: activity.slice(0, 48) });
+      activity = classifyActivity(snap, {
+        preferGames: cfg.presencePreferGames !== false,
+        pinnedApp: cfg.presencePinnedApp || '',
+      });
+      const line = activity?.statusLine || '';
+      if (cfg.presenceShareEnabled && line && line !== lastSharedText) {
+        lastSharedText = line;
+        patchConfig?.({ presenceText: line.slice(0, 48) });
       }
     }
 
+    const call = getCallInfo?.() || null;
     const payload = {
-      activity: activity || (cfg.presenceText || ''),
+      activityKind: activity?.kind || '',
+      activityLabel: activity?.label || '',
+      activityApp: activity?.app || '',
+      activityTitle: activity?.title || '',
+      activityElapsed: activity?.elapsedLabel || '',
+      statusLine: activity?.statusLine || cfg.presenceText || '',
       unread: getUnreadTotal?.() || 0,
       peersOnline: getPeersOnline?.() || 0,
-      idleLabel: 'BLIP',
+      callActive: !!call?.active,
+      callPeerName: call?.peerName || '',
+      callPeerId: call?.peerId || null,
+      callElapsed: call?.active ? formatCallElapsed(call.startedAt) : '',
+      now: Date.now(),
     };
     onOverlayPayload?.(payload);
-    if (cfg.overlayEnabled) pushOverlayUpdate(payload);
+    pushOverlayUpdate(payload);
   };
 
   void tick();
-  presenceTimer = setInterval(() => void tick(), 4000);
+  presenceTimer = setInterval(() => void tick(), 2000);
 }
 
 export function stopPresenceLoop() {
@@ -143,18 +194,26 @@ export function stopPresenceLoop() {
   }
 }
 
+/**
+ * When overlay feature is enabled: keep window ready (hidden) + presence loop.
+ * Do NOT auto-show — user toggles with Shift+Alt+O.
+ */
 export function refreshPresenceLoop(deps) {
   const cfg = deps.getConfig?.() || {};
   if (cfg.overlayEnabled || cfg.presenceDetectEnabled) {
     startPresenceLoop(deps);
     if (cfg.overlayEnabled) {
-      setOverlayVisible(true, deps.windowDeps);
+      createOverlayWindow(deps.windowDeps);
+      if (overlayShown) setOverlayVisible(true, deps.windowDeps);
+      else setOverlayVisible(false, deps.windowDeps);
     } else {
-      setOverlayVisible(false, deps.windowDeps);
+      overlayShown = false;
+      destroyOverlayWindow({ keepLoop: true });
     }
   } else {
     stopPresenceLoop();
-    setOverlayVisible(false, deps.windowDeps);
+    overlayShown = false;
     lastSharedText = '';
+    destroyOverlayWindow();
   }
 }

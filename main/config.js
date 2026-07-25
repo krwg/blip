@@ -34,6 +34,10 @@ const DEFAULT_CONFIG = {
   overlayEnabled: false,
   presenceDetectEnabled: false,
   presenceShareEnabled: false,
+  /** Prefer games over generic apps when writing status / overlay. */
+  presencePreferGames: true,
+  /** Optional process name to pin as the status focus (e.g. firefox). */
+  presencePinnedApp: '',
 
   defaultReactionEmoji: '❤️',
 
