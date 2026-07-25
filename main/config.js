@@ -30,7 +30,10 @@ const DEFAULT_CONFIG = {
 
   defaultReactionEmoji: '❤️',
 
-  closeToTray: process.platform === 'win32',
+  closeToTray:
+    process.platform === 'win32' ||
+    process.platform === 'darwin' ||
+    process.platform === 'linux',
 
   launchAtLogin: false,
 

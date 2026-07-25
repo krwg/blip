@@ -22,7 +22,8 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **Build trust UX** — removed official/unofficial client notices and MESH+ “needs official build” gate; MESH+ styling follows license only.
 - **Trust-anchor keys** — public/private under gitignored `keys/` (`node scripts/mesh-plus-keygen.mjs --rotate`); `build/build-info.json` untracked.
 - **BEACON (МАЯК)** — off by default; enable in Settings → Developer.
-- **Achievements** — NestUI square cards, empty icon slots, +5 mid and +5 legendary goals.
+- **Achievements** — empty icon slots, +5 mid and +5 legendary goals; NestUI uses soft Nest radii (default skin stays sharp).
+- **Multiplatform packaging** — Linux (AppImage/deb) + macOS 12+ (styled DMG + zip); tray/login settings on Darwin/Linux; see [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ### Fixed
 
