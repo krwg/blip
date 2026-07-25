@@ -43,8 +43,15 @@ function sanitizeChat(markdown) {
       'h2',
       'h3',
       'h4',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'input',
     ],
-    ALLOWED_ATTR: ['href', 'title', 'rel', 'target'],
+    ALLOWED_ATTR: ['href', 'title', 'rel', 'target', 'type', 'checked', 'disabled', 'align'],
     ALLOW_DATA_ATTR: false,
     FORBID_TAGS: ['img', 'style', 'script', 'iframe'],
   });
@@ -82,6 +89,20 @@ describe('chat markdown', () => {
     const html = sanitizeChat('**bold** and `code`');
     expect(html).toContain('<strong>bold</strong>');
     expect(html).toContain('<code>code</code>');
+  });
+
+  it('renders tables and task lists', () => {
+    const html = sanitizeChat(`
+| A | B |
+| - | - |
+| 1 | 2 |
+
+- [x] done
+- [ ] todo
+`);
+    expect(html).toContain('<table>');
+    expect(html).toContain('<td>');
+    expect(html.toLowerCase()).toContain('checkbox');
   });
 
   it('strips images and scripts', () => {

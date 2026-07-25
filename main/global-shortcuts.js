@@ -8,7 +8,12 @@ export function unregisterGlobalShortcuts() {
   active = false;
 }
 
-export function registerGlobalShortcuts({ enabled = true, getMainWindow, getCallWindow }) {
+export function registerGlobalShortcuts({
+  enabled = true,
+  getMainWindow,
+  getCallWindow,
+  onToggleOverlay,
+}) {
   unregisterGlobalShortcuts();
   if (enabled === false) return;
 
@@ -41,6 +46,8 @@ export function registerGlobalShortcuts({ enabled = true, getMainWindow, getCall
         }
       },
     ],
+    // Overlay toggle (Shift+Alt+O) — Discord-style HUD; feature must be enabled in Settings
+    ['Alt+Shift+O', () => onToggleOverlay?.()],
   ];
 
   for (const [accel, handler] of bindings) {

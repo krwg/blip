@@ -16,21 +16,9 @@ function openExternalUrl(url) {
   if (window.blip?.openExternal) void window.blip.openExternal(url);
 }
 
-function looksLikeMarkdown(text) {
-  const s = String(text || '');
-  if (!s.trim()) return false;
-  return /(^|\n)\s{0,3}(#{1,4}\s|[-*+]\s|\d+\.\s|>\s|```|~~~)|(\*\*|__|~~|`[^`]+`|\[[^\]]+\]\([^)]+\))/.test(
-    s,
-  );
-}
-
 function appendMarkdownOrPlain(parent, text) {
   const src = String(text || '');
   if (!src) return;
-  if (!looksLikeMarkdown(src)) {
-    appendLinkifiedText(parent, src, openExternalUrl);
-    return;
-  }
   const html = chatMarkdownToHtml(src);
   if (!html) {
     appendLinkifiedText(parent, src, openExternalUrl);

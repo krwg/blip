@@ -2921,6 +2921,7 @@ function buildSettingsShortcutsPanel() {
     ['settings.shortcuts_open_settings', 'Ctrl+,'],
     ['settings.shortcuts_toggle_dnd', 'Ctrl+Shift+D'],
     ['settings.shortcuts_hangup_global', 'Ctrl+Shift+End'],
+    ['settings.shortcuts_overlay', 'Shift+Alt+O'],
   ]);
 
   const globalRow = document.createElement('div');
@@ -3076,6 +3077,12 @@ function buildSettingsSystemPanel() {
   overlayRow.appendChild(createPixelHintIcon('settings.overlay_enable_hint'));
   frag.appendChild(overlayRow);
 
+  const hotkeyHint = document.createElement('p');
+  hotkeyHint.className = 'hint';
+  hotkeyHint.dataset.i18n = 'settings.overlay_hotkey_hint';
+  hotkeyHint.textContent = t('settings.overlay_hotkey_hint');
+  frag.appendChild(hotkeyHint);
+
   const detectToggle = createPixelToggle({
     checked: !!state.config.presenceDetectEnabled,
     labelKey: 'settings.presence_detect',
@@ -3101,6 +3108,38 @@ function buildSettingsSystemPanel() {
   shareRow.appendChild(shareToggle.el);
   shareRow.appendChild(createPixelHintIcon('settings.presence_share_hint'));
   frag.appendChild(shareRow);
+
+  const gamesToggle = createPixelToggle({
+    checked: state.config.presencePreferGames !== false,
+    labelKey: 'settings.presence_prefer_games',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ presencePreferGames: checked });
+    },
+  });
+  const gamesRow = document.createElement('div');
+  gamesRow.className = 'settings-toggle-with-hint';
+  gamesRow.appendChild(gamesToggle.el);
+  gamesRow.appendChild(createPixelHintIcon('settings.presence_prefer_games_hint'));
+  frag.appendChild(gamesRow);
+
+  frag.appendChild(buildSectionSubtitleRow('settings.presence_pinned_app'));
+  const pinInput = document.createElement('input');
+  pinInput.className = 'input';
+  pinInput.type = 'text';
+  pinInput.maxLength = 48;
+  pinInput.placeholder = t('settings.presence_pinned_app_ph');
+  pinInput.value = state.config.presencePinnedApp || '';
+  pinInput.addEventListener('change', async () => {
+    const v = pinInput.value.trim().slice(0, 48);
+    pinInput.value = v;
+    state.config = await api.saveConfig({ presencePinnedApp: v });
+  });
+  frag.appendChild(pinInput);
+  const pinHint = document.createElement('p');
+  pinHint.className = 'hint';
+  pinHint.dataset.i18n = 'settings.presence_pinned_app_hint';
+  pinHint.textContent = t('settings.presence_pinned_app_hint');
+  frag.appendChild(pinHint);
 
   return frag;
 }
