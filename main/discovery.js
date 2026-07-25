@@ -229,8 +229,9 @@ export class Discovery {
     const presenceText = sanitizePresenceText(data.presenceText);
     const check = verifyAnnouncePayload(data);
     const meshVerified = check.ok;
-    const meshLegacy = false;
+    const meshLegacy = !!check.meshLegacy;
     const meshPubkey = String(data.meshPubkey || '');
+    const meshTcpEncrypted = existing?.meshTcpEncrypted === true && !meshLegacy;
 
     const peer = {
       blipId: data.blipId,
@@ -244,6 +245,7 @@ export class Discovery {
       online: true,
       meshVerified,
       meshLegacy,
+      meshTcpEncrypted,
       meshPubkey,
       meshPlus: !!data.meshPlus,
       hasProfileGif: !!data.meshPlus && !!data.hasProfileGif,
@@ -262,6 +264,7 @@ export class Discovery {
       existing.tcpPort !== peer.tcpPort ||
       existing.meshVerified !== peer.meshVerified ||
       existing.meshLegacy !== peer.meshLegacy ||
+      existing.meshTcpEncrypted !== peer.meshTcpEncrypted ||
       existing.meshPlus !== peer.meshPlus ||
       existing.hasProfileGif !== peer.hasProfileGif ||
       existing.buildTrust !== peer.buildTrust ||
@@ -278,6 +281,7 @@ export class Discovery {
       existing.udpPort = peerUdp;
       existing.meshVerified = meshVerified;
       existing.meshLegacy = meshLegacy;
+      if (meshLegacy) existing.meshTcpEncrypted = false;
       existing.meshPubkey = meshPubkey;
       existing.meshPlus = peer.meshPlus;
       existing.hasProfileGif = peer.hasProfileGif;
@@ -317,6 +321,17 @@ export class Discovery {
     const nip = normalizePeerIp(ip);
     if (!nip || peer.ip === nip) return;
     peer.ip = nip;
+    this.emitPeers();
+  }
+
+  notePeerChannelCrypto(blipId, encrypted) {
+    const id = Number(blipId);
+    if (!Number.isFinite(id)) return;
+    const peer = this.peers.get(id);
+    if (!peer) return;
+    const next = !!encrypted && !peer.meshLegacy;
+    if (peer.meshTcpEncrypted === next) return;
+    peer.meshTcpEncrypted = next;
     this.emitPeers();
   }
 

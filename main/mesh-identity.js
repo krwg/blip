@@ -5,9 +5,14 @@ import {
   createPrivateKey,
   createPublicKey,
 } from 'crypto';
+import { generateEcdhKeyPair } from './mesh-session-crypto.js';
 
-export const MESH_PROTO = 1;
-const HANDSHAKE_CANON = 'blip-handshake-v1';
+/** Mesh protocol: 2 = TCP payload encryption after handshake (AES-GCM). */
+export const MESH_PROTO = 2;
+export const MESH_PROTO_MIN = 1;
+
+const HANDSHAKE_CANON_V1 = 'blip-handshake-v1';
+const HANDSHAKE_CANON_V2 = 'blip-handshake-v2';
 const ANNOUNCE_CANON = 'blip-announce-v1';
 
 export function ensureMeshIdentity(config) {
@@ -61,15 +66,18 @@ export function verifyCanonical(pubkeyB64, canonical, sigB64) {
       null,
       Buffer.from(canonical, 'utf8'),
       pub,
-      Buffer.from(sigB64, 'base64')
+      Buffer.from(sigB64, 'base64'),
     );
   } catch {
     return false;
   }
 }
 
-export function handshakeCanonical(from, ts, nonce, pubkey) {
-  return `${HANDSHAKE_CANON}|${from}|${ts}|${nonce}|${pubkey}`;
+export function handshakeCanonical(from, ts, nonce, pubkey, ecdhPubkey = '') {
+  if (ecdhPubkey) {
+    return `${HANDSHAKE_CANON_V2}|${from}|${ts}|${nonce}|${pubkey}|${ecdhPubkey}`;
+  }
+  return `${HANDSHAKE_CANON_V1}|${from}|${ts}|${nonce}|${pubkey}`;
 }
 
 export function announceCanonical(fields) {
@@ -81,35 +89,51 @@ export function buildHandshakePacket(config, fromId) {
   const ts = Date.now();
   const nonce = `${ts}-${Math.random().toString(36).slice(2, 10)}`;
   const meshPubkey = config.meshPublicKey;
-  const canonical = handshakeCanonical(from, ts, nonce, meshPubkey);
+  const ecdh = generateEcdhKeyPair();
+  const canonical = handshakeCanonical(from, ts, nonce, meshPubkey, ecdh.publicKeyB64);
   const sig = signCanonical(config, canonical);
   return {
-    type: 'mesh-handshake',
-    meshProto: MESH_PROTO,
-    from,
-    ts,
-    nonce,
-    meshPubkey,
-    sig,
+    packet: {
+      type: 'mesh-handshake',
+      meshProto: MESH_PROTO,
+      from,
+      ts,
+      nonce,
+      meshPubkey,
+      ecdhPubkey: ecdh.publicKeyB64,
+      sig,
+    },
+    ecdhPrivateKey: ecdh.privateKey,
   };
 }
 
-export function buildHandshakeAckPacket(config, fromId, peerPubkey) {
+export function buildHandshakeAckPacket(config, fromId, peerPubkey, ecdhPrivateKey, ecdhPublicKeyB64) {
   const from = Number(fromId);
   const ts = Date.now();
   const nonce = `${ts}-${Math.random().toString(36).slice(2, 10)}`;
   const meshPubkey = config.meshPublicKey;
-  const canonical = handshakeCanonical(from, ts, nonce, meshPubkey);
+  let ecdhPriv = ecdhPrivateKey;
+  let ecdhPub = ecdhPublicKeyB64;
+  if (!ecdhPriv || !ecdhPub) {
+    const ecdh = generateEcdhKeyPair();
+    ecdhPriv = ecdh.privateKey;
+    ecdhPub = ecdh.publicKeyB64;
+  }
+  const canonical = handshakeCanonical(from, ts, nonce, meshPubkey, ecdhPub);
   const sig = signCanonical(config, canonical);
   return {
-    type: 'mesh-handshake-ack',
-    meshProto: MESH_PROTO,
-    from,
-    ts,
-    nonce,
-    meshPubkey,
-    sig,
-    peerPubkey: peerPubkey || undefined,
+    packet: {
+      type: 'mesh-handshake-ack',
+      meshProto: MESH_PROTO,
+      from,
+      ts,
+      nonce,
+      meshPubkey,
+      ecdhPubkey: ecdhPub,
+      sig,
+      peerPubkey: peerPubkey || undefined,
+    },
+    ecdhPrivateKey: ecdhPriv,
   };
 }
 
@@ -121,10 +145,25 @@ export function verifyHandshakePacket(msg, expectedFrom) {
   const ts = Number(msg?.ts);
   const nonce = String(msg?.nonce || '');
   const sig = String(msg?.sig || '');
+  const ecdhPubkey = String(msg?.ecdhPubkey || '');
+  const meshProto = Number(msg?.meshProto) || 1;
   if (!meshPubkey || !nonce || !sig) return { ok: false };
-  const canonical = handshakeCanonical(from, ts, nonce, meshPubkey);
+  const canonical = handshakeCanonical(
+    from,
+    ts,
+    nonce,
+    meshPubkey,
+    meshProto >= 2 && ecdhPubkey ? ecdhPubkey : '',
+  );
   if (!verifyCanonical(meshPubkey, canonical, sig)) return { ok: false };
-  return { ok: true, from, meshPubkey };
+  return {
+    ok: true,
+    from,
+    meshPubkey,
+    ecdhPubkey: ecdhPubkey || null,
+    meshProto,
+    encryptedCapable: meshProto >= 2 && !!ecdhPubkey,
+  };
 }
 
 export function signAnnouncePayload(payload) {
@@ -133,7 +172,10 @@ export function signAnnouncePayload(payload) {
 }
 
 export function verifyAnnouncePayload(data) {
-  if (Number(data?.meshProto) !== MESH_PROTO) return { ok: false, reason: 'proto' };
+  const proto = Number(data?.meshProto);
+  if (!Number.isFinite(proto) || proto < MESH_PROTO_MIN || proto > MESH_PROTO) {
+    return { ok: false, reason: 'proto' };
+  }
   const meshPubkey = String(data?.meshPubkey || '');
   const sig = String(data?.meshAnnounceSig || '');
   const ts = Number(data?.meshAnnounceTs);
@@ -150,7 +192,7 @@ export function verifyAnnouncePayload(data) {
     meshPubkey,
   });
   if (!verifyCanonical(meshPubkey, canonical, sig)) return { ok: false, reason: 'sig' };
-  return { ok: true, meshPubkey };
+  return { ok: true, meshPubkey, meshProto: proto, meshLegacy: proto < MESH_PROTO };
 }
 
 export function shouldAcceptAnnounce(data) {
