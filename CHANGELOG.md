@@ -21,6 +21,8 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **Version label** — UI shows `[2.0.0]` (no leading `v`) in About and Updates.
 - **Build trust UX** — removed official/unofficial client notices and MESH+ “needs official build” gate; MESH+ styling follows license only.
 - **Trust-anchor keys** — public/private under gitignored `keys/` (`node scripts/mesh-plus-keygen.mjs --rotate`); `build/build-info.json` untracked.
+- **BEACON (МАЯК)** — off by default; enable in Settings → Developer.
+- **Achievements** — NestUI square cards, empty icon slots, +5 mid and +5 legendary goals.
 
 ### Fixed
 

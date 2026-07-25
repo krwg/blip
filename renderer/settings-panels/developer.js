@@ -16,8 +16,9 @@ import { hideDeveloperMode } from '../dev-mode.js';
  *   getState: () => { config: object, peers: array, view: string },
  *   saveConfig: (patch: object) => Promise<object>,
  *   syncAchievements: (cfg: object) => void,
- *   refreshBeaconMesh: () => void,
- *   onProjectsChanged: () => void,
+   *   refreshBeaconMesh: () => void,
+   *   onBeaconChanged: (enabled: boolean) => void,
+   *   onProjectsChanged: () => void,
  *   onFactoryReset: () => Promise<void>,
  *   onDeveloperHidden: (cfg: object) => void,
  *   renderSettingsIfOpen: () => void,
@@ -29,6 +30,7 @@ export function buildSettingsDeveloperPanel({
   saveConfig,
   syncAchievements,
   refreshBeaconMesh,
+  onBeaconChanged,
   onProjectsChanged,
   onFactoryReset,
   onDeveloperHidden,
@@ -106,6 +108,7 @@ export function buildSettingsDeveloperPanel({
       const next = await saveConfig({ devBeaconEnabled: checked });
       getState().config = next;
       refreshBeaconMesh?.();
+      onBeaconChanged?.(checked);
       showAppToast({
         title: checked ? t('settings.dev_beacon_on') : t('settings.dev_beacon_off'),
         durationMs: 4000,
