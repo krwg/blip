@@ -18,4 +18,11 @@ build/giphy-api-key.txt
 .env.build
 mesh-plus-public-key.local
 build/mesh-plus-public-key.txt
+build/build-info.json
 ENTITLEMENT-MAP.local.md
+
+# Trust-anchor key material (never commit)
+keys/
+*.private.b64
+*-private.b64
+*-public.b64

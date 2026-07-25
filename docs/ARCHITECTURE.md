@@ -36,6 +36,20 @@ connection as chat messages; media is peer-to-peer in the renderer.
 
 Vite build entries: `index.html`, `call-window.html`, `group-call-window.html` (`vite.config.js`).
 
+## Peer identity (BLIP ID 1–64)
+
+LAN peer ids are a **soft product limit**, not a protocol bitmask: the UI is an **8×8** grid (`renderer/grid.js`), and the same bound is enforced wherever ids are accepted.
+
+| Site | Role |
+|------|------|
+| `shared/blip-id.js` | `BLIP_ID_MIN` / `BLIP_ID_MAX` / `isValidBlipId` |
+| `main/trust-policy.js` `normalizePeerIdList` | Config lists (block/trust) |
+| `main/mesh-identity.js` `verifyHandshakePacket` | Handshake `from` |
+| `renderer/ui.js` dial validation | Manual dial entry |
+| `renderer/peer-favorites.js` | Favorites persistence |
+
+Raising the ceiling needs coordinated UI (grid), discovery, and handshake validation — track as a separate change if ever needed.
+
 ## Networking
 
 | Mechanism | Default port | Purpose |

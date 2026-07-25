@@ -45,15 +45,18 @@ export function loadTrustAnchorB64() {
 
       }
     } else {
+      paths.push(join(process.cwd(), 'keys', 'mesh-plus-public.b64'));
       paths.push(join(process.cwd(), 'mesh-plus-public-key.local'));
       try {
         paths.push(join(app.getAppPath(), '..', 'mesh-plus-public-key.local'));
+        paths.push(join(app.getAppPath(), '..', 'keys', 'mesh-plus-public.b64'));
       } catch {
-
+        /* ignore */
       }
       paths.push(join(process.cwd(), 'build', 'mesh-plus-public-key.txt'));
     }
   } else {
+    paths.push(join(process.cwd(), 'keys', 'mesh-plus-public.b64'));
     paths.push(join(process.cwd(), 'mesh-plus-public-key.local'));
     paths.push(join(process.cwd(), 'build', 'mesh-plus-public-key.txt'));
   }

@@ -1,5 +1,4 @@
 import { t } from '../i18n.js';
-import { appendAboutBuildTrustNotice } from '../trust-ui.js';
 import { bindAboutVersionUnlock } from '../dev-mode.js';
 import { formatAppVersionBracket } from '../app-version.js';
 
@@ -110,12 +109,6 @@ export function buildSettingsAboutPanel({
       <span>krwg</span>
     </div>`;
   frag.appendChild(metaBlock);
-
-  let aboutTrustNotice = appendAboutBuildTrustNotice(frag);
-  window.blip?.onTrustState?.(() => {
-    aboutTrustNotice?.remove();
-    aboutTrustNotice = appendAboutBuildTrustNotice(frag);
-  });
 
   const githubBtn = document.createElement('button');
   githubBtn.type = 'button';

@@ -15,18 +15,16 @@ let appTrustState = {
 
 export function initAppTrustState(config) {
   const build = verifyBuildAtStartup();
+  // Build signature is still verified for signed releases, but the product no longer
+  // treats "official vs unofficial client" as a user-facing trust tier.
   const buildTrust = build.verified
     ? BUILD_TRUST.VERIFIED_OFFICIAL
     : BUILD_TRUST.UNVERIFIED_BUILD;
 
   const licenseOk = resolveEntitlementState(config);
-  let meshPlusTrust = MESH_TRUST.UNVERIFIED_MESH_PLUS;
-  if (licenseOk) {
-    meshPlusTrust =
-      buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL
-        ? MESH_TRUST.OFFICIAL_MESH_PLUS
-        : MESH_TRUST.UNVERIFIED_MESH_PLUS;
-  }
+  const meshPlusTrust = licenseOk
+    ? MESH_TRUST.OFFICIAL_MESH_PLUS
+    : MESH_TRUST.UNVERIFIED_MESH_PLUS;
 
   appTrustState = {
     buildTrust,
@@ -45,42 +43,30 @@ export function getAppTrustState() {
 }
 
 export function getBuildAnnounceTrust() {
-  const official = appTrustState.buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL;
   return {
-    buildVerified: official,
-    buildIssuer: official ? OFFICIAL_BUILD_ISSUER : appTrustState.buildIssuer || 'unknown',
+    buildVerified: false,
+    buildIssuer: '',
     buildVersion: appTrustState.buildVersion || '',
     meshPlusTrust: appTrustState.meshPlusTrust,
   };
 }
 
-export function peerBuildTrustFromAnnounce(data) {
-  if (data?.buildVerified && String(data.buildIssuer) === OFFICIAL_BUILD_ISSUER) {
-    return BUILD_TRUST.VERIFIED_OFFICIAL;
-  }
+export function peerBuildTrustFromAnnounce() {
   return BUILD_TRUST.UNVERIFIED_BUILD;
 }
 
 export function peerMeshPlusTrustFromAnnounce(data) {
   if (!data?.meshPlus) return null;
-  if (
-    data.buildVerified &&
-    String(data.buildIssuer) === OFFICIAL_BUILD_ISSUER
-  ) {
-    return MESH_TRUST.OFFICIAL_MESH_PLUS;
-  }
-  return MESH_TRUST.UNVERIFIED_MESH_PLUS;
+  return MESH_TRUST.OFFICIAL_MESH_PLUS;
 }
 
 export function refreshMeshPlusTrust(config) {
   const licenseOk = resolveEntitlementState(config);
-  if (!licenseOk) {
-    appTrustState.meshPlusTrust = MESH_TRUST.UNVERIFIED_MESH_PLUS;
-  } else {
-    appTrustState.meshPlusTrust =
-      appTrustState.buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL
-        ? MESH_TRUST.OFFICIAL_MESH_PLUS
-        : MESH_TRUST.UNVERIFIED_MESH_PLUS;
-  }
+  appTrustState.meshPlusTrust = licenseOk
+    ? MESH_TRUST.OFFICIAL_MESH_PLUS
+    : MESH_TRUST.UNVERIFIED_MESH_PLUS;
   return getAppTrustState();
 }
+
+// Re-export for callers that still import issuer constant via this module path.
+export { OFFICIAL_BUILD_ISSUER };
