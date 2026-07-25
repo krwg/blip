@@ -946,6 +946,12 @@ function renderPeersView() {
         leg.title = t('peers.handshake_legacy');
         leg.textContent = '!';
         name.appendChild(leg);
+      } else if (peer.meshTcpEncrypted) {
+        const lock = document.createElement('span');
+        lock.className = 'peer-handshake-badge peer-handshake-badge--encrypted';
+        lock.title = t('peers.channel_encrypted');
+        lock.textContent = '▣';
+        name.appendChild(lock);
       }
       const idSpan = document.createElement('span');
       idSpan.className = 'peer-id';

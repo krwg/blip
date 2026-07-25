@@ -1,7 +1,13 @@
 import net from 'net';
 import { DEFAULT_TCP_PORT } from './ports.js';
 import { createTcpLineReader } from './tcp-framing.js';
-import { initInboundSession, clearSocketSession } from './mesh-handshake.js';
+import {
+  initInboundSession,
+  clearSocketSession,
+  getSocketSession,
+} from './mesh-handshake.js';
+import { parseMeshTcpLine } from './mesh-session-crypto.js';
+import { sendOnSocketQueued } from './tcp-write-queue.js';
 
 const connections = new Map();
 
@@ -15,7 +21,7 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
       try {
         socket.destroy();
       } catch {
-
+        /* ignore */
       }
     });
 
@@ -24,10 +30,23 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
         const lines = reader.push(chunk);
         for (const line of lines) {
           try {
-            const msg = JSON.parse(line);
+            const session = getSocketSession(socket);
+            const msg = parseMeshTcpLine(session?.cipher || null, line);
             handlers.onMessage(msg, socket, remoteIp);
-          } catch {
-
+          } catch (err) {
+            if (
+              err?.code === 'MESH_PLAINTEXT_AFTER_CIPHER' ||
+              err?.code === 'MESH_BAD_ENVELOPE' ||
+              err?.code === 'MESH_NO_CIPHER'
+            ) {
+              console.warn('[TCP] mesh crypto:', err.code, remoteIp);
+              try {
+                socket.destroy();
+              } catch {
+                /* ignore */
+              }
+              return;
+            }
           }
         }
       } catch (e) {
@@ -37,7 +56,7 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
         try {
           socket.destroy();
         } catch {
-
+          /* ignore */
         }
       }
     });
@@ -54,7 +73,7 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
       try {
         socket.destroy();
       } catch {
-
+        /* ignore */
       }
     });
   });
@@ -70,7 +89,7 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
     sendTo(blipId, payload) {
       const socket = connections.get(blipId);
       if (socket && !socket.destroyed) {
-        socket.write(JSON.stringify(payload) + '\n');
+        void sendOnSocketQueued(socket, payload);
         return true;
       }
       return false;
@@ -78,7 +97,7 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
     broadcast(payload, excludeId) {
       for (const [id, socket] of connections) {
         if (id !== excludeId && !socket.destroyed) {
-          socket.write(JSON.stringify(payload) + '\n');
+          void sendOnSocketQueued(socket, payload);
         }
       }
     },
