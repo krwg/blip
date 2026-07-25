@@ -60,10 +60,6 @@ import { openAvatarCropDialog } from './avatar-crop-dialog.js';
 import {
   sounds,
   setSoundPrefs,
-  SOUND_PREVIEW_KEYS,
-  MELODY_PREVIEW_KEYS,
-  SOUND_PACK_IDS,
-  MELODY_PACK_IDS,
 } from './audio.js';
 import {
   sendChatFile,
@@ -83,11 +79,6 @@ import {
   refreshTransferHubI18n,
 } from './file-transfer-hub.js';
 import {
-  STREAM_QUALITY_IDS,
-  normalizeStreamQuality,
-  normalizeFullscreenQuality,
-} from './call-media.js';
-import {
   buildThemedSelect,
   fillSettingsDropdown,
   buildSettingsField,
@@ -101,14 +92,7 @@ import {
   createSettingsListPanel,
   wrapInSettingsListPanel,
 } from './settings-ui.js';
-import { buildMicTestPanel } from './mic-test-panel.js';
-import {
-  appendMeshPlusBadgeToNameRow,
-  fillPremiumGatedDropdown,
-  premiumTierEnabled,
-  markPremiumGatedOptions,
-  MESH_PLUS_FEATURES,
-} from './mesh-plus.js';
+import { appendMeshPlusBadgeToNameRow } from './mesh-plus.js';
 import { buildSettingsMeshPlusPanel } from './mesh-plus-settings.js';
 import { recordCallStarted, recordFileSent, recordPeersOnline, setAchievementConfigProvider } from './session-stats.js';
 import { buildSettingsAchievementsPanel } from './achievements-settings-panel.js';
@@ -118,6 +102,10 @@ import { buildAppearanceSection } from './settings-panels/appearance.js';
 import { buildSettingsLanguagePanel as buildLanguagePanelView } from './settings-panels/language.js';
 import { buildSettingsNotificationsPanel as buildNotificationsPanelView } from './settings-panels/notifications.js';
 import { buildSettingsTransferPanel as buildTransferPanelView } from './settings-panels/transfer.js';
+import { buildSettingsPrivacyPanel as buildPrivacyPanelView } from './settings-panels/privacy.js';
+import { buildSettingsSoundPanel as buildSoundPanelView } from './settings-panels/sound.js';
+import { buildSettingsCallPanel as buildCallPanelView } from './settings-panels/call.js';
+import { buildSettingsSystemPanel as buildSystemPanelView } from './settings-panels/system.js';
 import {
   startClipboardSync,
   stopClipboardSync,
@@ -1638,66 +1626,6 @@ function buildAvatarSettingsSection() {
   return block;
 }
 
-function isDesktopTrayPlatform() {
-  const p = typeof window !== 'undefined' ? window.blip?.platform : null;
-  return p === 'win32' || p === 'darwin' || p === 'linux';
-}
-
-function platformHintKey(baseKey) {
-  const p = typeof window !== 'undefined' ? window.blip?.platform : null;
-  if (p === 'darwin') return `${baseKey}_mac`;
-  if (p === 'linux') return `${baseKey}_linux`;
-  return baseKey;
-}
-
-function buildLaunchAtLoginSection() {
-  if (!isDesktopTrayPlatform()) {
-    return null;
-  }
-
-  const block = document.createElement('div');
-  block.className = 'settings-tray-wrap settings-tray-wrap--flat';
-
-  const row = document.createElement('div');
-  row.className = 'settings-toggle-with-hint';
-  const toggle = createPixelToggle({
-    checked: !!state.config.launchAtLogin,
-    labelKey: 'settings.launch_at_login',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ launchAtLogin: checked });
-    },
-  });
-  row.appendChild(toggle.el);
-  row.appendChild(createPixelHintIcon(platformHintKey('settings.launch_at_login_hint')));
-  block.appendChild(row);
-
-  return block;
-}
-
-function buildCloseToTraySection() {
-  if (!isDesktopTrayPlatform()) {
-    return null;
-  }
-
-  const block = document.createElement('div');
-  block.className = 'settings-tray-wrap settings-tray-wrap--flat';
-
-  const row = document.createElement('div');
-  row.className = 'settings-toggle-with-hint';
-  const toggle = createPixelToggle({
-    checked: !!state.config.closeToTray,
-    labelKey: 'settings.close_to_tray',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ closeToTray: checked });
-    },
-  });
-  row.appendChild(toggle.el);
-  row.appendChild(createPixelHintIcon(platformHintKey('settings.close_to_tray_hint')));
-  block.appendChild(row);
-
-  return block;
-}
-
 function buildAppearancePanelWithTitle() {
   const wrap = document.createElement('div');
   wrap.className = 'settings-panel';
@@ -1963,287 +1891,20 @@ function buildSettingsNotificationsPanel() {
 }
 
 function buildSettingsPrivacyPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel settings-panel--privacy';
-
-  appendSettingsPanelHeader(frag, 'settings.section_privacy', 'settings.privacy_hint');
-
-  const list = createSettingsListPanel('settings-blocked-list settings-list-panel--stretch-x');
-
-  function renderList() {
-    list.innerHTML = '';
-    const blocked = getBlockedPeerIds();
-    list.classList.toggle('settings-list-panel--empty', blocked.length === 0);
-    if (blocked.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'hint';
-      empty.dataset.i18n = 'settings.privacy_empty';
-      empty.textContent = t('settings.privacy_empty');
-      list.appendChild(empty);
-      return;
-    }
-    for (const id of blocked) {
-      const row = document.createElement('div');
-      row.className = 'settings-blocked-row settings-list-panel__row';
-
-      const peer = state.peers.find((p) => p.blipId === id);
-      const meta = document.createElement('div');
-      meta.className = 'settings-blocked-meta';
-
-      const name = document.createElement('span');
-      name.className = 'settings-blocked-name';
-      name.textContent = formatPeerDisplayName(peer, id);
-
-      const idLine = document.createElement('span');
-      idLine.className = 'settings-blocked-id';
-      idLine.textContent = `BLIP #${id}`;
-
-      meta.appendChild(name);
-      meta.appendChild(idLine);
-
-      const unblockBtn = document.createElement('button');
-      unblockBtn.type = 'button';
-      unblockBtn.className = 'btn btn-lang';
-      unblockBtn.dataset.i18n = 'settings.privacy_unblock';
-      unblockBtn.textContent = t('settings.privacy_unblock');
-      unblockBtn.addEventListener('click', () => {
-        unblockPeer(id);
-        showAppToast({
-          title: t('peers.unblock_done'),
-          body: `BLIP #${id}`,
-          durationMs: 3500,
-        });
-        renderList();
-        if (state.view === 'peers') renderView('peers');
-      });
-
-      row.appendChild(meta);
-      row.appendChild(unblockBtn);
-      list.appendChild(row);
-    }
-  }
-
-  renderList();
-  frag.appendChild(list);
-  return frag;
+  return buildPrivacyPanelView({
+    getState: () => state,
+    renderPeersIfOpen: () => {
+      if (state.view === 'peers') renderView('peers');
+    },
+  });
 }
 
 function buildSettingsSoundPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_sound');
-
-  const enableToggle = createPixelToggle({
-    checked: state.config.uiSoundsEnabled !== false,
-    labelKey: 'settings.sound_enable',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ uiSoundsEnabled: checked });
-      applySoundPrefsFromConfig(state.config);
-      syncVolumeDisabled();
-    },
+  return buildSoundPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    applySoundPrefs: applySoundPrefsFromConfig,
   });
-
-  const volLabel = document.createElement('label');
-  volLabel.className = 'settings-sound-volume-label';
-  volLabel.dataset.i18n = 'settings.sound_volume';
-  volLabel.textContent = t('settings.sound_volume');
-
-  const volRow = document.createElement('div');
-  volRow.className = 'settings-sound-volume-row';
-
-  const volRange = document.createElement('input');
-  volRange.type = 'range';
-  volRange.min = '0';
-  volRange.max = '100';
-  volRange.step = '5';
-  volRange.className = 'settings-sound-range';
-  const volPct = Math.round(
-    (typeof state.config.uiSoundsVolume === 'number' ? state.config.uiSoundsVolume : 1) * 100
-  );
-  volRange.value = String(volPct);
-
-  const volVal = document.createElement('span');
-  volVal.className = 'settings-sound-volume-val';
-  volVal.textContent = `${volPct}%`;
-
-  async function persistVolume() {
-    const v = Number(volRange.value) / 100;
-    volVal.textContent = `${volRange.value}%`;
-    state.config = await api.saveConfig({ uiSoundsVolume: v });
-    applySoundPrefsFromConfig(state.config);
-  }
-
-  volRange.addEventListener('input', () => {
-    volVal.textContent = `${volRange.value}%`;
-    setSoundPrefs({
-      enabled: enableToggle.input.checked,
-      volume: Number(volRange.value) / 100,
-      soundPack: state.config.uiSoundPack,
-      melodyPack: state.config.uiMelodyPack,
-    });
-  });
-  volRange.addEventListener('change', () => {
-    void persistVolume();
-  });
-
-  function syncVolumeDisabled() {
-    volRange.disabled = !enableToggle.input.checked;
-    volLabel.style.opacity = enableToggle.input.checked ? '1' : '0.45';
-  }
-  syncVolumeDisabled();
-
-  volRow.appendChild(volRange);
-  volRow.appendChild(volVal);
-
-  const soundPackSelect = buildThemedSelect();
-  fillPremiumGatedDropdown(
-    soundPackSelect,
-    markPremiumGatedOptions(
-      [
-        { value: 'signal', label: t('settings.sound_pack_signal') },
-        { value: 'pulse', label: t('settings.sound_pack_pulse') },
-        { value: 'wire', label: t('settings.sound_pack_wire') },
-        { value: 'static', label: t('settings.sound_pack_static') },
-      ],
-      MESH_PLUS_FEATURES.sound_pack,
-      state.config
-    ),
-    SOUND_PACK_IDS.includes(state.config.uiSoundPack) ? state.config.uiSoundPack : 'signal',
-    MESH_PLUS_FEATURES.sound_pack,
-    state.config,
-    async (id) => {
-      state.config = await api.saveConfig({ uiSoundPack: id });
-      applySoundPrefsFromConfig(state.config);
-    }
-  );
-
-  const melodyPackSelect = buildThemedSelect();
-  fillPremiumGatedDropdown(
-    melodyPackSelect,
-    markPremiumGatedOptions(
-      [
-        { value: 'mesh', label: t('settings.melody_pack_mesh') },
-        { value: 'grid', label: t('settings.melody_pack_grid') },
-        { value: 'beacon', label: t('settings.melody_pack_beacon') },
-        { value: 'chime', label: t('settings.melody_pack_chime') },
-      ],
-      MESH_PLUS_FEATURES.melody_pack,
-      state.config
-    ),
-    MELODY_PACK_IDS.includes(state.config.uiMelodyPack) ? state.config.uiMelodyPack : 'mesh',
-    MESH_PLUS_FEATURES.melody_pack,
-    state.config,
-    async (id) => {
-      state.config = await api.saveConfig({ uiMelodyPack: id });
-      applySoundPrefsFromConfig(state.config);
-    }
-  );
-
-  const previewLabels = {
-    messageReceived: 'settings.sound_prev_message',
-    messageSent: 'settings.sound_prev_sent',
-    notify: 'settings.sound_prev_notify',
-    incomingCall: 'settings.sound_prev_incoming',
-    outgoingCall: 'settings.sound_prev_outgoing',
-    callConnected: 'settings.sound_prev_connected',
-    callEnd: 'settings.sound_prev_end',
-    peerOnline: 'settings.sound_prev_online',
-    groupInvite: 'settings.sound_prev_group',
-    groupCallInvite: 'settings.sound_prev_group_call',
-    meshPing: 'settings.sound_prev_ping',
-  };
-
-  function buildPreviewSection(titleKey, keys) {
-    const sub = document.createElement('h3');
-    sub.className = 'section-subtitle';
-    sub.dataset.i18n = titleKey;
-    sub.textContent = t(titleKey);
-    const grid = document.createElement('div');
-    grid.className = 'settings-sound-preview-grid';
-    keys.forEach((key) => {
-      const labelKey = previewLabels[key];
-      if (!labelKey) return;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-lang settings-sound-preview-btn';
-      btn.dataset.i18n = labelKey;
-      btn.textContent = t(labelKey);
-      btn.addEventListener('click', async () => {
-        setSoundPrefs({
-          enabled: true,
-          volume: Number(volRange.value) / 100,
-          soundPack: state.config.uiSoundPack,
-          melodyPack: state.config.uiMelodyPack,
-        });
-        await sounds.preview(key);
-      });
-      grid.appendChild(btn);
-    });
-    return { sub, grid };
-  }
-
-  const fxPreview = buildPreviewSection('settings.sound_preview_fx', SOUND_PREVIEW_KEYS);
-  const melodyPreview = buildPreviewSection(
-    'settings.sound_preview_melody',
-    MELODY_PREVIEW_KEYS
-  );
-
-  frag.appendChild(enableToggle.el);
-
-  const typingToggle = createPixelToggle({
-    checked: !!state.config.typingSoundEnabled,
-    labelKey: 'settings.typing_sound',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ typingSoundEnabled: checked });
-    },
-  });
-  frag.appendChild(typingToggle.el);
-
-  frag.appendChild(volLabel);
-  frag.appendChild(volRow);
-  frag.appendChild(
-    buildSettingsFieldWithHint('settings.sound_pack', 'settings.sound_mesh_plus_hint', soundPackSelect)
-  );
-  frag.appendChild(buildSettingsField('settings.melody_pack', melodyPackSelect));
-  const previewTitle = document.createElement('h3');
-  previewTitle.className = 'section-subtitle';
-  previewTitle.dataset.i18n = 'settings.sound_preview';
-  previewTitle.textContent = t('settings.sound_preview');
-  frag.appendChild(previewTitle);
-  frag.appendChild(fxPreview.sub);
-  frag.appendChild(fxPreview.grid);
-  frag.appendChild(melodyPreview.sub);
-  frag.appendChild(melodyPreview.grid);
-  return frag;
-}
-
-async function ensureAudioDeviceLabels() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((tr) => tr.stop());
-  } catch {
-
-  }
-}
-
-async function listMediaDevices(kind) {
-  await ensureAudioDeviceLabels();
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  return devices.filter((d) => d.kind === kind);
-}
-
-function fillDeviceSelect(select, devices, currentId, defaultLabelKey, deviceLabelKey) {
-  while (select.options.length > 1) select.remove(1);
-  for (const d of devices) {
-    const opt = document.createElement('option');
-    opt.value = d.deviceId;
-    opt.textContent =
-      d.label || `${t(deviceLabelKey)} (${d.deviceId.slice(0, 8)}…)`;
-    select.appendChild(opt);
-  }
-  const ok = [...select.options].some((o) => o.value === currentId);
-  select.value = ok ? currentId : '';
 }
 
 function buildSettingsTransferPanel() {
@@ -2254,192 +1915,10 @@ function buildSettingsTransferPanel() {
 }
 
 function buildSettingsCallPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_call', 'settings.call_hint');
-
-  const micTest = buildMicTestPanel(state.config, async (patch) => {
-    state.config = await api.saveConfig(patch);
-    return state.config;
+  return buildCallPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
   });
-  frag.appendChild(micTest.el);
-
-  const qualitySelect = buildThemedSelect('blip-select settings-call-select');
-  const qOpts = STREAM_QUALITY_IDS.map((id) => ({
-    value: id,
-    label: t(`settings.stream_quality_${id}`),
-  }));
-  fillSettingsDropdown(
-    qualitySelect,
-    qOpts,
-    normalizeStreamQuality(state.config.streamQuality),
-    async (val) => {
-      state.config = await api.saveConfig({ streamQuality: val });
-    }
-  );
-  frag.appendChild(buildSettingsField('settings.stream_quality', qualitySelect));
-
-  const fsSelect = buildThemedSelect('blip-select settings-call-select');
-  fillSettingsDropdown(
-    fsSelect,
-    qOpts,
-    normalizeFullscreenQuality(state.config),
-    async (val) => {
-      state.config = await api.saveConfig({ fullscreenQuality: val });
-    }
-  );
-  frag.appendChild(buildSettingsField('settings.fullscreen_quality', fsSelect));
-
-  const micSelect = buildThemedSelect('blip-select settings-call-select');
-  const micDefault = document.createElement('option');
-  micDefault.value = '';
-  micDefault.dataset.i18n = 'settings.call_mic_default';
-  micDefault.textContent = t('settings.call_mic_default');
-  micSelect.appendChild(micDefault);
-
-  const outSelect = buildThemedSelect('blip-select settings-call-select');
-  const outDefault = document.createElement('option');
-  outDefault.value = '';
-  outDefault.dataset.i18n = 'settings.call_speaker_default';
-  outDefault.textContent = t('settings.call_speaker_default');
-  outSelect.appendChild(outDefault);
-
-  async function populateDevices() {
-    const inputs = await listMediaDevices('audioinput');
-    const outputs = await listMediaDevices('audiooutput');
-    fillDeviceSelect(
-      micSelect,
-      inputs,
-      state.config.audioInputDeviceId || '',
-      'settings.call_mic_default',
-      'settings.call_mic_device'
-    );
-    fillDeviceSelect(
-      outSelect,
-      outputs,
-      state.config.audioOutputDeviceId || '',
-      'settings.call_speaker_default',
-      'settings.call_speaker_device'
-    );
-  }
-
-  micSelect.addEventListener('change', async () => {
-    state.config = await api.saveConfig({ audioInputDeviceId: micSelect.value });
-  });
-  outSelect.addEventListener('change', async () => {
-    state.config = await api.saveConfig({ audioOutputDeviceId: outSelect.value });
-  });
-
-  void populateDevices();
-
-  const micTestWrap = document.createElement('div');
-  micTestWrap.className = 'settings-mic-test';
-  const micTestLabel = document.createElement('span');
-  micTestLabel.className = 'settings-sub-label';
-  micTestLabel.dataset.i18n = 'settings.call_mic_test_label';
-  micTestLabel.textContent = t('settings.call_mic_test_label');
-
-  const micTestActions = document.createElement('div');
-  micTestActions.className = 'settings-mic-test-actions';
-
-  const micTestBtn = document.createElement('button');
-  micTestBtn.type = 'button';
-  micTestBtn.className = 'btn btn-lang';
-  micTestBtn.dataset.i18n = 'settings.call_mic_test';
-  micTestBtn.textContent = t('settings.call_mic_test');
-
-  const micTestStopBtn = document.createElement('button');
-  micTestStopBtn.type = 'button';
-  micTestStopBtn.className = 'btn btn-danger hidden';
-  micTestStopBtn.dataset.i18n = 'settings.call_mic_test_stop';
-  micTestStopBtn.textContent = t('settings.call_mic_test_stop');
-
-  const micMeter = document.createElement('div');
-  micMeter.className = 'settings-mic-meter hidden';
-  for (let i = 0; i < 12; i++) {
-    const bar = document.createElement('div');
-    bar.className = 'settings-mic-bar';
-    micMeter.appendChild(bar);
-  }
-
-  let micTestStream = null;
-  let micTestRaf = 0;
-  let micTestCtx = null;
-
-  function stopMicTest() {
-    if (micTestRaf) cancelAnimationFrame(micTestRaf);
-    micTestRaf = 0;
-    if (micTestStream) {
-      micTestStream.getTracks().forEach((tr) => tr.stop());
-      micTestStream = null;
-    }
-    if (micTestCtx) {
-      void micTestCtx.close();
-      micTestCtx = null;
-    }
-    micMeter.querySelectorAll('.settings-mic-bar').forEach((b) => b.classList.remove('lit'));
-    micMeter.classList.add('hidden');
-    micTestBtn.classList.remove('hidden');
-    micTestStopBtn.classList.add('hidden');
-  }
-
-  micTestBtn.addEventListener('click', async () => {
-    stopMicTest();
-    const deviceId = micSelect.value;
-    const audio =
-      deviceId && deviceId !== 'default'
-        ? { deviceId: { exact: deviceId } }
-        : true;
-    try {
-      micTestStream = await navigator.mediaDevices.getUserMedia({ audio });
-      micTestCtx = new AudioContext();
-      const src = micTestCtx.createMediaStreamSource(micTestStream);
-      const analyser = micTestCtx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      const bins = new Uint8Array(analyser.frequencyBinCount);
-      const bars = [...micMeter.querySelectorAll('.settings-mic-bar')];
-
-      const tick = () => {
-        analyser.getByteFrequencyData(bins);
-        let sum = 0;
-        for (let i = 0; i < bins.length; i++) sum += bins[i];
-        const level = Math.min(1, sum / bins.length / 96);
-        bars.forEach((bar, i) => {
-          const threshold = (i + 1) / bars.length;
-          bar.classList.toggle('lit', level >= threshold * 0.82);
-        });
-        micTestRaf = requestAnimationFrame(tick);
-      };
-      tick();
-      micMeter.classList.remove('hidden');
-      micTestBtn.classList.add('hidden');
-      micTestStopBtn.classList.remove('hidden');
-    } catch (err) {
-      console.warn('[settings] mic test:', err.message);
-      showAppToast({
-        title: t('settings.call_mic_test_fail'),
-        body: err?.message || '',
-        durationMs: 4500,
-        variant: 'danger',
-      });
-    }
-  });
-
-  micTestStopBtn.addEventListener('click', () => stopMicTest());
-  micSelect.addEventListener('change', () => stopMicTest());
-
-  micTestActions.appendChild(micTestBtn);
-  micTestActions.appendChild(micTestStopBtn);
-  micTestWrap.appendChild(micTestLabel);
-  micTestWrap.appendChild(micTestActions);
-  micTestWrap.appendChild(micMeter);
-
-  frag.appendChild(buildSettingsField('settings.call_mic', micSelect));
-  frag.appendChild(buildSettingsField('settings.call_speaker', outSelect));
-  frag.appendChild(micTestWrap);
-  return frag;
 }
 
 function buildSettingsNetworkPanel() {
@@ -2885,107 +2364,10 @@ function buildSettingsAboutPanel() {
 }
 
 function buildSettingsSystemPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_system');
-
-  const tray = buildCloseToTraySection();
-  if (tray) {
-    frag.appendChild(tray);
-  }
-  const autostart = buildLaunchAtLoginSection();
-  if (autostart) {
-    frag.appendChild(autostart);
-  }
-  if (!tray && !autostart) {
-    const p = document.createElement('p');
-    p.className = 'hint';
-    p.dataset.i18n = 'settings.system_na';
-    p.textContent = t('settings.system_na');
-    frag.appendChild(p);
-  }
-
-  frag.appendChild(buildSectionSubtitleRow('settings.overlay_section'));
-
-  const overlayToggle = createPixelToggle({
-    checked: !!state.config.overlayEnabled,
-    labelKey: 'settings.overlay_enable',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ overlayEnabled: checked });
-    },
+  return buildSystemPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
   });
-  const overlayRow = document.createElement('div');
-  overlayRow.className = 'settings-toggle-with-hint';
-  overlayRow.appendChild(overlayToggle.el);
-  overlayRow.appendChild(createPixelHintIcon('settings.overlay_enable_hint'));
-  frag.appendChild(overlayRow);
-
-  const hotkeyHint = document.createElement('p');
-  hotkeyHint.className = 'hint';
-  hotkeyHint.dataset.i18n = 'settings.overlay_hotkey_hint';
-  hotkeyHint.textContent = t('settings.overlay_hotkey_hint');
-  frag.appendChild(hotkeyHint);
-
-  const detectToggle = createPixelToggle({
-    checked: !!state.config.presenceDetectEnabled,
-    labelKey: 'settings.presence_detect',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ presenceDetectEnabled: checked });
-    },
-  });
-  const detectRow = document.createElement('div');
-  detectRow.className = 'settings-toggle-with-hint';
-  detectRow.appendChild(detectToggle.el);
-  detectRow.appendChild(createPixelHintIcon('settings.presence_detect_hint'));
-  frag.appendChild(detectRow);
-
-  const shareToggle = createPixelToggle({
-    checked: !!state.config.presenceShareEnabled,
-    labelKey: 'settings.presence_share',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ presenceShareEnabled: checked });
-    },
-  });
-  const shareRow = document.createElement('div');
-  shareRow.className = 'settings-toggle-with-hint';
-  shareRow.appendChild(shareToggle.el);
-  shareRow.appendChild(createPixelHintIcon('settings.presence_share_hint'));
-  frag.appendChild(shareRow);
-
-  const gamesToggle = createPixelToggle({
-    checked: state.config.presencePreferGames !== false,
-    labelKey: 'settings.presence_prefer_games',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ presencePreferGames: checked });
-    },
-  });
-  const gamesRow = document.createElement('div');
-  gamesRow.className = 'settings-toggle-with-hint';
-  gamesRow.appendChild(gamesToggle.el);
-  gamesRow.appendChild(createPixelHintIcon('settings.presence_prefer_games_hint'));
-  frag.appendChild(gamesRow);
-
-  frag.appendChild(buildSectionSubtitleRow('settings.presence_pinned_app'));
-  const pinInput = document.createElement('input');
-  pinInput.className = 'input';
-  pinInput.type = 'text';
-  pinInput.maxLength = 48;
-  pinInput.placeholder = t('settings.presence_pinned_app_ph');
-  pinInput.value = state.config.presencePinnedApp || '';
-  pinInput.addEventListener('change', async () => {
-    const v = pinInput.value.trim().slice(0, 48);
-    pinInput.value = v;
-    state.config = await api.saveConfig({ presencePinnedApp: v });
-  });
-  frag.appendChild(pinInput);
-  const pinHint = document.createElement('p');
-  pinHint.className = 'hint';
-  pinHint.dataset.i18n = 'settings.presence_pinned_app_hint';
-  pinHint.textContent = t('settings.presence_pinned_app_hint');
-  frag.appendChild(pinHint);
-
-  return frag;
 }
 
 function formatUpdateStatusText() {

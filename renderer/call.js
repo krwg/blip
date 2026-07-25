@@ -14,71 +14,32 @@ import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 import { bindCallWaveform } from './call-waveform.js';
-import { rtcConfiguration } from '../shared/ice-servers.js';
+import {
+  toSdpWire,
+  normalizeSdp,
+  normalizeCandidate,
+  formatCallDuration,
+  createCallPeerConnection,
+} from './call-signalling.js';
 
 let activeCall = null;
 let pendingCandidates = [];
 let pendingOffer = null;
 
-export function toSdpWire(desc) {
-  if (!desc) return null;
-  if (typeof desc.type === 'string' && typeof desc.sdp === 'string' && desc.sdp.length > 0) {
-    return { type: desc.type, sdp: desc.sdp };
-  }
-  return null;
-}
-
-function normalizeSdp(sdp) {
-  if (!sdp) return null;
-  if (typeof sdp === 'string') return { type: 'offer', sdp };
-  let type = sdp.type;
-  let body = sdp.sdp;
-  if (body && typeof body === 'object' && typeof body.sdp === 'string') {
-    type = body.type ?? type;
-    body = body.sdp;
-  }
-  if (typeof type === 'string' && typeof body === 'string' && body.length > 0) {
-    return { type, sdp: body };
-  }
-  return null;
-}
-
-function normalizeCandidate(candidate) {
-  if (!candidate) return null;
-  if (candidate.candidate !== undefined) return candidate;
-  return null;
-}
+export { toSdpWire };
 
 function createPeerConnection(onRemoteStream, cfg) {
-  const pc = new RTCPeerConnection(rtcConfiguration(cfg));
-
-  pc.ontrack = (e) => {
-    if (e.streams[0]) onRemoteStream(e.streams[0]);
-  };
-
-  pc.onicecandidate = (e) => {
-    if (e.candidate && activeCall?.onCandidate) {
-      const json = e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
-      activeCall.onCandidate(json);
-    }
-  };
-
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'failed') {
-      console.error('[call] connection failed');
-    }
-  };
-
-  return pc;
+  return createCallPeerConnection({
+    cfg,
+    onRemoteStream,
+    onIceCandidate: (json) => {
+      if (activeCall?.onCandidate) activeCall.onCandidate(json);
+    },
+  });
 }
 
 function formatDuration(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  const pad = (n) => String(n).padStart(2, '0');
-  if (h > 0) return `${pad(h)}:${pad(m % 60)}:${pad(s % 60)}`;
-  return `${pad(m)}:${pad(s % 60)}`;
+  return formatCallDuration(ms);
 }
 
 export function createCallUI(config, api, options = {}) {

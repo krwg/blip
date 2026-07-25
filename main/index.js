@@ -9,11 +9,10 @@ import { connectToPeer, sendOnSocket, pingPeer } from './tcp-client.js';
 import { createTcpLineReader } from './tcp-framing.js';
 import { loadConfig, saveConfig, initConfigPath, getLocalIp, getLocalIpv4Set } from './config.js';
 import { toPublicConfig } from './config-public.js';
-import { confirmEntitlementBlob, resolveEntitlementState } from './mesh-plus-license.js';
+import { resolveEntitlementState } from './mesh-plus-license.js';
 import {
   initAppTrustState,
   getAppTrustState,
-  refreshMeshPlusTrust,
 } from './trust-state.js';
 import {
   premiumResetPatch,
@@ -42,13 +41,14 @@ import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
 import {
   destroyOverlayWindow,
   refreshPresenceLoop,
-  pushOverlayUpdate,
   toggleOverlayVisible,
 } from './overlay-window.js';
 import { registerCallIpc } from './ipc/calls.js';
 import { registerBeaconIpc } from './ipc/beacon.js';
 import { registerFileIpc } from './ipc/files.js';
-import { detectForegroundApp } from './presence-detect.js';
+import { registerOverlayIpc } from './ipc/overlay.js';
+import { registerMeshPlusIpc } from './ipc/mesh-plus.js';
+import { registerProfileIpc } from './ipc/profile.js';
 
 import {
   setupAutoUpdater,
@@ -62,29 +62,9 @@ import { resolvePorts } from './ports.js';
 import { serializeSdp, sendCallPayload } from './call-wire.js';
 import { fetchGithubReleases } from './github-releases.js';
 import {
-  getCustomAvatarDataUrl,
-  saveCustomAvatar,
-  clearCustomAvatar,
-  hasCustomAvatar,
-} from './avatar-store.js';
-import {
   clearActiveProfileGif,
-  getActiveProfileGifId,
-  getProfileGifDataUrl,
-  getProfileGifShareDataUrl,
   getProfileGifPublicState,
-  hasActiveProfileGif,
-  listProfileGifHistory,
-  saveProfileGifFromBuffer,
-  saveProfileGifFromDataUrl,
-  setActiveProfileGif,
 } from './profile-gif-store.js';
-import {
-  downloadGifUrl,
-  isGiphyConfigured,
-  searchGiphy,
-  trendingGiphy,
-} from './giphy-client.js';
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts.js';
 import {
   listDisplaySources,
@@ -1023,30 +1003,17 @@ function installTray() {
 
 function setupIpc() {
   ipcMain.handle('get-config', () => toPublicConfig(config));
-  ipcMain.handle('get-foreground-presence', async () => {
-    const snap = await detectForegroundApp();
-    return snap;
+
+  registerOverlayIpc({
+    getConfig: () => config,
+    getLastOverlayUnread: () => lastOverlayUnread,
+    setLastOverlayUnread: (n) => {
+      lastOverlayUnread = n;
+    },
+    getPeersOnline: () =>
+      (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
   });
-  ipcMain.handle('overlay-push-stats', (_, stats) => {
-    lastOverlayUnread = Math.max(0, Number(stats?.unread) || 0);
-    pushOverlayUpdate({
-      activity: config?.presenceText || '',
-      unread: lastOverlayUnread,
-      peersOnline: (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
-      idleLabel: 'BLIP',
-    });
-    return true;
-  });
-  ipcMain.on('overlay-ready', () => {
-    if (config?.overlayEnabled) {
-      pushOverlayUpdate({
-        activity: config?.presenceText || '',
-        unread: lastOverlayUnread,
-        peersOnline: (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
-        idleLabel: 'BLIP',
-      });
-    }
-  });
+
   ipcMain.handle('save-config', (_, updates) => {
     const prevLang = config?.language;
     const safe = { ...updates };
@@ -1111,82 +1078,27 @@ function setupIpc() {
     return pub;
   });
 
-  ipcMain.handle('activate-mesh-plus', (_, rawKey) => {
-    const result = confirmEntitlementBlob(rawKey);
-    if (!result.ok) return result;
-    config = saveConfig({
-      meshPlusLicenseId: result.licenseId,
-      meshPlusLicenseSig: result.sigB64,
-      meshPlusActivatedAt: Date.now(),
-    });
-    discovery?.updateConfig(config);
-    discovery?.announce();
-    refreshAppIcons();
-    refreshMeshPlusTrust(config);
-    broadcastTrustState();
-    const pub = toPublicConfig(config);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('config-updated', pub);
-    }
-    return { ok: true, tier: pub.tier };
+  registerMeshPlusIpc({
+    getConfig: () => config,
+    setConfig: (cfg) => {
+      config = cfg;
+    },
+    getDiscovery: () => discovery,
+    refreshAppIcons,
+    broadcastTrustState,
+    clearActiveProfileGif,
+    getMainWindow: () => mainWindow,
+    closeAuxiliaryWindows,
+    clearPeerSockets: () => {
+      for (const s of peerSockets.values()) {
+        if (!s.destroyed) s.destroy();
+      }
+      peerSockets.clear();
+    },
+    performFactoryReset,
+    unregisterGlobalShortcuts,
+    sendToRenderer,
   });
-
-  ipcMain.handle('deactivate-mesh-plus', () => {
-    const patch = {
-      meshPlusLicenseId: '',
-      meshPlusLicenseSig: '',
-      meshPlusActivatedAt: 0,
-    };
-    if (String(config.appIconVariant || '').startsWith('mesh-')) {
-      patch.appIconVariant = 'main';
-    }
-    const prefsPatch = premiumResetPatch(config);
-    if (prefsPatch) Object.assign(patch, prefsPatch);
-    if (prefsPatch?.hasProfileGif === false) clearActiveProfileGif();
-    config = saveConfig(patch);
-    discovery?.updateConfig(config);
-    discovery?.announce();
-    refreshAppIcons();
-    refreshMeshPlusTrust(config);
-    broadcastTrustState();
-    const pub = toPublicConfig(config);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('config-updated', pub);
-    }
-    return { ok: true, tier: 'free' };
-  });
-
-  ipcMain.handle('factory-reset', () => {
-    closeAuxiliaryWindows();
-    for (const s of peerSockets.values()) {
-      if (!s.destroyed) s.destroy();
-    }
-    peerSockets.clear();
-    config = performFactoryReset();
-    unregisterGlobalShortcuts();
-    refreshAppIcons();
-    discovery?.updateConfig(config);
-    discovery?.announce();
-    sendToRenderer('peers-updated', { peers: [], occupiedIds: [] });
-    const pub = toPublicConfig(config);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('config-updated', pub);
-      mainWindow.webContents.send('factory-reset-done', pub);
-    }
-    return { ok: true, config: pub };
-  });
-
-  ipcMain.handle('get-mesh-plus-status', () => {
-    const pub = toPublicConfig(config);
-    return {
-      tier: pub.tier,
-      active: pub.meshPlusActive,
-      licenseMasked: pub.meshPlusLicenseMasked || '',
-      activatedAt: config.meshPlusActivatedAt || 0,
-    };
-  });
-
-  ipcMain.handle('get-trust-state', () => getAppTrustState());
 
   ipcMain.handle('get-github-releases', async (_, limit) => fetchGithubReleases(limit ?? 8));
   ipcMain.handle('get-peers', () => ({
@@ -1314,136 +1226,12 @@ function setupIpc() {
     return !!(callWindow && !callWindow.isDestroyed());
   });
 
-  ipcMain.handle('get-avatar-data-url', () => getCustomAvatarDataUrl());
-
-  ipcMain.handle('save-avatar', async (_, dataUrl) => {
-    try {
-      saveCustomAvatar(dataUrl);
-      config = saveConfig({ customAvatar: true });
-      discovery?.announce();
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'save_failed' };
-    }
-  });
-
-  ipcMain.handle('clear-avatar', () => {
-    clearCustomAvatar();
-    config = saveConfig({ customAvatar: false });
-    discovery?.announce();
-    return { ok: true };
-  });
-
-  ipcMain.handle('get-profile-gif-active-url', () => getProfileGifDataUrl());
-  ipcMain.handle('get-profile-gif-share-url', () => getProfileGifShareDataUrl());
-  ipcMain.handle('get-profile-gif-history', () => listProfileGifHistory());
-  ipcMain.handle('is-giphy-configured', () => isGiphyConfigured());
-  ipcMain.handle('search-giphy', (_, query, offset) => searchGiphy(query, { offset }));
-  ipcMain.handle('trending-giphy', (_, offset) => trendingGiphy({ offset }));
-
-  ipcMain.handle('save-profile-gif', async (_, dataUrl) => {
-    if (!resolveEntitlementState(config) || !config?.meshPlusLicenseId) {
-      return { ok: false, error: 'mesh_plus_required' };
-    }
-    try {
-      const id = saveProfileGifFromDataUrl(dataUrl);
-      const pub = getProfileGifPublicState();
-      config = saveConfig({
-        profileGifActiveId: pub.profileGifActiveId,
-        hasProfileGif: pub.hasProfileGif,
-      });
-      discovery?.announce();
-      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'save_failed' };
-    }
-  });
-
-  ipcMain.handle('save-profile-gif-bytes', async (_, base64) => {
-    if (!resolveEntitlementState(config) || !config?.meshPlusLicenseId) {
-      return { ok: false, error: 'mesh_plus_required' };
-    }
-    try {
-      const buf = Buffer.from(String(base64 || ''), 'base64');
-      if (!buf.length) return { ok: false, error: 'invalid_gif' };
-      const id = saveProfileGifFromBuffer(buf);
-      const pub = getProfileGifPublicState();
-      config = saveConfig({
-        profileGifActiveId: pub.profileGifActiveId,
-        hasProfileGif: pub.hasProfileGif,
-      });
-      discovery?.announce();
-      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'save_failed' };
-    }
-  });
-
-  ipcMain.handle('save-profile-gif-path', async (_, filePath) => {
-    if (!resolveEntitlementState(config) || !config?.meshPlusLicenseId) {
-      return { ok: false, error: 'mesh_plus_required' };
-    }
-    try {
-      const p = String(filePath || '').trim();
-      if (!p) return { ok: false, error: 'invalid_gif' };
-      const buf = readFileSync(p);
-      const id = saveProfileGifFromBuffer(buf);
-      const pub = getProfileGifPublicState();
-      config = saveConfig({
-        profileGifActiveId: pub.profileGifActiveId,
-        hasProfileGif: pub.hasProfileGif,
-      });
-      discovery?.announce();
-      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'save_failed' };
-    }
-  });
-
-  ipcMain.handle('import-giphy-gif', async (_, gifUrl) => {
-    try {
-      const buf = await downloadGifUrl(gifUrl);
-      const id = saveProfileGifFromBuffer(buf);
-      const pub = getProfileGifPublicState();
-      config = saveConfig({
-        profileGifActiveId: pub.profileGifActiveId,
-        hasProfileGif: pub.hasProfileGif,
-      });
-      discovery?.announce();
-      return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'import_failed' };
-    }
-  });
-
-  ipcMain.handle('set-profile-gif-active', (_, id) => {
-    try {
-      if (!id) {
-        clearActiveProfileGif();
-      } else {
-        setActiveProfileGif(id);
-      }
-      const pub = getProfileGifPublicState();
-      config = saveConfig({
-        profileGifActiveId: pub.profileGifActiveId,
-        hasProfileGif: pub.hasProfileGif,
-      });
-      discovery?.announce();
-      return { ok: true, dataUrl: getProfileGifDataUrl() };
-    } catch (e) {
-      return { ok: false, error: e?.message || 'set_failed' };
-    }
-  });
-
-  ipcMain.handle('clear-profile-gif', () => {
-    clearActiveProfileGif();
-    const pub = getProfileGifPublicState();
-    config = saveConfig({
-      profileGifActiveId: '',
-      hasProfileGif: false,
-    });
-    discovery?.announce();
-    return { ok: true };
+  registerProfileIpc({
+    getConfig: () => config,
+    setConfig: (cfg) => {
+      config = cfg;
+    },
+    getDiscovery: () => discovery,
   });
 
   ipcMain.handle('check-for-updates', () => checkForUpdatesNow(() => config));
