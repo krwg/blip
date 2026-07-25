@@ -77,7 +77,8 @@ const DEFAULT_CONFIG = {
 
   projectsClipboardEnabled: false,
 
-  devGroupsEnabled: false,
+  /** Groups/conferences are always available (legacy key ignored if present). */
+  developerMode: false,
 
   streamQuality: 'max',
 

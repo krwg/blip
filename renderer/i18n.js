@@ -872,7 +872,12 @@ const locales = {
     'settings.nav_group_app': 'App',
     'settings.nav_group_connection': 'Connection',
     'settings.nav_group_system': 'System',
-    'settings.dev_panel_hint': 'Beta flags and internal tools — not required for normal use.',
+    'settings.dev_panel_hint':
+      'Hidden until you tap the About version seven times. Beta flags and internal tools.',
+    'settings.dev_mode_unlocked': 'Developer section unlocked',
+    'settings.dev_mode_hidden': 'Developer section hidden',
+    'settings.dev_hide': 'Hide developer section',
+    'settings.dev_hide_hint': 'Removes Developer from the sidebar until you tap the About version again.',
     'settings.dev_projects_callout': 'Signal Corps (Projects)',
     'settings.system_na': 'These options are only available on Windows for now.',
     'settings.updates_check': 'Check',
@@ -1877,7 +1882,13 @@ const locales = {
     'settings.nav_group_app': 'Приложение',
     'settings.nav_group_connection': 'Сеть',
     'settings.nav_group_system': 'Система',
-    'settings.dev_panel_hint': 'Бета-флаги и внутренние инструменты — для обычной работы не нужны.',
+    'settings.dev_panel_hint':
+      'Скрыт, пока не нажмёте версию в «О приложении» семь раз. Бета-флаги и внутренние инструменты.',
+    'settings.dev_mode_unlocked': 'Раздел разработчика открыт',
+    'settings.dev_mode_hidden': 'Раздел разработчика скрыт',
+    'settings.dev_hide': 'Скрыть раздел разработчика',
+    'settings.dev_hide_hint':
+      'Убирает «Разработчик» из боковой панели, пока снова не нажмёте версию в «О приложении».',
     'settings.dev_projects_callout': 'Сигнал Корпс (Проекты)',
     'settings.system_na': 'Эти настройки пока только для виндвос.',
     'settings.updates_check': 'Проверить',
