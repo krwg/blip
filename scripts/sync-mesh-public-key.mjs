@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outPath = join(root, 'build', 'mesh-plus-public-key.txt');
 const localPath = join(root, 'mesh-plus-public-key.local');
+const keysPub = join(root, 'keys', 'mesh-plus-public.b64');
 const envBuildPath = join(root, '.env.build');
 
 function parseEnvBuild() {
@@ -25,6 +26,10 @@ function readKey() {
   if (fromEnv) return fromEnv;
   const fromBuild = parseEnvBuild();
   if (fromBuild) return fromBuild;
+  if (existsSync(keysPub)) {
+    const k = readFileSync(keysPub, 'utf8').trim();
+    if (k) return k;
+  }
   if (existsSync(localPath)) {
     return readFileSync(localPath, 'utf8').trim();
   }

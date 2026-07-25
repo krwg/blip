@@ -1,16 +1,14 @@
 import { t } from './i18n.js';
 import { createAvatarElement } from './avatar.js';
-import { BUILD_TRUST, MESH_TRUST, OFFICIAL_BUILD_ISSUER } from '../shared/trust-levels.js';
+import { MESH_TRUST } from '../shared/trust-levels.js';
 
 let localTrustState = null;
 
 export function setLocalTrustState(state) {
   if (!state) return;
   localTrustState = {
-    buildTrust: state.buildTrust || BUILD_TRUST.UNVERIFIED_BUILD,
     meshPlusTrust: state.meshPlusTrust || MESH_TRUST.UNVERIFIED_MESH_PLUS,
   };
-
 }
 
 export function getLocalTrustState() {
@@ -18,64 +16,34 @@ export function getLocalTrustState() {
   const live = typeof window !== 'undefined' ? window.trustState : null;
   if (!live) return null;
   return {
-    buildTrust: live.buildTrust || BUILD_TRUST.UNVERIFIED_BUILD,
     meshPlusTrust: live.meshPlusTrust || MESH_TRUST.UNVERIFIED_MESH_PLUS,
   };
 }
 
-export function isOfficialBuildTrust(buildTrust) {
-  return buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL;
+/** @deprecated Build official/unofficial tiers removed from product UX. */
+export function isOfficialBuildTrust() {
+  return false;
 }
 
 export function resolvePeerMeshPlusTrust(peer) {
   if (!peer?.meshPlus) return null;
-  if (peer.meshPlusTrust === MESH_TRUST.OFFICIAL_MESH_PLUS) {
-    return MESH_TRUST.OFFICIAL_MESH_PLUS;
-  }
-  if (peer.meshPlusTrust === MESH_TRUST.UNVERIFIED_MESH_PLUS) {
-    return MESH_TRUST.UNVERIFIED_MESH_PLUS;
-  }
-  if (peer.buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL) {
-    return MESH_TRUST.OFFICIAL_MESH_PLUS;
-  }
-  if (
-    peer.buildVerified &&
-    String(peer.buildIssuer || '') === OFFICIAL_BUILD_ISSUER
-  ) {
-    return MESH_TRUST.OFFICIAL_MESH_PLUS;
-  }
-  return MESH_TRUST.UNVERIFIED_MESH_PLUS;
+  return MESH_TRUST.OFFICIAL_MESH_PLUS;
 }
 
 export function applyMeshPlusTrustClass(el, meshPlusTrust, active = true) {
   if (!el) return;
   el.classList.remove('meshplus-official', 'meshplus-unverified');
   if (!active) return;
-  if (meshPlusTrust === MESH_TRUST.OFFICIAL_MESH_PLUS) {
+  if (meshPlusTrust) {
     el.classList.add('meshplus-official');
     el.removeAttribute('title');
     el.removeAttribute('data-i18n-title');
-  } else {
-    el.classList.add('meshplus-unverified');
-    el.dataset.i18nTitle = 'trust.unofficial_mesh_tooltip';
-    el.title = t('trust.unofficial_mesh_tooltip');
   }
 }
 
-export function appendAboutBuildTrustNotice(parent) {
-  const trust = getLocalTrustState();
-  const official = isOfficialBuildTrust(trust?.buildTrust);
-  const box = document.createElement('div');
-  box.className = `settings-about-trust-notice${
-    official
-      ? ' settings-about-trust-notice--official'
-      : ' settings-about-trust-notice--unofficial'
-  }`;
-  const key = official ? 'trust.about_official_client' : 'trust.about_unofficial_client';
-  box.dataset.i18n = key;
-  box.textContent = t(key);
-  parent.appendChild(box);
-  return box;
+/** Official/unofficial build notices removed — no-op for call sites. */
+export function appendAboutBuildTrustNotice() {
+  return null;
 }
 
 export function createTrustedAvatarElement(blipId, scale, opts) {
@@ -86,17 +54,10 @@ export function applyPeerMeshPlusBadgeTrust(badge, peer) {
   if (!badge) return;
   badge.classList.remove(
     'mesh-plus-badge--trust-official',
-    'mesh-plus-badge--trust-unverified'
+    'mesh-plus-badge--trust-unverified',
   );
   if (!peer?.meshPlus) return;
-  const meshTrust = resolvePeerMeshPlusTrust(peer);
-  if (meshTrust === MESH_TRUST.OFFICIAL_MESH_PLUS) {
-    badge.classList.add('mesh-plus-badge--trust-official');
-    badge.removeAttribute('title');
-    badge.removeAttribute('data-i18n-title');
-    return;
-  }
-  badge.classList.add('mesh-plus-badge--trust-unverified');
-  badge.dataset.i18nTitle = 'trust.unofficial_mesh_tooltip';
-  badge.title = t('trust.unofficial_mesh_tooltip');
+  badge.classList.add('mesh-plus-badge--trust-official');
+  badge.removeAttribute('title');
+  badge.removeAttribute('data-i18n-title');
 }

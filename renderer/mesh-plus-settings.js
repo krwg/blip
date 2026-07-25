@@ -1,7 +1,5 @@
 import { t } from './i18n.js';
 import { premiumTierEnabled } from './mesh-plus.js';
-import { getLocalTrustState, resolvePeerMeshPlusTrust } from './trust-ui.js';
-import { BUILD_TRUST, MESH_TRUST, OFFICIAL_BUILD_ISSUER } from '../shared/trust-levels.js';
 import { showAppToast } from './toasts.js';
 import { buildPanelTitleRow, buildSectionSubtitleRow } from './settings-ui.js';
 import { createMeshPlusPixelHero, createMeshPlusPixelStrip } from './mesh-plus-pixel-bg.js';
@@ -199,42 +197,20 @@ export function buildSettingsMeshPlusPanel(state, onConfigChange) {
 
   function syncActivationUi() {
     const active = premiumTierEnabled(state.config);
-    const trust = getLocalTrustState();
-    const selfPeer = {
-      meshPlus: active,
-      meshPlusTrust: trust?.meshPlusTrust,
-      buildTrust: trust?.buildTrust,
-      buildVerified: trust?.buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL,
-      buildIssuer: trust?.buildTrust === BUILD_TRUST.VERIFIED_OFFICIAL ? OFFICIAL_BUILD_ISSUER : '',
-    };
-    const meshTrust = active
-      ? resolvePeerMeshPlusTrust(selfPeer)
-      : MESH_TRUST.UNVERIFIED_MESH_PLUS;
     statusPill.textContent = active ? t('mesh_plus.status_mesh_plus') : t('mesh_plus.status_free');
     statusPill.classList.toggle('mesh-plus-tier-pill--active', active);
     statusCard.classList.toggle('mesh-plus-status-card--active', active);
+    statusCard.classList.remove('mesh-plus-status-card--trust-unverified');
+    statusCard.removeAttribute('title');
+    statusCard.removeAttribute('data-i18n-title');
     pixelHero.setSubscriptionActive(active);
     carouselPixelStrip.setSubscriptionActive(active);
-    const unofficialLabel = active && meshTrust === MESH_TRUST.UNVERIFIED_MESH_PLUS;
     pixelHero.hero
       .querySelector('.mesh-plus-pixel-banner__label')
-      ?.classList.toggle('mesh-plus-pixel-banner__label--unverified', unofficialLabel);
+      ?.classList.remove('mesh-plus-pixel-banner__label--unverified');
     carouselPixelStrip.strip
       .querySelector('.mesh-plus-pixel-banner__label')
-      ?.classList.toggle('mesh-plus-pixel-banner__label--unverified', unofficialLabel);
-    if (meshTrust === MESH_TRUST.UNVERIFIED_MESH_PLUS && active) {
-      statusCard.classList.add('mesh-plus-status-card--trust-unverified');
-    } else {
-      statusCard.classList.remove('mesh-plus-status-card--trust-unverified');
-    }
-    if (
-      active &&
-      meshTrust === MESH_TRUST.UNVERIFIED_MESH_PLUS &&
-      trust?.buildTrust === BUILD_TRUST.UNVERIFIED_BUILD
-    ) {
-      statusCard.dataset.i18nTitle = 'mesh_plus.trust_needs_official_build';
-      statusCard.title = t('mesh_plus.trust_needs_official_build');
-    }
+      ?.classList.remove('mesh-plus-pixel-banner__label--unverified');
     keyInput.classList.toggle('hidden', active);
     keyLabel.classList.toggle('hidden', active);
     activateBtn.classList.toggle('hidden', active);
