@@ -19,6 +19,8 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **Developer settings** — hidden until the About version line is tapped seven times; can be hidden again from the panel.
 - **Obfuscator** — still afterPack-only (~0.4s on MESH+ targets); skippable via `BLIP_SKIP_OBFUSCATE=1`.
 - **Version label** — UI shows `[2.0.0]` (no leading `v`) in About and Updates.
+- **Build trust UX** — removed official/unofficial client notices and MESH+ “needs official build” gate; MESH+ styling follows license only.
+- **Trust-anchor keys** — public/private under gitignored `keys/` (`node scripts/mesh-plus-keygen.mjs --rotate`); `build/build-info.json` untracked.
 
 ### Fixed
 
