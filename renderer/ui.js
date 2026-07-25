@@ -167,6 +167,7 @@ import {
   listenReducedMotion,
 } from './appearance.js';
 import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
+import { formatAppVersionBracket } from './app-version.js';
 
 async function broadcastCustomAvatar() {
   const dataUrl = getSelfAvatarCache();
@@ -268,11 +269,6 @@ const unreadByPeer = new Map();
 let unreadInviteCount = 0;
 
 const peersTyping = new Set();
-
-function formatAppVersion(meta) {
-  if (!meta) return '—';
-  return meta.displayVersion || meta.version || '—';
-}
 
 async function openCallOutgoing(peerId, video = false) {
   if (!window.blip?.openCallOutgoing) return;
@@ -3273,7 +3269,7 @@ function buildSettingsUpdatesPanel() {
   });
 
   window.blip.getAppMetadata?.().then((meta) => {
-    verLine.textContent = `v${formatAppVersion(meta)}`;
+    verLine.textContent = formatAppVersionBracket(meta);
     if (!meta?.isPackaged) {
       statusLine.dataset.i18n = 'settings.updates_dev_only';
       statusLine.textContent = t('settings.updates_dev_only');
