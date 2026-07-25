@@ -356,6 +356,19 @@ const locales = {
     'settings.reactive_background_hint':
       'Background pulses with your mic in voice channels and calls. Enable an animated wallpaper first.',
     'settings.reduce_motion': 'Reduce background motion',
+    'settings.ui_motion': 'Interface animations',
+    'settings.ui_motion_hint':
+      'Apple-style motion for views, settings panels, nav, modals, and toasts. Smooth springs (little bounce). Off is instant; also respects OS Reduce Motion.',
+    'settings.overlay_section': 'Overlay & activity',
+    'settings.overlay_enable': 'Show desktop overlay',
+    'settings.overlay_enable_hint':
+      'Always-on-top glass panel (Discord-style). Local only — see docs/OVERLAY.md.',
+    'settings.presence_detect': 'Detect running apps / games',
+    'settings.presence_detect_hint':
+      'Reads the foreground window locally (Windows / macOS). Never uploaded.',
+    'settings.presence_share': 'Share activity in mesh status',
+    'settings.presence_share_hint':
+      'Writes detected activity into your presence text so LAN peers can see it. Opt-in.',
     'settings.default_reaction': 'Default reaction',
     'call.exit_stream': 'Exit stream',
     'settings.motion_hint': 'Animated backgrounds can be paused here or via the OS “reduce motion” setting.',
@@ -1411,6 +1424,19 @@ const locales = {
     'settings.reactive_background_hint':
       'Фон пульсирует от микрофона в голосовом канале и звонках. Сначала выбери анимированный фон.',
     'settings.reduce_motion': 'Меньше движения фона',
+    'settings.ui_motion': 'Анимации интерфейса',
+    'settings.ui_motion_hint':
+      'Движение в стиле Apple: разделы, панели настроек, навигация, модалки и тосты. Плавные пружины. Выкл — мгновенно; также учитывается системное «уменьшить движение».',
+    'settings.overlay_section': 'Оверлей и активность',
+    'settings.overlay_enable': 'Показывать оверлей',
+    'settings.overlay_enable_hint':
+      'Панель поверх окон (как у Discord). Только локально — см. docs/OVERLAY.md.',
+    'settings.presence_detect': 'Определять приложения / игры',
+    'settings.presence_detect_hint':
+      'Читает переднее окно локально (Windows / macOS). Никуда не отправляется.',
+    'settings.presence_share': 'Делиться активностью в статусе',
+    'settings.presence_share_hint':
+      'Пишет обнаруженную активность в текст статуса для пиров в LAN. Только по согласию.',
     'settings.default_reaction': 'Реакция по умолчанию',
     'call.exit_stream': 'Выйти из трансляции',
     'settings.motion_hint': 'Анимацию фона можно отключить здесь или через системную настройку «уменьшить движение».',

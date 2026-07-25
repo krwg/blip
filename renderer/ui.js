@@ -135,6 +135,7 @@ import {
 import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
+import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
 import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
 import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
@@ -3059,6 +3060,48 @@ function buildSettingsSystemPanel() {
     p.textContent = t('settings.system_na');
     frag.appendChild(p);
   }
+
+  frag.appendChild(buildSectionSubtitleRow('settings.overlay_section'));
+
+  const overlayToggle = createPixelToggle({
+    checked: !!state.config.overlayEnabled,
+    labelKey: 'settings.overlay_enable',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ overlayEnabled: checked });
+    },
+  });
+  const overlayRow = document.createElement('div');
+  overlayRow.className = 'settings-toggle-with-hint';
+  overlayRow.appendChild(overlayToggle.el);
+  overlayRow.appendChild(createPixelHintIcon('settings.overlay_enable_hint'));
+  frag.appendChild(overlayRow);
+
+  const detectToggle = createPixelToggle({
+    checked: !!state.config.presenceDetectEnabled,
+    labelKey: 'settings.presence_detect',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ presenceDetectEnabled: checked });
+    },
+  });
+  const detectRow = document.createElement('div');
+  detectRow.className = 'settings-toggle-with-hint';
+  detectRow.appendChild(detectToggle.el);
+  detectRow.appendChild(createPixelHintIcon('settings.presence_detect_hint'));
+  frag.appendChild(detectRow);
+
+  const shareToggle = createPixelToggle({
+    checked: !!state.config.presenceShareEnabled,
+    labelKey: 'settings.presence_share',
+    onChange: async (checked) => {
+      state.config = await api.saveConfig({ presenceShareEnabled: checked });
+    },
+  });
+  const shareRow = document.createElement('div');
+  shareRow.className = 'settings-toggle-with-hint';
+  shareRow.appendChild(shareToggle.el);
+  shareRow.appendChild(createPixelHintIcon('settings.presence_share_hint'));
+  frag.appendChild(shareRow);
+
   return frag;
 }
 
@@ -3449,6 +3492,22 @@ function renderSettingsNavAside() {
     (id) => {
       if (id === state.settingsSection) return;
       state.settingsSection = id;
+      const host = mainContent?.querySelector('.settings-shell__main');
+      if (state.view === 'settings' && host) {
+        const panel = renderSettingsMainPanel();
+        mainContent.querySelectorAll('.settings-nav-btn').forEach((btn) => {
+          const key = btn.dataset.i18n || '';
+          const sid = key.replace(/^settings\.section_/, '');
+          btn.classList.toggle('selected', sid === id);
+        });
+        void swapPanelContent(host, panel, {
+          enabled: isUiMotionEnabled(state.config),
+        }).then(() => {
+          applyI18n(host);
+          updateNavActive();
+        });
+        return;
+      }
       renderView('settings');
     },
     getSettingsSectionIds
@@ -4019,14 +4078,15 @@ function renderView(viewName, options = {}) {
     disposeProfilePageIfMounted();
   }
 
-  mainContent.replaceChildren(view);
-  applyI18n(mainContent);
-
-  updateNavActive();
-
-  if (viewName === 'peers' || viewName === 'profile') {
-    void runMeshPulseRound();
-  }
+  void swapMainView(mainContent, view, {
+    enabled: isUiMotionEnabled(state.config),
+  }).then(() => {
+    applyI18n(mainContent);
+    updateNavActive();
+    if (viewName === 'peers' || viewName === 'profile') {
+      void runMeshPulseRound();
+    }
+  });
 }
 
 function clearProfileNavigationState() {

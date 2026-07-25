@@ -12,6 +12,7 @@ export default defineConfig({
         main: resolve(__dirname, 'renderer/index.html'),
         call: resolve(__dirname, 'renderer/call-window.html'),
         groupCall: resolve(__dirname, 'renderer/group-call-window.html'),
+        overlay: resolve(__dirname, 'renderer/overlay.html'),
       },
     },
   },
