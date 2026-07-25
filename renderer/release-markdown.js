@@ -38,11 +38,18 @@ const CHAT_PURIFY = {
     'h2',
     'h3',
     'h4',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'input',
   ],
-  ALLOWED_ATTR: ['href', 'title', 'rel', 'target'],
+  ALLOWED_ATTR: ['href', 'title', 'rel', 'target', 'type', 'checked', 'disabled', 'align'],
   ALLOW_DATA_ATTR: false,
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|blip):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-  FORBID_TAGS: ['img', 'style', 'script', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+  FORBID_TAGS: ['img', 'style', 'script', 'iframe', 'object', 'embed', 'form', 'button', 'textarea'],
   FORBID_ATTR: ['style', 'onerror', 'onload', 'onclick'],
 };
 
@@ -79,6 +86,10 @@ export function bindMarkdownInteractions(root, opts = {}) {
   const openExternal = opts.openExternal;
   const allowImages = opts.allowImages !== false;
   if (!root) return;
+
+  root.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+    el.disabled = true;
+  });
 
   root.querySelectorAll('a[href]').forEach((a) => {
     a.rel = 'noopener noreferrer';

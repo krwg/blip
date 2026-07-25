@@ -1,10 +1,9 @@
 /**
- * Apple-inspired UI motion (WWDC23 springs): smooth critically-damped
- * navigation, light snappy press feedback. Controlled by data-ui-motion.
+ * UI motion helpers. Soft ease-out continuity; controlled by data-ui-motion.
  */
 
-const ENTER_MS = 320;
-const EXIT_MS = 220;
+const ENTER_MS = 200;
+const EXIT_MS = 140;
 
 export function isUiMotionEnabled(config) {
   if (config?.uiMotion === false) return false;
@@ -25,7 +24,7 @@ export function syncUiMotion(config) {
 }
 
 /**
- * Swap main view with a short fade/slide (Apple-like continuity).
+ * Swap main view with a short fade/slide.
  * Falls back to instant replace when motion is off.
  */
 export function swapMainView(mainEl, nextView, { enabled } = {}) {
@@ -92,6 +91,6 @@ function settleClass(el, className, ms) {
       finish();
     };
     el.addEventListener('animationend', onEnd);
-    window.setTimeout(finish, ms + 80);
+    window.setTimeout(finish, ms + 60);
   });
 }

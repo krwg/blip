@@ -358,17 +358,25 @@ const locales = {
     'settings.reduce_motion': 'Reduce background motion',
     'settings.ui_motion': 'Interface animations',
     'settings.ui_motion_hint':
-      'Apple-style motion for views, settings panels, nav, modals, and toasts. Smooth springs (little bounce). Off is instant; also respects OS Reduce Motion.',
+      'Short soft transitions for views, settings panels, nav, modals, and toasts. Off is instant; also respects OS Reduce Motion.',
     'settings.overlay_section': 'Overlay & activity',
-    'settings.overlay_enable': 'Show desktop overlay',
+    'settings.overlay_enable': 'Enable desktop overlay',
     'settings.overlay_enable_hint':
-      'Always-on-top glass panel (Discord-style). Local only — see docs/OVERLAY.md.',
+      'Prepares the Discord-style HUD. It stays hidden until you press Shift+Alt+O.',
+    'settings.overlay_hotkey_hint': 'Toggle overlay: Shift+Alt+O (feature must be enabled above).',
     'settings.presence_detect': 'Detect running apps / games',
     'settings.presence_detect_hint':
       'Reads the foreground window locally (Windows / macOS). Never uploaded.',
     'settings.presence_share': 'Share activity in mesh status',
     'settings.presence_share_hint':
       'Writes detected activity into your presence text so LAN peers can see it. Opt-in.',
+    'settings.presence_prefer_games': 'Prefer games in status',
+    'settings.presence_prefer_games_hint':
+      'When a game is detected, status shows Playing… by default instead of a generic app.',
+    'settings.presence_pinned_app': 'Pin app (optional)',
+    'settings.presence_pinned_app_ph': 'e.g. firefox, Code',
+    'settings.presence_pinned_app_hint':
+      'Force this process name as the status focus when it is in the foreground (shows time spent).',
     'settings.default_reaction': 'Default reaction',
     'call.exit_stream': 'Exit stream',
     'settings.motion_hint': 'Animated backgrounds can be paused here or via the OS “reduce motion” setting.',
@@ -799,6 +807,7 @@ const locales = {
     'settings.shortcuts_global_off': 'System shortcuts disabled',
     'settings.shortcuts_toggle_dnd': 'Toggle Do Not Disturb',
     'settings.shortcuts_hangup_global': 'Hang up call',
+    'settings.shortcuts_overlay': 'Toggle desktop overlay',
     'toast.dnd_off_title': 'Do Not Disturb off',
     'toast.dnd_off_body': 'Notifications and UI sounds restored.',
     'settings.shortcuts_call_scope': 'Call window',
@@ -1426,17 +1435,25 @@ const locales = {
     'settings.reduce_motion': 'Меньше движения фона',
     'settings.ui_motion': 'Анимации интерфейса',
     'settings.ui_motion_hint':
-      'Движение в стиле Apple: разделы, панели настроек, навигация, модалки и тосты. Плавные пружины. Выкл — мгновенно; также учитывается системное «уменьшить движение».',
+      'Короткие мягкие переходы разделов, панелей, навигации, модалок и тостов. Выкл — мгновенно; также учитывается системное «уменьшить движение».',
     'settings.overlay_section': 'Оверлей и активность',
-    'settings.overlay_enable': 'Показывать оверлей',
+    'settings.overlay_enable': 'Включить оверлей',
     'settings.overlay_enable_hint':
-      'Панель поверх окон (как у Discord). Только локально — см. docs/OVERLAY.md.',
+      'Готовит HUD в стиле Discord. По умолчанию скрыт — показ по Shift+Alt+O.',
+    'settings.overlay_hotkey_hint': 'Показать/скрыть оверлей: Shift+Alt+O (сначала включите опцию выше).',
     'settings.presence_detect': 'Определять приложения / игры',
     'settings.presence_detect_hint':
       'Читает переднее окно локально (Windows / macOS). Никуда не отправляется.',
     'settings.presence_share': 'Делиться активностью в статусе',
     'settings.presence_share_hint':
       'Пишет обнаруженную активность в текст статуса для пиров в LAN. Только по согласию.',
+    'settings.presence_prefer_games': 'Приоритет игр в статусе',
+    'settings.presence_prefer_games_hint':
+      'Если видна игра — в статусе по умолчанию «Playing…», а не обычное приложение.',
+    'settings.presence_pinned_app': 'Закрепить приложение (опционально)',
+    'settings.presence_pinned_app_ph': 'напр. firefox, Code',
+    'settings.presence_pinned_app_hint':
+      'Если процесс на переднем плане — статус и таймер сессии привязаны к нему.',
     'settings.default_reaction': 'Реакция по умолчанию',
     'call.exit_stream': 'Выйти из трансляции',
     'settings.motion_hint': 'Анимацию фона можно отключить здесь или через системную настройку «уменьшить движение».',
@@ -1855,6 +1872,7 @@ const locales = {
     'settings.shortcuts_global_off': 'Системные клавиши выключены',
     'settings.shortcuts_toggle_dnd': 'Не беспокоить',
     'settings.shortcuts_hangup_global': 'Сбросить звонок',
+    'settings.shortcuts_overlay': 'Показать / скрыть оверлей',
     'toast.dnd_off_title': 'Режим «не беспокоить» выкл',
     'toast.dnd_off_body': 'Уведомления и звуки снова включены.',
     'settings.shortcuts_call_scope': 'Окно звонка',

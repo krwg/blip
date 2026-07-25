@@ -68,6 +68,7 @@ import {
   destroyOverlayWindow,
   refreshPresenceLoop,
   pushOverlayUpdate,
+  toggleOverlayVisible,
 } from './overlay-window.js';
 import { detectForegroundApp } from './presence-detect.js';
 
@@ -151,9 +152,25 @@ let mainWindow = null;
 let callWindow = null;
 
 let activeCallPeerId = null;
+let activeCallStartedAt = 0;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
+
+function setActiveCallPeer(peerId) {
+  const id = Number(peerId) || null;
+  if (id && id !== activeCallPeerId) {
+    activeCallStartedAt = Date.now();
+  }
+  if (!id) activeCallStartedAt = 0;
+  activeCallPeerId = id;
+}
+
+function clearActiveCallPeer(peerId = null) {
+  if (peerId != null && Number(peerId) !== Number(activeCallPeerId)) return;
+  activeCallPeerId = null;
+  activeCallStartedAt = 0;
+}
 
 const pendingCallIpc = [];
 
@@ -344,6 +361,7 @@ function refreshGlobalShortcuts() {
     enabled: config.globalShortcutsEnabled !== false,
     getMainWindow: () => mainWindow,
     getCallWindow: () => callWindow,
+    onToggleOverlay: () => toggleOverlayHotkey(),
   });
 }
 
@@ -621,7 +639,9 @@ function patchConfig(updates) {
   if (
     updates?.overlayEnabled !== undefined ||
     updates?.presenceDetectEnabled !== undefined ||
-    updates?.presenceShareEnabled !== undefined
+    updates?.presenceShareEnabled !== undefined ||
+    updates?.presencePreferGames !== undefined ||
+    updates?.presencePinnedApp !== undefined
   ) {
     syncOverlayFeature();
   }
@@ -644,6 +664,26 @@ function syncOverlayFeature() {
     getPeersOnline: () =>
       (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
     getUnreadTotal: () => 0,
+    getCallInfo: () => {
+      if (!activeCallPeerId) return { active: false };
+      const peer = (discovery?.getPeers?.() || []).find(
+        (p) => Number(p.blipId) === Number(activeCallPeerId)
+      );
+      return {
+        active: true,
+        peerId: activeCallPeerId,
+        peerName: peer?.displayName || `BLIP-${activeCallPeerId}`,
+        startedAt: activeCallStartedAt || Date.now(),
+      };
+    },
+    windowDeps: overlayWindowDeps(),
+  });
+}
+
+function toggleOverlayHotkey() {
+  if (!config?.overlayEnabled) return;
+  toggleOverlayVisible({
+    getConfig: () => config,
     windowDeps: overlayWindowDeps(),
   });
 }
@@ -839,7 +879,7 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     case 'call-offer': {
       const callerId = msg.from ?? fromBlipId;
-      activeCallPeerId = Number(callerId) || null;
+      setActiveCallPeer(callerId);
       if (config?.desktopCallNotifications !== false && !config?.doNotDisturb) {
         showDesktopNotification({
           kind: 'call',
@@ -861,7 +901,7 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     }
     case 'call-answer':
-      activeCallPeerId = Number(msg.from ?? fromBlipId) || activeCallPeerId;
+      setActiveCallPeer(msg.from ?? fromBlipId ?? activeCallPeerId);
       void sendToCallWindow('call-answer', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-candidate':
@@ -871,7 +911,7 @@ function handleTcpPayload(msg, fromBlipId) {
       void sendToCallWindow('call-rejected', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-hangup':
-      if (Number(msg.from ?? fromBlipId) === activeCallPeerId) activeCallPeerId = null;
+      clearActiveCallPeer(msg.from ?? fromBlipId);
       void sendToCallWindow('call-ended', { ...msg, from: msg.from ?? fromBlipId }, { focus: false });
       break;
     case 'call-state':
@@ -1074,7 +1114,9 @@ function setupIpc() {
     if (
       updates?.overlayEnabled !== undefined ||
       updates?.presenceDetectEnabled !== undefined ||
-      updates?.presenceShareEnabled !== undefined
+      updates?.presenceShareEnabled !== undefined ||
+      updates?.presencePreferGames !== undefined ||
+      updates?.presencePinnedApp !== undefined
     ) {
       syncOverlayFeature();
     }
@@ -1507,7 +1549,7 @@ function setupIpc() {
 
   ipcMain.handle('call-hangup', async (_, payload) => {
     try {
-      if (Number(payload.to) === activeCallPeerId) activeCallPeerId = null;
+      clearActiveCallPeer(payload.to);
       await sendCallToPeer(payload.to, {
         type: 'call-hangup',
         from: config.blipId,
@@ -1515,7 +1557,7 @@ function setupIpc() {
       });
       return { ok: true };
     } catch {
-      activeCallPeerId = null;
+      clearActiveCallPeer();
       return { ok: true };
     }
   });
@@ -1787,7 +1829,7 @@ function setupIpc() {
       const peer = findPeer(peerId);
       if (!peer) return { ok: false, error: 'Peer not found' };
       await ensurePeerSocket(peerId);
-      activeCallPeerId = peerId;
+      setActiveCallPeer(peerId);
       await sendToCallWindow(
         'call-outgoing',
         { peerId, video: payload.video ?? false },
@@ -1795,7 +1837,7 @@ function setupIpc() {
       );
       return { ok: true };
     } catch (err) {
-      activeCallPeerId = null;
+      clearActiveCallPeer();
       return { ok: false, error: err?.message || String(err) };
     }
   });
@@ -2017,7 +2059,7 @@ app.whenReady().then(async () => {
 async function hangupActiveCallIfAny() {
   const peer = activeCallPeerId;
   if (!peer || !config?.blipId) return;
-  activeCallPeerId = null;
+  clearActiveCallPeer();
   try {
     await sendCallToPeer(peer, {
       type: 'call-hangup',
