@@ -168,6 +168,7 @@ export function applyAppearance(config) {
     config?.reactiveBackground === true && bg !== 'none' ? '1' : '0';
   applyCustomAccentVars(html, config);
   syncReducedMotion(config);
+  syncUiMotionFlag(config);
   applyUiPreferences(config);
 }
 
@@ -200,6 +201,7 @@ export function applyCallWindowAppearance(config) {
   html.dataset.uiSkin = normalizeUiSkin(config?.uiSkin);
   applyCustomAccentVars(html, config);
   syncReducedMotion(config);
+  syncUiMotionFlag(config);
 }
 
 export function syncReducedMotion(config) {
@@ -210,6 +212,15 @@ export function syncReducedMotion(config) {
   html.dataset.reducedMotion = reduce ? '1' : '0';
 }
 
+/** Interface chrome motion — separate from background reduceMotion. */
+export function syncUiMotionFlag(config) {
+  const html = document.documentElement;
+  const osReduce = !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const enabled = config?.uiMotion !== false && !osReduce;
+  html.dataset.uiMotion = enabled ? '1' : '0';
+  return enabled;
+}
+
 export function listenReducedMotion(cb, getConfig) {
   const mqMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const mqScheme = window.matchMedia?.('(prefers-color-scheme: dark)');
@@ -217,6 +228,7 @@ export function listenReducedMotion(cb, getConfig) {
     const cfg = getConfig?.();
     if (cfg) applyAppearance(cfg);
     syncReducedMotion(cfg);
+    syncUiMotionFlag(cfg);
     cb?.();
   };
   mqMotion?.addEventListener('change', fn);

@@ -136,6 +136,20 @@ export function buildAppearanceSection({ getState, saveConfig }) {
   reactiveRow.appendChild(createPixelHintIcon('settings.reactive_background_hint'));
   block.appendChild(reactiveRow);
 
+  const uiMotionToggle = createPixelToggle({
+    checked: state.config.uiMotion !== false,
+    labelKey: 'settings.ui_motion',
+    onChange: async (checked) => {
+      state.config = await saveConfig({ uiMotion: checked });
+      applyAppearance(state.config);
+    },
+  });
+  const uiMotionRow = document.createElement('div');
+  uiMotionRow.className = 'settings-toggle-with-hint';
+  uiMotionRow.appendChild(uiMotionToggle.el);
+  uiMotionRow.appendChild(createPixelHintIcon('settings.ui_motion_hint'));
+  block.appendChild(uiMotionRow);
+
   const motionToggle = createPixelToggle({
     checked: !!state.config.reduceMotion,
     labelKey: 'settings.reduce_motion',

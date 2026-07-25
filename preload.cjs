@@ -274,4 +274,15 @@ contextBridge.exposeInMainWorld('blip', {
   reportCallWindowReady: () => ipcRenderer.send('call-window-ready'),
   reportGroupCallWindowReady: () => ipcRenderer.send('group-call-window-ready'),
   getGroupForCall: (groupId) => ipcRenderer.invoke('get-group-for-call', groupId),
+  getForegroundPresence: () => ipcRenderer.invoke('get-foreground-presence'),
+  overlayPushStats: (stats) => ipcRenderer.invoke('overlay-push-stats', stats),
+});
+
+contextBridge.exposeInMainWorld('blipOverlay', {
+  onUpdate: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('overlay-update', handler);
+    return () => ipcRenderer.removeListener('overlay-update', handler);
+  },
+  ready: () => ipcRenderer.send('overlay-ready'),
 });

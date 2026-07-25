@@ -26,7 +26,14 @@ const DEFAULT_CONFIG = {
 
   reduceMotion: false,
 
+  /** Interface motion (views, panels, chrome). Default on; OS reduce-motion wins. */
+  uiMotion: true,
+
   reactiveBackground: false,
+
+  overlayEnabled: false,
+  presenceDetectEnabled: false,
+  presenceShareEnabled: false,
 
   defaultReactionEmoji: '❤️',
 
