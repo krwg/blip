@@ -136,6 +136,11 @@ import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
 import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
+import {
+  isVersionNewer,
+  filterReleasesForChannel,
+  githubRepoBase,
+} from './app-version.js';
 import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
 import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
@@ -1716,43 +1721,6 @@ function applySoundPrefsFromConfig(cfg = state.config) {
   });
 }
 
-function parseSemver(v) {
-  const m = String(v || '')
-    .replace(/^v/i, '')
-    .match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!m) return null;
-  return [Number(m[1]), Number(m[2]), Number(m[3])];
-}
-
-function compareAppVersions(a, b) {
-  const strip = (v) => String(v || '').replace(/^v/i, '').trim();
-  const pa = strip(a).split('-');
-  const pb = strip(b).split('-');
-  const na = pa[0].split('.').map((n) => Number(n) || 0);
-  const nb = pb[0].split('.').map((n) => Number(n) || 0);
-  for (let i = 0; i < 3; i++) {
-    if (na[i] > nb[i]) return 1;
-    if (na[i] < nb[i]) return -1;
-  }
-  const preA = pa[1] || '';
-  const preB = pb[1] || '';
-  if (!preA && preB) return 1;
-  if (preA && !preB) return -1;
-  if (preA > preB) return 1;
-  if (preA < preB) return -1;
-  return 0;
-}
-
-function isVersionNewer(a, b) {
-  return compareAppVersions(a, b) > 0;
-}
-
-function filterReleasesForChannel(releases, receiveBeta) {
-  if (!releases?.length) return [];
-  if (receiveBeta) return releases;
-  return releases.filter((r) => !r.prerelease);
-}
-
 function showUpdateStatusToast(payload) {
   if (!payload?.state) return;
   lastUpdateToastDismiss?.();
@@ -3018,11 +2986,6 @@ async function applyFactoryReset() {
   void loadSelfAvatarFromMain();
   restartClipboardSync();
   render();
-}
-
-function githubRepoBase(meta) {
-  const raw = meta?.githubUrl || 'https://github.com/krwg/blip';
-  return String(raw).replace(/\/$/, '');
 }
 
 function buildSettingsAboutPanel() {
