@@ -1,13 +1,13 @@
-/* Apple-inspired UI motion — springs via cubic-bezier (smooth / snappy).
+/* Soft UI motion — short ease-out transitions.
    Active when html[data-ui-motion="1"]. Instant when "0" or prefers-reduced-motion. */
 
 html {
-  --ui-ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-  --ui-ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1.05);
-  --ui-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ui-dur-fast: 160ms;
-  --ui-dur-med: 280ms;
-  --ui-dur-slow: 380ms;
+  --ui-ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ui-ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --ui-ease-snappy: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ui-dur-fast: 100ms;
+  --ui-dur-med: 160ms;
+  --ui-dur-slow: 220ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -25,33 +25,32 @@ html[data-ui-motion='0'] .ui-motion-panel-exit {
   animation: none !important;
 }
 
-/* —— View enter / exit (main content) —— */
 @keyframes ui-motion-view-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 @keyframes ui-motion-view-out {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
   to {
     opacity: 0;
-    transform: translateY(-6px) scale(0.99);
+    transform: translateY(-3px);
   }
 }
 
 @keyframes ui-motion-panel-in {
   from {
     opacity: 0;
-    transform: translateX(14px);
+    transform: translateX(8px);
   }
   to {
     opacity: 1;
@@ -66,12 +65,12 @@ html[data-ui-motion='0'] .ui-motion-panel-exit {
   }
   to {
     opacity: 0;
-    transform: translateX(-10px);
+    transform: translateX(-6px);
   }
 }
 
 html[data-ui-motion='1'] .ui-motion-enter {
-  animation: ui-motion-view-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+  animation: ui-motion-view-in var(--ui-dur-slow) var(--ui-ease-out) both;
 }
 
 html[data-ui-motion='1'] .ui-motion-exit {
@@ -80,7 +79,7 @@ html[data-ui-motion='1'] .ui-motion-exit {
 }
 
 html[data-ui-motion='1'] .ui-motion-panel-enter {
-  animation: ui-motion-panel-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+  animation: ui-motion-panel-in var(--ui-dur-slow) var(--ui-ease-out) both;
 }
 
 html[data-ui-motion='1'] .ui-motion-panel-exit {
@@ -88,7 +87,6 @@ html[data-ui-motion='1'] .ui-motion-panel-exit {
   pointer-events: none;
 }
 
-/* —— Chrome: nav, buttons, rows, toggles —— */
 html[data-ui-motion='1'] .nav-btn,
 html[data-ui-motion='1'] .settings-nav-item,
 html[data-ui-motion='1'] .btn,
@@ -104,7 +102,7 @@ html[data-ui-motion='1'] .titlebar-btn {
     border-color var(--ui-dur-fast) var(--ui-ease-out),
     color var(--ui-dur-fast) var(--ui-ease-out),
     box-shadow var(--ui-dur-med) var(--ui-ease-smooth),
-    transform var(--ui-dur-fast) var(--ui-ease-snappy),
+    transform var(--ui-dur-fast) var(--ui-ease-out),
     opacity var(--ui-dur-fast) var(--ui-ease-out);
 }
 
@@ -114,24 +112,15 @@ html[data-ui-motion='1'] .settings-nav-item:active,
 html[data-ui-motion='1'] .peer-row:active,
 html[data-ui-motion='1'] .chat-hub-item:active,
 html[data-ui-motion='1'] .ach-card:active {
-  transform: scale(0.97);
+  transform: scale(0.985);
 }
 
-html[data-ui-motion='1'] .nav-btn.active,
-html[data-ui-motion='1'] .settings-nav-item.active {
-  transition:
-    background var(--ui-dur-med) var(--ui-ease-smooth),
-    transform var(--ui-dur-med) var(--ui-ease-snappy),
-    box-shadow var(--ui-dur-med) var(--ui-ease-smooth);
-}
-
-/* —— Modals —— */
 html[data-ui-motion='1'] .blip-modal-backdrop {
   animation: ui-motion-backdrop-in var(--ui-dur-med) var(--ui-ease-out) both;
 }
 
 html[data-ui-motion='1'] .blip-modal {
-  animation: ui-motion-modal-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+  animation: ui-motion-modal-in var(--ui-dur-slow) var(--ui-ease-out) both;
 }
 
 @keyframes ui-motion-backdrop-in {
@@ -146,36 +135,34 @@ html[data-ui-motion='1'] .blip-modal {
 @keyframes ui-motion-modal-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.96);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
-/* —— Toasts —— */
 html[data-ui-motion='1'] .toast-stack .toast,
 html[data-ui-motion='1'] .app-toast {
-  animation: ui-motion-toast-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+  animation: ui-motion-toast-in var(--ui-dur-slow) var(--ui-ease-out) both;
 }
 
 @keyframes ui-motion-toast-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
-/* —— Settings shell —— */
 html[data-ui-motion='1'] .settings-layout .settings-nav-item {
   transition:
     background var(--ui-dur-fast) var(--ui-ease-out),
-    transform var(--ui-dur-fast) var(--ui-ease-snappy),
+    transform var(--ui-dur-fast) var(--ui-ease-out),
     color var(--ui-dur-fast) var(--ui-ease-out);
 }
 

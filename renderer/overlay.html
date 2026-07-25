@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-ui-skin="pixel">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,12 +7,14 @@
   <title>BLIP Overlay</title>
   <style>
     :root {
-      --bg: rgba(12, 12, 16, 0.72);
-      --border: rgba(148, 163, 184, 0.28);
-      --text: rgba(226, 232, 240, 0.95);
-      --muted: rgba(148, 163, 184, 0.75);
+      --bg: rgba(10, 12, 18, 0.78);
+      --border: rgba(148, 163, 184, 0.32);
+      --text: rgba(241, 245, 249, 0.96);
+      --muted: rgba(148, 163, 184, 0.82);
       --accent: #94a3b8;
-      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --game: #5eead4;
+      --call: #86efac;
+      --ease: cubic-bezier(0.33, 1, 0.68, 1);
     }
     html, body {
       margin: 0;
@@ -20,70 +22,128 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
       color: var(--text);
       -webkit-user-select: none;
       user-select: none;
     }
     .panel {
       box-sizing: border-box;
-      margin: 8px;
-      padding: 12px 14px;
-      width: calc(100% - 16px);
-      min-height: calc(100% - 16px);
-      border-radius: 14px;
+      margin: 10px;
+      padding: 14px 16px;
+      width: calc(100% - 20px);
+      min-height: calc(100% - 20px);
+      border-radius: 16px;
       background: var(--bg);
       border: 1px solid var(--border);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      animation: in 320ms var(--ease) both;
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 10px 36px rgba(0, 0, 0, 0.4);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+      animation: in 200ms var(--ease) both;
     }
     @keyframes in {
-      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: none; }
     }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
     .brand {
-      font-size: 11px;
-      letter-spacing: 0.14em;
+      font-size: 10px;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--muted);
     }
-    .activity {
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 1.35;
-      word-break: break-word;
+    .clock {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
-    .meta {
-      font-size: 12px;
+    .clock-time {
+      display: block;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    .clock-date {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .body { display: flex; flex-direction: column; gap: 6px; min-height: 64px; }
+    .kind {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--muted);
     }
-    .row {
+    .kind--game { color: var(--game); }
+    .kind--call { color: var(--call); }
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .call-box {
+      margin-top: 4px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--call) 35%, transparent);
+      background: color-mix(in srgb, var(--call) 10%, transparent);
+    }
+    .call-box.hidden { display: none; }
+    .footer {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 8px;
-      align-items: baseline;
+      font-size: 11px;
+      color: var(--muted);
     }
     .badge {
       font-size: 11px;
-      padding: 2px 6px;
+      padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid var(--border);
       color: var(--accent);
     }
-    .idle .activity { color: var(--muted); font-weight: 500; }
+    .badge.hidden { display: none; }
+    .idle .title { color: var(--muted); font-weight: 550; }
   </style>
 </head>
 <body>
   <div class="panel idle" id="panel">
-    <div class="brand">BLIP</div>
-    <div class="activity" id="activity">—</div>
-    <div class="row">
-      <span class="meta" id="meta"></span>
+    <div class="top">
+      <div class="brand">BLIP</div>
+      <div class="clock">
+        <span class="clock-time" id="clockTime">--:--</span>
+        <span class="clock-date" id="clockDate"></span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="kind" id="kind"></div>
+      <div class="title" id="title">—</div>
+      <div class="sub" id="sub"></div>
+      <div class="call-box hidden" id="callBox">
+        <div class="kind kind--call" data-i18n-fallback="In call">In call</div>
+        <div class="title" id="callPeer" style="font-size:14px"></div>
+        <div class="sub" id="callElapsed"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <span id="meta"></span>
       <span class="badge hidden" id="unread"></span>
     </div>
   </div>

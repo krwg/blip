@@ -3,24 +3,168 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-let lastSnapshot = { title: '', app: '', pid: 0, at: 0 };
+const GAME_HINTS = [
+  'steam',
+  'steamwebhelper',
+  'cs2',
+  'csgo',
+  'dota2',
+  'valorant',
+  'leagueclient',
+  'league of legends',
+  'minecraft',
+  'javaw',
+  'epicgameslauncher',
+  'fortniteclient',
+  'r5apex',
+  'overwatch',
+  'gta5',
+  'rdr2',
+  'witcher3',
+  'cyberpunk2077',
+  'hl2',
+  'tf2',
+  'rocketleague',
+  'genshinimpact',
+  'osu!',
+  'osu',
+  'faceit',
+  'battlenet',
+  'origin',
+  'eaDesktop',
+  'upc',
+  'riotclient',
+];
 
-/**
- * Opt-in foreground app probe (Windows first).
- * Returns { title, app, pid } or null when unavailable.
- */
+let lastSnapshot = { title: '', app: '', pid: 0, at: 0 };
+/** @type {{ key: string, since: number, kind: string, label: string, app: string, title: string } | null} */
+let session = null;
+
 export async function detectForegroundApp() {
-  if (process.platform === 'win32') {
-    return detectWindowsForeground();
-  }
-  if (process.platform === 'darwin') {
-    return detectMacForeground();
-  }
+  if (process.platform === 'win32') return detectWindowsForeground();
+  if (process.platform === 'darwin') return detectMacForeground();
   return null;
 }
 
 export function getLastPresenceSnapshot() {
   return lastSnapshot;
+}
+
+export function getActivitySession() {
+  return session;
+}
+
+export function isLikelyGame(appName, title = '') {
+  const app = String(appName || '').toLowerCase();
+  const t = String(title || '').toLowerCase();
+  if (!app) return false;
+  if (app === 'blip' || app === 'electron' || app === 'powershell' || app === 'cmd') {
+    return false;
+  }
+  return GAME_HINTS.some((g) => app.includes(g.toLowerCase()) || t.includes(g.toLowerCase()));
+}
+
+function prettyApp(name) {
+  return String(name || '')
+    .replace(/\.exe$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim();
+}
+
+function formatDuration(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Classify foreground activity with session timing (Discord/Steam-style).
+ * preferGames: when true, games win over generic apps for status.
+ * pinnedApp: optional process name to always treat as the focus app.
+ */
+export function classifyActivity(snap, opts = {}) {
+  const preferGames = opts.preferGames !== false;
+  const pinned = String(opts.pinnedApp || '')
+    .trim()
+    .toLowerCase();
+  const excludeSelf = opts.excludeSelf !== false;
+
+  if (!snap?.app) {
+    session = null;
+    return null;
+  }
+
+  const appRaw = String(snap.app);
+  const app = appRaw.toLowerCase();
+  if (excludeSelf && (app === 'blip' || app === 'electron')) {
+    return session
+      ? {
+          ...session,
+          elapsedMs: Date.now() - session.since,
+          elapsedLabel: formatDuration(Date.now() - session.since),
+          current: false,
+        }
+      : null;
+  }
+
+  const title = String(snap.title || '').trim();
+  const game = isLikelyGame(appRaw, title);
+  const pinnedHit = pinned && (app === pinned || app.includes(pinned));
+
+  let kind = 'app';
+  let label = prettyApp(appRaw);
+  if (pinnedHit) {
+    kind = game ? 'game' : 'app';
+    label = prettyApp(appRaw);
+  } else if (game && preferGames) {
+    kind = 'game';
+    label = title && title.length > 2 && !title.toLowerCase().includes(app)
+      ? title.slice(0, 64)
+      : prettyApp(appRaw);
+  } else if (game) {
+    kind = 'game';
+    label = prettyApp(appRaw);
+  } else if (title.length > 2) {
+    label = `${prettyApp(appRaw)}`.slice(0, 48);
+  }
+
+  const key = `${kind}:${app}`;
+  if (!session || session.key !== key) {
+    session = {
+      key,
+      since: Date.now(),
+      kind,
+      label,
+      app: appRaw,
+      title,
+    };
+  } else {
+    session.label = label;
+    session.title = title;
+    session.app = appRaw;
+    session.kind = kind;
+  }
+
+  const elapsedMs = Date.now() - session.since;
+  return {
+    ...session,
+    elapsedMs,
+    elapsedLabel: formatDuration(elapsedMs),
+    current: true,
+    statusLine:
+      kind === 'game'
+        ? `Playing ${label}`.slice(0, 48)
+        : `In ${prettyApp(appRaw)} · ${formatDuration(elapsedMs)}`.slice(0, 48),
+  };
+}
+
+/** @deprecated prefer classifyActivity */
+export function formatPresenceActivity(snap, opts = {}) {
+  const c = classifyActivity(snap, opts);
+  return c?.statusLine || '';
 }
 
 async function detectWindowsForeground() {
@@ -91,30 +235,4 @@ return n
   } catch {
     return null;
   }
-}
-
-/** Map process names to a short activity label for mesh status. */
-export function formatPresenceActivity(snap, { excludeSelf = true } = {}) {
-  if (!snap?.app) return '';
-  const app = snap.app.toLowerCase();
-  if (excludeSelf && (app === 'blip' || app === 'electron')) return '';
-  const games = [
-    'steam',
-    'cs2',
-    'dota2',
-    'valorant',
-    'league of legends',
-    'minecraft',
-    'epicgameslauncher',
-    'r5apex',
-    'overwatch',
-  ];
-  const pretty = snap.app.replace(/\.exe$/i, '');
-  if (games.some((g) => app.includes(g))) {
-    return `Playing ${pretty}`;
-  }
-  if (snap.title && snap.title.length > 2) {
-    return `${pretty}: ${snap.title}`.slice(0, 80);
-  }
-  return pretty.slice(0, 64);
 }

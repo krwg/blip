@@ -24,8 +24,9 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **BEACON (МАЯК)** — off by default; enable in Settings → Developer.
 - **Achievements** — empty icon slots, +5 mid and +5 legendary goals; NestUI uses soft Nest radii (default skin stays sharp).
 - **Multiplatform packaging** — Linux (AppImage/deb) + macOS 12+ (styled DMG + zip); tray/login settings on Darwin/Linux; see [`docs/PACKAGING.md`](docs/PACKAGING.md).
-- **Interface animations** — Apple-style view/panel/nav/modal motion; Settings → Appearance toggle (default on); OS Reduce Motion wins ([#84](https://github.com/krwg/blip/issues/84)).
-- **Overlay / activity (slice)** — always-on-top overlay + opt-in foreground app detect/share; Settings → System; [`docs/OVERLAY.md`](docs/OVERLAY.md) ([#82](https://github.com/krwg/blip/issues/82)).
+- **Interface animations** — soft short view/panel/nav/modal motion; Settings → Appearance toggle (default on); OS Reduce Motion wins.
+- **Overlay / activity** — Shift+Alt+O HUD (call timer, clock, game/app session); game-priority status + pin app; [`docs/OVERLAY.md`](docs/OVERLAY.md).
+- **Chat Markdown** — full GFM in DMs and groups (tables, lists, code, task lists) via sanitized `marked` + DOMPurify.
 
 ### Fixed
 
