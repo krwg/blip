@@ -105,8 +105,16 @@ export function createTray(opts) {
       },
     ]);
     tray.setContextMenu(menu);
-    tray.on('click', showMain);
-    tray.on('double-click', showMain);
+    if (process.platform === 'darwin') {
+      try {
+        tray.setIgnoreDoubleClickEvents(true);
+      } catch {
+
+      }
+    } else {
+      tray.on('click', showMain);
+      tray.on('double-click', showMain);
+    }
   } catch {
     tray = null;
   }

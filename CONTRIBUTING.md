@@ -6,7 +6,7 @@ Thanks for helping improve BLIP. This project is **GPL-3.0** — your contributi
 
 - **Node.js** ≥ 20 (see `.nvmrc`). Use `nvm use` if you use nvm.
 - **npm** (ships with Node).
-- **Windows** is the primary target today; other platforms may work but are not fully validated in CI.
+- **Windows** is the primary day-to-day target; **Linux** and **macOS 12+** are supported packaging targets (see [`docs/PACKAGING.md`](docs/PACKAGING.md)).
 
 ## GitHub Pages
 
@@ -50,31 +50,39 @@ Builds the renderer first (`prestart` → `vite build`), then launches Electron 
 
 ## Building installers
 
-Requires Windows for the current electron-builder targets:
+See **[`docs/PACKAGING.md`](docs/PACKAGING.md)** for Windows / Linux / macOS 12+ details (styled DMG, tray & login-item limits, Gatekeeper).
 
 ```bash
-npm run electron:build        # NSIS installer
+npm run electron:build          # Windows NSIS
 npm run electron:build:portable
-npm run electron:build:all    # Setup + portable + latest.yml (auto-update manifest)
+npm run electron:build:win      # Setup + portable + latest.yml
+npm run electron:build:mac      # DMG + zip (on macOS)
+npm run electron:build:linux    # AppImage + deb (on Linux)
 ```
 
 Outputs go to `dist-electron/` (see `electron-builder.yml`).
 
 ### Publishing a GitHub Release
 
-In-app updates need **`latest.yml`** and **`BLIP-Setup-<version>.exe`** on the **same** release tag as `app-metadata.json` (e.g. tag `1.1.1`, not `v1.1.1`, unless you use that tag consistently).
+In-app updates need the matching channel file on the **same** release tag as `app-metadata.json`:
+
+| Platform | Manifest |
+|----------|----------|
+| Windows | `latest.yml` + Setup exe |
+| macOS | `latest-mac.yml` + dmg/zip |
+| Linux | `latest-linux.yml` + AppImage/deb |
 
 | Method | Command |
 |--------|---------|
-| **CI (recommended)** | Push git tag `1.1.1` → [`.github/workflows/release.yml`](.github/workflows/release.yml) runs `electron:publish:win` |
-| **Local publish** | `$env:GH_TOKEN = "ghp_…"; npm run electron:publish:win` |
-| **Manual upload** | `npm run electron:build:all` then `npm run release:assets` — attach listed files to the GitHub Release |
+| **CI (recommended)** | Push git tag → [`.github/workflows/release.yml`](.github/workflows/release.yml) builds win/linux/mac |
+| **Local publish** | `$env:GH_TOKEN = "ghp_…"; npm run electron:publish:win` (or `:mac` / `:linux`) |
+| **Manual upload** | Build locally then `npm run release:assets` — attach listed files to the GitHub Release |
 
 Copy release notes from [`docs/release-notes-v1.1.1-github.md`](docs/release-notes-v1.1.1-github.md) (update per version).
 
-**Portable** builds do not receive in-app updates — users must download a new portable or install Setup once.
+**Portable** Windows builds do not receive in-app updates — users must download a new portable or install Setup once.
 
-**Dev vs packaged UI:** `npm run electron:dev` loads live sources from Vite; `electron:build:all` snapshots `dist/` into the exe. Always run `npm run build` before shipping (the build scripts do this automatically).
+**Dev vs packaged UI:** `npm run electron:dev` loads live sources from Vite; packaging snapshots `dist/` into the app. Always run `npm run build` before shipping (the build scripts do this automatically).
 
 ## Release metadata
 

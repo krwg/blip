@@ -13,7 +13,7 @@
 [![Version](https://img.shields.io/badge/version-2.0.0_Morse-00ffc8?style=for-the-badge&labelColor=0a0a0a)](https://github.com/krwg/blip/releases)
 [![Electron](https://img.shields.io/badge/Electron-35-47848F?style=for-the-badge&logo=electron&logoColor=white&labelColor=0a0a0a)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-00ffc8?style=for-the-badge&labelColor=0a0a0a)](LICENSE)
-[![Platform](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=0a0a0a)]()
+[![Platform](https://img.shields.io/badge/Windows%20%7C%20macOS%2012%2B%20%7C%20Linux-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=0a0a0a)]()
 [![P2P](https://img.shields.io/badge/P2P-LAN%20%2F%20VPN-00ffc8?style=for-the-badge&labelColor=0a0a0a)]()
 [![WebRTC](https://img.shields.io/badge/WebRTC-voice%20%2B%20video-00ffc8?style=for-the-badge&labelColor=0a0a0a)]()
 [![Offline](https://img.shields.io/badge/offline--first-yes-00ffc8?style=for-the-badge&labelColor=0a0a0a)]()
@@ -112,8 +112,8 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | **Shortcuts** | In-window + system-wide (**Alt+1–4**, tray-safe) |
 | **Languages** | Full **English / Russian** UI (including group call chrome and badges) |
 | **Settings** | Profile, privacy/block list, appearance, network, shortcuts, call devices, transfers |
-| **Window** | Custom title bar, system tray, close-to-tray (Windows), **launch at login** (Windows) |
-| **Updates** | Auto-check on startup (NSIS **Setup** builds; attach `latest.yml` on GitHub — see [`CONTRIBUTING.md`](CONTRIBUTING.md)) |
+| **Window** | Custom title bar, system tray / menu bar, close-to-tray, **launch at login** (Windows / macOS 12+ / Linux — see [`docs/PACKAGING.md`](docs/PACKAGING.md)) |
+| **Updates** | Auto-check on startup (Setup / AppImage / mac zip feeds — see [`docs/PACKAGING.md`](docs/PACKAGING.md)) |
 | **MESH+** | Optional test tier — extra customization, early features, profile badge; keys free from the author ([details](docs/MESH-PLUS.md)) |
 
 <h3 id="en-mesh-plus">MESH+</h3>
@@ -200,7 +200,7 @@ flowchart LR
 | | |
 |---|---|
 | Node.js | **20+** (see `.nvmrc`) |
-| OS | Windows 10/11 (for `.exe` builds) |
+| OS | Windows 10/11, macOS 12+, Linux (packaging — [`docs/PACKAGING.md`](docs/PACKAGING.md)) |
 | Network | Same LAN / VPN (Hamachi, Radmin) |
 
 **Install**
@@ -230,20 +230,23 @@ npx electron .
 
 Or `npm start` (runs `prebuild` automatically).
 
-**Windows builds**
+**Desktop builds**
 
-Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico`.
+Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico` / PNG (+ DMG background). Full matrix: [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 | Command | Output |
 |---------|--------|
-| `npm run electron:build` | **`BLIP-Setup-<version>.exe`** — NSIS installer (`app-metadata.json`) |
-| `npm run electron:build:portable` | **`BLIP-<version>-Portable.exe`** — portable (no in-app auto-update) |
-| `npm run electron:build:all` | Installer + portable + `latest.yml` |
-| `npm run electron:publish:win` | Build + upload to GitHub Releases (`GH_TOKEN`) |
+| `npm run electron:build` | **Windows** NSIS Setup |
+| `npm run electron:build:portable` | **Windows** portable |
+| `npm run electron:build:win` | Setup + portable + `latest.yml` |
+| `npm run electron:build:mac` | **macOS 12+** DMG + zip (build on macOS) |
+| `npm run electron:build:linux` | **Linux** AppImage + deb |
+| `npm run electron:publish:win` / `:mac` / `:linux` | Build + upload to GitHub Releases (`GH_TOKEN`) |
 | `npm run electron:build:dir` | `dist-electron/win-unpacked/BLIP.exe` (debug folder) |
 
-- **Installer (NSIS, assisted):** language → welcome → network tips → GPL license → per-user/per-machine → **choose folder** → install → finish (Launch BLIP). Desktop + Start Menu shortcuts. Uninstaller can optionally wipe `%APPDATA%\BLIP`.
-- **Portable:** one `.exe`, copy anywhere; settings live in `%APPDATA%`.
+- **Windows NSIS:** language → welcome → network tips → GPL → install folder → finish. Uninstaller can wipe `%APPDATA%\BLIP`.
+- **macOS DMG:** styled background, drag to Applications; Gatekeeper / notarization notes in PACKAGING.
+- **Linux:** AppImage (portable) + deb.
 
 <h3 id="en-scripts">npm scripts</h3>
 
@@ -253,11 +256,13 @@ Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico`.
 | `npm run build` | Build renderer → `dist/` |
 | `npm start` | `prebuild` + Electron |
 | `npm run electron:dev` | Vite + Electron |
-| `npm run build:icons` | `icon.svg` → `build/icon.ico` + PNG |
-| `npm run electron:build` | NSIS installer |
-| `npm run electron:build:portable` | Portable `.exe` |
-| `npm run electron:build:all` | Installer + portable + `latest.yml` |
-| `npm run electron:publish:win` | Build + publish to GitHub (`GH_TOKEN`) |
+| `npm run build:icons` | `icon.svg` → icons + DMG background |
+| `npm run electron:build` | Windows NSIS installer |
+| `npm run electron:build:portable` | Windows portable `.exe` |
+| `npm run electron:build:win` | Windows Setup + portable + `latest.yml` |
+| `npm run electron:build:mac` | macOS 12+ DMG + zip |
+| `npm run electron:build:linux` | Linux AppImage + deb |
+| `npm run electron:publish:win` / `:mac` / `:linux` | Build + publish to GitHub (`GH_TOKEN`) |
 | `npm run release:assets` | List files to attach to a manual release |
 | `npm run electron:build:dir` | Unpacked app folder |
 | `npm run copy-fonts` | Copy Minecraft font from npm package |
@@ -293,7 +298,7 @@ Icons: root `icon.svg` → `npm run build:icons` → `build/icon.ico`.
 6. **CHAT** — typing indicator when the peer composes; unread badge on the nav until you open the thread; **Ctrl+F** search in the open thread; hub shows **GRP** / **VOICE** for groups.
 7. **Groups** — open a group from the chat hub: text channels + **voice channels** (join/leave in the main window, mute/deafen/share). **GRP CALL** opens the legacy **Group call** window (separate mesh call); ongoing group calls show a join bar in the hub.
 8. **Calls (1:1)** — separate window: **M** mute, **D** deafen, **S** screen share, **F** fullscreen, **Esc** hang up.
-9. **Profile** — upload an avatar; peers on the LAN receive it automatically. **Settings → System** — optional **Start BLIP when Windows starts**.
+9. **Profile** — upload an avatar; peers on the LAN receive it automatically. **Settings → System** — optional **launch at login** / close-to-tray (platform notes in [`docs/PACKAGING.md`](docs/PACKAGING.md)).
 
 > Open firewall ports **42069–42070** only if peers are not discovered.
 
@@ -450,7 +455,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | **Горячие клавиши** | В окне + системные (**Alt+1–4**, из трея) |
 | **Языки** | Полный интерфейс **EN / RU** (включая групповой звонок и бейджи) |
 | **Настройки** | Профиль, конфиденциальность/блок, вид, сеть, горячие клавиши, звонок, передачи |
-| **Окно** | Свой title bar, трей, в трей (Windows), **автозапуск при входе в Windows** |
+| **Окно** | Свой title bar, трей / строка меню, в трей, **автозапуск при входе** (Windows / macOS 12+ / Linux — [`docs/PACKAGING.md`](docs/PACKAGING.md)) |
 | **Обновления** | Автопроверка при запуске (установщик **Setup**; на GitHub нужен `latest.yml` — см. [`CONTRIBUTING.md`](CONTRIBUTING.md)) |
 | **MESH+** | Тестовая подписка — кастомизация, ранний доступ к фичам, бейдж; ключи бесплатно от автора ([подробнее](docs/MESH-PLUS.md)) |
 
@@ -508,7 +513,7 @@ FREE: чат, звонки, группы (бета), блокнот, Mesh Pulse,
 | | |
 |---|---|
 | Node.js | **20+** (see `.nvmrc`) |
-| ОС | Windows 10/11 (сборка `.exe`) |
+| ОС | Windows 10/11, macOS 12+, Linux (сборка — [`docs/PACKAGING.md`](docs/PACKAGING.md)) |
 | Сеть | Одна LAN / VPN (Hamachi, Radmin) |
 
 **Установка**
@@ -538,20 +543,23 @@ npx electron .
 
 или `npm start` (сборка через `prebuild`).
 
-**Сборка Windows**
+**Сборка desktop**
 
-Иконка: корневой `icon.svg` → `npm run build:icons` → `build/icon.ico`.
+Иконка: корневой `icon.svg` → `npm run build:icons` → `build/icon.ico` / PNG (+ фон DMG). Матрица: [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 | Команда | Результат |
 |---------|-----------|
-| `npm run electron:build` | **`BLIP-Setup-<version>.exe`** — установщик NSIS (`app-metadata.json`) |
-| `npm run electron:build:portable` | **`BLIP-<version>-Portable.exe`** — portable (без автообновления в приложении) |
-| `npm run electron:build:all` | Setup + portable + `latest.yml` |
-| `npm run electron:publish:win` | Сборка + выкладка на GitHub Releases (`GH_TOKEN`) |
+| `npm run electron:build` | **Windows** NSIS Setup |
+| `npm run electron:build:portable` | **Windows** portable |
+| `npm run electron:build:win` | Setup + portable + `latest.yml` |
+| `npm run electron:build:mac` | **macOS 12+** DMG + zip (сборка на macOS) |
+| `npm run electron:build:linux` | **Linux** AppImage + deb |
+| `npm run electron:publish:win` / `:mac` / `:linux` | Сборка + выкладка на GitHub Releases (`GH_TOKEN`) |
 | `npm run electron:build:dir` | `dist-electron/win-unpacked/BLIP.exe` |
 
-- **Установщик (NSIS, мастер):** язык → приветствие → советы по сети → GPL → для пользователя / для ПК → **выбор папки** → установка → финиш (запуск BLIP). Ярлыки Desktop + «Пуск». В удалении можно стереть `%APPDATA%\BLIP`.
-- **Portable:** один `.exe`, настройки в `%APPDATA%`.
+- **Windows NSIS:** язык → приветствие → сеть → GPL → папка → финиш. Удаление может стереть `%APPDATA%\BLIP`.
+- **macOS DMG:** стилизованный фон, перенос в Applications; Gatekeeper / нотаризация — в PACKAGING.
+- **Linux:** AppImage + deb.
 
 <h3 id="ru-scripts">Скрипты npm</h3>
 
@@ -561,11 +569,13 @@ npx electron .
 | `npm run build` | Сборка renderer → `dist/` |
 | `npm start` | `prebuild` + Electron |
 | `npm run electron:dev` | Vite + Electron |
-| `npm run build:icons` | `icon.svg` → `build/icon.ico` + PNG |
-| `npm run electron:build` | NSIS-установщик |
-| `npm run electron:build:portable` | Portable `.exe` |
-| `npm run electron:build:all` | Setup + portable + `latest.yml` |
-| `npm run electron:publish:win` | Сборка + публикация на GitHub (`GH_TOKEN`) |
+| `npm run build:icons` | `icon.svg` → иконки + фон DMG |
+| `npm run electron:build` | Windows NSIS |
+| `npm run electron:build:portable` | Windows portable `.exe` |
+| `npm run electron:build:win` | Windows Setup + portable + `latest.yml` |
+| `npm run electron:build:mac` | macOS 12+ DMG + zip |
+| `npm run electron:build:linux` | Linux AppImage + deb |
+| `npm run electron:publish:win` / `:mac` / `:linux` | Сборка + публикация на GitHub (`GH_TOKEN`) |
 | `npm run release:assets` | Список файлов для ручного релиза |
 | `npm run electron:build:dir` | Распакованная папка |
 | `npm run copy-fonts` | Скопировать Minecraft из npm-пакета |
@@ -601,7 +611,7 @@ npx electron .
 6. **ЧАТ** — «печатает…»; непрочитанное на **Чат**; **Ctrl+F** — поиск в открытом чате; в hub — **ГРП** / **ГОЛОС** у групп.
 7. **Группы** — из hub: текстовые и **голосовые** каналы (вход/выход в главном окне, mute/deafen/экран). **ГРП ЗВОНОК** — legacy-окно **Групповой звонок**; активный звонок — полоса «войти» в hub.
 8. **Звонок 1:1** — отдельное окно: **M** / **D** / **S** / **F** / **Esc**.
-9. **Профиль** — аватар уходит абонентам по LAN. **Настройки → Система** — **запуск при старте Windows** (опционально).
+9. **Профиль** — аватар уходит абонентам по LAN. **Настройки → Система** — **автозапуск / в трей** (заметки по ОС — [`docs/PACKAGING.md`](docs/PACKAGING.md)).
 
 > Откройте порты **42069–42070** в firewall, только если пиры не видны.
 
