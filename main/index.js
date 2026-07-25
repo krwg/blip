@@ -65,6 +65,13 @@ import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
 import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
 import {
+  destroyOverlayWindow,
+  refreshPresenceLoop,
+  pushOverlayUpdate,
+} from './overlay-window.js';
+import { detectForegroundApp } from './presence-detect.js';
+
+import {
   setupAutoUpdater,
   checkForUpdatesNow,
   quitAndInstallUpdater,
@@ -597,6 +604,7 @@ function broadcastTrustState() {
 function patchConfig(updates) {
   config = saveConfig(updates);
   discovery?.updateConfig(config);
+  discovery?.announce();
   const pub = toPublicConfig(config);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('config-updated', pub);
@@ -610,7 +618,34 @@ function patchConfig(updates) {
   if (updates?.launchAtLogin !== undefined) {
     applyLaunchAtLogin(config.launchAtLogin);
   }
+  if (
+    updates?.overlayEnabled !== undefined ||
+    updates?.presenceDetectEnabled !== undefined ||
+    updates?.presenceShareEnabled !== undefined
+  ) {
+    syncOverlayFeature();
+  }
   return config;
+}
+
+function overlayWindowDeps() {
+  return {
+    rootDir,
+    useViteDev,
+    preloadPath,
+    icon: getWindowIcon(),
+  };
+}
+
+function syncOverlayFeature() {
+  refreshPresenceLoop({
+    getConfig: () => config,
+    patchConfig,
+    getPeersOnline: () =>
+      (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
+    getUnreadTotal: () => 0,
+    windowDeps: overlayWindowDeps(),
+  });
 }
 
 function meshHandshakeContext() {
@@ -967,6 +1002,29 @@ function installTray() {
 
 function setupIpc() {
   ipcMain.handle('get-config', () => toPublicConfig(config));
+  ipcMain.handle('get-foreground-presence', async () => {
+    const snap = await detectForegroundApp();
+    return snap;
+  });
+  ipcMain.handle('overlay-push-stats', (_, stats) => {
+    pushOverlayUpdate({
+      activity: config?.presenceText || '',
+      unread: Number(stats?.unread) || 0,
+      peersOnline: (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
+      idleLabel: 'BLIP',
+    });
+    return true;
+  });
+  ipcMain.on('overlay-ready', () => {
+    if (config?.overlayEnabled) {
+      pushOverlayUpdate({
+        activity: config?.presenceText || '',
+        unread: 0,
+        peersOnline: (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
+        idleLabel: 'BLIP',
+      });
+    }
+  });
   ipcMain.handle('save-config', (_, updates) => {
     const prevLang = config?.language;
     const safe = { ...updates };
@@ -1012,6 +1070,13 @@ function setupIpc() {
     }
     if (updates?.launchAtLogin !== undefined) {
       applyLaunchAtLogin(config.launchAtLogin);
+    }
+    if (
+      updates?.overlayEnabled !== undefined ||
+      updates?.presenceDetectEnabled !== undefined ||
+      updates?.presenceShareEnabled !== undefined
+    ) {
+      syncOverlayFeature();
     }
     if (
       updates?.globalShortcutsEnabled !== undefined ||
@@ -1925,6 +1990,7 @@ app.whenReady().then(async () => {
   broadcastTrustState();
   refreshAppIcons();
   installTray();
+  syncOverlayFeature();
   void ensureCallWindow().catch((e) => console.warn('[BLIP] prewarm call window', e));
   void ensureGroupCallWindow().catch((e) => console.warn('[BLIP] prewarm group call window', e));
   setupAutoUpdater(() => mainWindow, () => config);
@@ -1968,6 +2034,7 @@ app.on('before-quit', () => {
   void hangupActiveCallIfAny();
   unregisterGlobalShortcuts();
   destroyTray();
+  destroyOverlayWindow();
 });
 
 app.on('window-all-closed', () => {

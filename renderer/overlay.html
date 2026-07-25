@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-skin="pixel">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <title>BLIP Overlay</title>
+  <style>
+    :root {
+      --bg: rgba(12, 12, 16, 0.72);
+      --border: rgba(148, 163, 184, 0.28);
+      --text: rgba(226, 232, 240, 0.95);
+      --muted: rgba(148, 163, 184, 0.75);
+      --accent: #94a3b8;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      color: var(--text);
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .panel {
+      box-sizing: border-box;
+      margin: 8px;
+      padding: 12px 14px;
+      width: calc(100% - 16px);
+      min-height: calc(100% - 16px);
+      border-radius: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      animation: in 320ms var(--ease) both;
+    }
+    @keyframes in {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to { opacity: 1; transform: none; }
+    }
+    .brand {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .activity {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .idle .activity { color: var(--muted); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="panel idle" id="panel">
+    <div class="brand">BLIP</div>
+    <div class="activity" id="activity">—</div>
+    <div class="row">
+      <span class="meta" id="meta"></span>
+      <span class="badge hidden" id="unread"></span>
+    </div>
+  </div>
+  <script type="module" src="./overlay.js"></script>
+</body>
+</html>
