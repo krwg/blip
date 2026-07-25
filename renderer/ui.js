@@ -52,10 +52,10 @@ import {
   setPeerAvatarDataUrl,
   getSelfAvatarCache,
 } from './avatar.js';
-import {
-  appendAboutBuildTrustNotice,
-  createTrustedAvatarElement,
-} from './trust-ui.js';
+import { createTrustedAvatarElement } from './trust-ui.js';
+import { isDeveloperMode } from './dev-mode.js';
+import { buildSettingsAboutPanel as buildAboutPanelView } from './settings-panels/about.js';
+import { buildSettingsDeveloperPanel as buildDeveloperPanelView } from './settings-panels/developer.js';
 import { openAvatarCropDialog } from './avatar-crop-dialog.js';
 import {
   sounds,
@@ -1079,7 +1079,8 @@ function openSettingsToSection(sectionId, scrollSelector = null) {
   clearProfileNavigationState();
   state.activePeer = null;
   state.activeGroup = null;
-  state.settingsSection = sectionId;
+  const allowed = getSettingsSectionIds();
+  state.settingsSection = allowed.includes(sectionId) ? sectionId : null;
   state.view = 'settings';
   if (mainContent?.isConnected) {
     renderView('settings');
@@ -1516,7 +1517,7 @@ function showPeerContextMenu(e, peerOrId, options = {}) {
   menu.appendChild(labelItem);
   menu.appendChild(pingItem);
   menu.appendChild(copyIdItem);
-  if (state.config?.devGroupsEnabled) menu.appendChild(groupItem);
+  menu.appendChild(groupItem);
   menu.appendChild(favItem);
   menu.appendChild(blockItem);
   document.body.appendChild(menu);
@@ -1933,10 +1934,21 @@ function getSettingsSectionIds() {
     'developer',
     'about',
   ];
+  let out = ids;
   if (typeof window !== 'undefined' && window.blip?.platform !== 'win32') {
-    return ids.filter((id) => id !== 'system');
+    out = out.filter((id) => id !== 'system');
   }
-  return ids;
+  if (!isDeveloperMode(state.config)) {
+    out = out.filter((id) => id !== 'developer');
+  }
+  return out;
+}
+
+function refreshSettingsAfterDeveloperUnlock() {
+  if (state.settingsSection === 'developer' && !isDeveloperMode(state.config)) {
+    state.settingsSection = 'about';
+  }
+  if (state.view === 'settings') renderView('settings');
 }
 
 function buildSettingsProfilePanel() {
@@ -2914,203 +2926,31 @@ function buildSettingsShortcutsPanel() {
 }
 
 function buildSettingsDeveloperPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel settings-panel--developer';
-
-  frag.appendChild(buildPanelTitleRow('settings.section_developer', 'settings.dev_panel_hint'));
-
-  const projRow = document.createElement('div');
-  projRow.className = 'settings-toggle-with-hint';
-  const projToggle = createPixelToggle({
-    checked: !!state.config?.devProjectsEnabled,
-    labelKey: 'settings.dev_projects',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ devProjectsEnabled: checked });
-      if (!checked) {
+  return buildDeveloperPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    syncAchievements,
+    refreshBeaconMesh,
+    onProjectsChanged: (enabled) => {
+      if (!enabled) {
         projectsViewInstance?.destroy?.();
         projectsViewInstance = null;
       }
-      showAppToast({
-        title: checked ? t('settings.dev_projects_on') : t('settings.dev_projects_off'),
-        durationMs: 4200,
-      });
       render();
     },
-  });
-  projRow.appendChild(projToggle.el);
-  projRow.appendChild(createPixelHintIcon('settings.dev_projects_hint'));
-  frag.appendChild(projRow);
-
-  const groupsRow = document.createElement('div');
-  groupsRow.className = 'settings-toggle-with-hint';
-  const groupsToggle = createPixelToggle({
-    checked: !!state.config?.devGroupsEnabled,
-    labelKey: 'settings.dev_groups',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ devGroupsEnabled: checked });
-      showAppToast({
-        title: checked ? t('settings.dev_groups_on') : t('settings.dev_groups_off'),
-        durationMs: 4500,
-      });
-      render();
+    onFactoryReset: () => applyFactoryReset(),
+    onDeveloperHidden: (cfg) => {
+      state.config = cfg;
+      if (state.settingsSection === 'developer') state.settingsSection = 'about';
+      refreshSettingsAfterDeveloperUnlock();
     },
-  });
-  groupsRow.appendChild(groupsToggle.el);
-  groupsRow.appendChild(createPixelHintIcon('settings.dev_groups_hint'));
-  frag.appendChild(groupsRow);
-
-  const betaRow = document.createElement('div');
-  betaRow.className = 'settings-toggle-with-hint';
-  const betaToggle = createPixelToggle({
-    checked: !!state.config?.receiveBetaUpdates,
-    labelKey: 'settings.dev_beta_updates',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ receiveBetaUpdates: checked });
-      if (state.config?.achievementsEnabled) syncAchievements(state.config);
-      showAppToast({
-        title: checked ? t('settings.dev_beta_on') : t('settings.dev_beta_off'),
-        durationMs: 4000,
-      });
-    },
-  });
-  betaRow.appendChild(betaToggle.el);
-  betaRow.appendChild(createPixelHintIcon('settings.dev_hint'));
-  frag.appendChild(betaRow);
-
-  const traceRow = document.createElement('div');
-  traceRow.className = 'settings-toggle-with-hint';
-  const traceToggle = createPixelToggle({
-    checked: !!state.config?.devMeshTrace,
-    labelKey: 'settings.dev_mesh_trace',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ devMeshTrace: checked });
-      showAppToast({
-        title: checked ? t('settings.dev_mesh_trace_on') : t('settings.dev_mesh_trace_off'),
-        durationMs: 3200,
-      });
-    },
-  });
-  traceRow.appendChild(traceToggle.el);
-  traceRow.appendChild(createPixelHintIcon('settings.dev_mesh_trace_hint'));
-  frag.appendChild(traceRow);
-
-  const beaconRow = document.createElement('div');
-  beaconRow.className = 'settings-toggle-with-hint';
-  const beaconToggle = createPixelToggle({
-    checked: !!state.config?.devBeaconEnabled,
-    labelKey: 'settings.dev_beacon',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ devBeaconEnabled: checked });
-      refreshBeaconMesh();
-      showAppToast({
-        title: checked ? t('settings.dev_beacon_on') : t('settings.dev_beacon_off'),
-        durationMs: 4000,
-      });
-    },
-  });
-  beaconRow.appendChild(beaconToggle.el);
-  beaconRow.appendChild(createPixelHintIcon('settings.dev_beacon_hint'));
-  frag.appendChild(beaconRow);
-
-  const exportBtn = document.createElement('button');
-  exportBtn.type = 'button';
-  exportBtn.className = 'btn btn-lang';
-  exportBtn.dataset.i18n = 'settings.dev_export';
-  exportBtn.textContent = t('settings.dev_export');
-  exportBtn.addEventListener('click', async () => {
-    let net = null;
-    try {
-      net = await window.blip.getNetworkDiagnostics?.();
-    } catch {
-
-    }
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      version: (await window.blip.getAppMetadata?.())?.version,
-      blipId: state.config.blipId,
-      network: net,
-      peers: state.peers.map((p) => ({
-        id: p.blipId,
-        online: p.online,
-        name: p.displayName,
-      })),
-      networkLog: getNetworkLogEntries(),
-    };
-    const ok = await copyTextToClipboard(JSON.stringify(payload, null, 2));
-    showAppToast({
-      title: ok ? t('settings.dev_export_done') : t('settings.dev_export_fail'),
-      durationMs: 4000,
-      variant: ok ? undefined : 'danger',
-    });
-  });
-  frag.appendChild(exportBtn);
-
-  const clearMeshBtn = document.createElement('button');
-  clearMeshBtn.type = 'button';
-  clearMeshBtn.className = 'btn btn-danger';
-  clearMeshBtn.dataset.i18n = 'settings.dev_clear_mesh_plus';
-  clearMeshBtn.textContent = t('settings.dev_clear_mesh_plus');
-  clearMeshBtn.addEventListener('click', async () => {
-    if (!premiumTierEnabled(state.config)) {
-      showAppToast({
-        title: t('settings.dev_clear_mesh_plus_none'),
-        durationMs: 4000,
-      });
-      return;
-    }
-    try {
-      await window.blip.deactivateMeshPlus();
-      state.config = await window.blip.getConfig();
-      showAppToast({
-        title: t('settings.dev_clear_mesh_plus_ok'),
-        durationMs: 4500,
-      });
+    renderSettingsIfOpen: () => {
       if (state.view === 'settings') renderView('settings');
+    },
+    renderPeersIfOpen: () => {
       if (state.view === 'peers') renderView('peers');
-    } catch (e) {
-      showAppToast({
-        title: e?.message || t('settings.dev_clear_mesh_plus_fail'),
-        durationMs: 4500,
-        variant: 'danger',
-      });
-    }
+    },
   });
-  frag.appendChild(clearMeshBtn);
-
-  const factoryRow = document.createElement('div');
-  factoryRow.className = 'settings-toggle-with-hint settings-dev-factory-row';
-  const factoryBtn = document.createElement('button');
-  factoryBtn.type = 'button';
-  factoryBtn.className = 'btn btn-danger';
-  factoryBtn.dataset.i18n = 'settings.dev_factory_reset';
-  factoryBtn.textContent = t('settings.dev_factory_reset');
-  factoryBtn.addEventListener('click', async () => {
-    const ok = await openConfirmDialog({
-      title: t('settings.dev_factory_reset'),
-      body: t('settings.dev_factory_reset_confirm'),
-      confirmLabel: t('settings.dev_factory_reset'),
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await applyFactoryReset();
-      showAppToast({
-        title: t('settings.dev_factory_reset_ok'),
-        durationMs: 5000,
-      });
-    } catch (e) {
-      showAppToast({
-        title: e?.message || t('settings.dev_factory_reset_fail'),
-        durationMs: 4500,
-        variant: 'danger',
-      });
-    }
-  });
-  factoryRow.appendChild(factoryBtn);
-  factoryRow.appendChild(createPixelHintIcon('settings.dev_factory_reset_hint'));
-  frag.appendChild(factoryRow);
-
-  return frag;
 }
 
 async function applyFactoryReset() {
@@ -3153,150 +2993,24 @@ async function applyFactoryReset() {
   render();
 }
 
-function showAboutIconContextMenu(e) {
-  const menu = document.createElement('div');
-  menu.className = 'context-menu glass';
-  menu.style.left = `${e.clientX}px`;
-  menu.style.top = `${e.clientY}px`;
-
-  const changeBtn = document.createElement('button');
-  changeBtn.type = 'button';
-  changeBtn.dataset.i18n = 'settings.about_icon_change';
-  changeBtn.textContent = t('settings.about_icon_change');
-  changeBtn.addEventListener('mousedown', (ev) => ev.stopPropagation());
-  changeBtn.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    menu.remove();
-    openSettingsToSection('appearance', '.settings-app-icon-grid');
-  });
-
-  menu.appendChild(changeBtn);
-  document.body.appendChild(menu);
-  const close = () => menu.remove();
-  setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
-}
-
 function githubRepoBase(meta) {
   const raw = meta?.githubUrl || 'https://github.com/krwg/blip';
   return String(raw).replace(/\/$/, '');
 }
 
 function buildSettingsAboutPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel settings-panel--about';
-
-  const hero = document.createElement('div');
-  hero.className = 'settings-about-hero';
-  const iconBtn = document.createElement('button');
-  iconBtn.type = 'button';
-  iconBtn.className = 'settings-about-icon-btn';
-  iconBtn.title = t('settings.about_icon_open_appearance');
-  const icon = document.createElement('img');
-  icon.className = 'settings-about-icon';
-  icon.alt = 'BLIP';
-  icon.draggable = false;
-  void (async () => {
-    try {
-      const url = await window.blip.getAppIconUrl?.();
-      if (url) icon.src = url;
-    } catch {
-
-    }
-  })();
-  iconBtn.appendChild(icon);
-  iconBtn.addEventListener('click', () => {
-    openSettingsToSection('appearance', '.settings-app-icon-grid');
+  return buildAboutPanelView({
+    getConfig: () => state.config,
+    saveConfig: async (patch) => {
+      state.config = await api.saveConfig(patch);
+      return state.config;
+    },
+    openAppearanceIcons: () => openSettingsToSection('appearance', '.settings-app-icon-grid'),
+    onDeveloperUnlocked: (cfg) => {
+      state.config = cfg;
+      refreshSettingsAfterDeveloperUnlock();
+    },
   });
-  iconBtn.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showAboutIconContextMenu(e);
-  });
-  hero.appendChild(iconBtn);
-
-  const aboutLine = document.createElement('p');
-  aboutLine.className = 'settings-about-line';
-
-  const aboutVersion = document.createElement('p');
-  aboutVersion.className = 'settings-about-version';
-
-  const aboutTagline = document.createElement('p');
-  aboutTagline.className = 'settings-about-tagline';
-  aboutTagline.dataset.i18n = 'settings.about_tagline';
-  aboutTagline.textContent = t('settings.about_tagline');
-
-  hero.appendChild(aboutLine);
-  hero.appendChild(aboutVersion);
-  hero.appendChild(aboutTagline);
-  frag.appendChild(hero);
-
-  const metaBlock = document.createElement('div');
-  metaBlock.className = 'settings-about-meta';
-  metaBlock.innerHTML = `
-    <div class="settings-about-meta-row">
-      <span data-i18n="settings.about_license">${t('settings.about_license')}</span>
-      <span>GPL-3.0</span>
-    </div>
-    <div class="settings-about-meta-row">
-      <span data-i18n="settings.about_made">${t('settings.about_made')}</span>
-      <span>krwg</span>
-    </div>`;
-  frag.appendChild(metaBlock);
-
-  let aboutTrustNotice = appendAboutBuildTrustNotice(frag);
-  window.blip?.onTrustState?.(() => {
-    aboutTrustNotice?.remove();
-    aboutTrustNotice = appendAboutBuildTrustNotice(frag);
-  });
-
-  const githubBtn = document.createElement('button');
-  githubBtn.type = 'button';
-  githubBtn.className = 'btn btn-lang';
-  githubBtn.dataset.i18n = 'settings.github';
-  githubBtn.textContent = t('settings.github');
-
-  const actionsCol = document.createElement('div');
-  actionsCol.className = 'settings-about-actions';
-
-  const changelogBtn = document.createElement('button');
-  changelogBtn.type = 'button';
-  changelogBtn.className = 'btn btn-lang';
-  changelogBtn.dataset.i18n = 'settings.changelog';
-  changelogBtn.textContent = t('settings.changelog');
-
-  const releasesAboutBtn = document.createElement('button');
-  releasesAboutBtn.type = 'button';
-  releasesAboutBtn.className = 'btn btn-lang';
-  releasesAboutBtn.dataset.i18n = 'settings.updates_releases';
-  releasesAboutBtn.textContent = t('settings.updates_releases');
-
-  window.blip.getAppMetadata?.().then((meta) => {
-    const name = meta?.displayName || 'BLIP';
-    aboutLine.textContent = name;
-    const code = meta?.codename ? ` · ${meta.codename}` : '';
-    aboutVersion.textContent = `v${formatAppVersion(meta)}${code}`;
-    const repoBase = githubRepoBase(meta);
-    if (meta?.githubUrl) {
-      githubBtn.addEventListener('click', () => window.blip.openExternal?.(meta.githubUrl));
-    } else {
-      githubBtn.disabled = true;
-    }
-    changelogBtn.addEventListener('click', () => {
-      window.blip.openExternal?.(`${repoBase}/blob/main/CHANGELOG.md`);
-    });
-    releasesAboutBtn.addEventListener('click', () => {
-      window.blip.openExternal?.(`${repoBase}/releases`);
-    });
-  }).catch(() => {});
-
-  const linkRow = document.createElement('div');
-  linkRow.className = 'settings-about-links';
-  linkRow.appendChild(changelogBtn);
-  linkRow.appendChild(releasesAboutBtn);
-
-  actionsCol.appendChild(githubBtn);
-  actionsCol.appendChild(linkRow);
-  frag.appendChild(actionsCol);
-  return frag;
 }
 
 function buildSettingsSystemPanel() {
@@ -3632,7 +3346,13 @@ function renderSettingsMainPanel() {
     settingsPanelCleanup = null;
     return buildSettingsPlaceholderPanel();
   }
-  const section = state.settingsSection;
+  let section = state.settingsSection;
+  const allowed = getSettingsSectionIds();
+  if (section != null && !allowed.includes(section)) {
+    state.settingsSection = null;
+    settingsPanelCleanup = null;
+    return buildSettingsPlaceholderPanel();
+  }
   let frag;
   switch (section) {
     case 'profile':
