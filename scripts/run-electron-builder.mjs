@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 if (!args.length) {
-  console.error('[run-electron-builder] usage: node scripts/run-electron-builder.mjs --win [--dir] …');
+  console.error('[run-electron-builder] usage: node scripts/run-electron-builder.mjs --win|--mac|--linux …');
   process.exit(1);
 }
 

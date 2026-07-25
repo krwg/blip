@@ -76,6 +76,75 @@ nsis:
 portable:
   artifactName: ${productName}-${version}-Portable.${ext}
 
+mac:
+  category: public.app-category.social-networking
+  icon: icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  minimumSystemVersion: '12.0'
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  extendInfo:
+    NSMicrophoneUsageDescription: BLIP needs the microphone for voice and video calls on the LAN mesh.
+    NSCameraUsageDescription: BLIP needs the camera for video calls on the LAN mesh.
+    NSLocalNetworkUsageDescription: BLIP discovers peers and transfers files on your local network only.
+
+dmg:
+  title: ${productName} ${version}
+  background: dmg-background.png
+  icon: icon.png
+  iconSize: 96
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 142
+      y: 200
+      type: file
+    - x: 392
+      y: 200
+      type: link
+      path: /Applications
+  format: ULFO
+
+linux:
+  icon: icons
+  category: Network;Chat;
+  synopsis: P2P LAN messenger — text, voice, video, mesh files
+  description: BLIP is a peer-to-peer LAN messenger with chat, voice/video calls, and a local mesh file library. No cloud accounts.
+  desktop:
+    StartupWMClass: blip
+  target:
+    - AppImage
+    - deb
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+appImage:
+  artifactName: ${productName}-${version}-linux-${arch}.AppImage
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+  artifactName: ${productName}_${version}_linux_${arch}.${ext}
+
 fileAssociations:
   - ext: blip
     name: BLIPSeed

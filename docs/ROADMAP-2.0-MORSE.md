@@ -9,7 +9,7 @@ GitHub Release / installers are **not** cut until explicitly requested — versi
 |------|--------|
 | **Signal integrity** | Harden discovery and transport (signed/encrypted UDP announce, clearer trust UX). |
 | **Operator confidence** | Core unit tests, i18n parity checks, safer clipboard sync confirm. |
-| **Reach** | Optional STUN/TURN for VPN/Tailscale topologies; keep pure-LAN default. |
+| **Reach** | Optional STUN/TURN for VPN/Tailscale topologies; keep pure-LAN default. Multiplatform installers (Linux + macOS 12+). |
 | **Maintainability** | TypeScript from `shared/` + typed IPC outward. |
 
 ## Tracked issues (living list)
@@ -17,6 +17,8 @@ GitHub Release / installers are **not** cut until explicitly requested — versi
 - [#41](https://github.com/krwg/blip/issues/41) — core unit tests (UDP / TCP / i18n) ✅
 - [#38](https://github.com/krwg/blip/issues/38) — UDP announce reject + clipboard enable warning ✅
 - [#46](https://github.com/krwg/blip/issues/46) — NSIS assisted wizard ✅
+- [#81](https://github.com/krwg/blip/issues/81) — multiplatform builds (Linux + macOS 12+)
+- [#82](https://github.com/krwg/blip/issues/82) — Discord-style overlay + app/game presence
 - [#39](https://github.com/krwg/blip/issues/39) — optional STUN/TURN
 - [#40](https://github.com/krwg/blip/issues/40) — TypeScript migration (`shared/` + IPC)
 

@@ -1,4 +1,5 @@
-# Build Windows installers and publish to GitHub Releases (needs latest.yml for auto-update).
+# Build Windows / Linux / macOS installers and publish to GitHub Releases
+# (needs latest.yml / latest-mac.yml / latest-linux.yml for auto-update).
 name: Release
 
 on:
@@ -23,7 +24,45 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish to GitHub
+      - name: Build and publish Windows
         run: npm run electron:publish:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish Linux
+        run: npm run electron:publish:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish macOS
+        run: npm run electron:publish:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional signing / notarization (set in repo secrets when ready):
+          # CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID

@@ -306,4 +306,7 @@ Static showcase: [`docs/index.html`](index.html) → [krwg.github.io/blip](https
 ## Future seams
 
 - CI packaging smoke jobs, mobile client. Optional STUN/TURN is available in **Settings → Network** (`iceEnabled` / `iceServerLines`, off by default) via `shared/ice-servers.js`.
-- macOS/Linux autostart parity beyond Windows login items.
+- Discord-style overlay + app/game presence ([#82](https://github.com/krwg/blip/issues/82)).
+- Deeper notarization / Developer ID secrets for public macOS releases (see [`PACKAGING.md`](PACKAGING.md)).
+
+Packaging targets (Windows NSIS, Linux AppImage/deb, macOS 12+ DMG): [`PACKAGING.md`](PACKAGING.md) · [#81](https://github.com/krwg/blip/issues/81).

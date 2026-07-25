@@ -1929,7 +1929,7 @@ app.whenReady().then(async () => {
   void ensureGroupCallWindow().catch((e) => console.warn('[BLIP] prewarm group call window', e));
   setupAutoUpdater(() => mainWindow, () => config);
 
-  if (!app.isPackaged || process.platform === 'win32') {
+  if (!app.isPackaged || process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
     try {
       app.setAsDefaultProtocolClient('blip');
     } catch (e) {
