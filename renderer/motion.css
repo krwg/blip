@@ -1,0 +1,195 @@
+/* Apple-inspired UI motion — springs via cubic-bezier (smooth / snappy).
+   Active when html[data-ui-motion="1"]. Instant when "0" or prefers-reduced-motion. */
+
+html {
+  --ui-ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ui-ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1.05);
+  --ui-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ui-dur-fast: 160ms;
+  --ui-dur-med: 280ms;
+  --ui-dur-slow: 380ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    --ui-dur-fast: 1ms;
+    --ui-dur-med: 1ms;
+    --ui-dur-slow: 1ms;
+  }
+}
+
+html[data-ui-motion='0'] .ui-motion-enter,
+html[data-ui-motion='0'] .ui-motion-exit,
+html[data-ui-motion='0'] .ui-motion-panel-enter,
+html[data-ui-motion='0'] .ui-motion-panel-exit {
+  animation: none !important;
+}
+
+/* —— View enter / exit (main content) —— */
+@keyframes ui-motion-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ui-motion-view-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+
+@keyframes ui-motion-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ui-motion-panel-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+html[data-ui-motion='1'] .ui-motion-enter {
+  animation: ui-motion-view-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+}
+
+html[data-ui-motion='1'] .ui-motion-exit {
+  animation: ui-motion-view-out var(--ui-dur-med) var(--ui-ease-out) both;
+  pointer-events: none;
+}
+
+html[data-ui-motion='1'] .ui-motion-panel-enter {
+  animation: ui-motion-panel-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+}
+
+html[data-ui-motion='1'] .ui-motion-panel-exit {
+  animation: ui-motion-panel-out var(--ui-dur-med) var(--ui-ease-out) both;
+  pointer-events: none;
+}
+
+/* —— Chrome: nav, buttons, rows, toggles —— */
+html[data-ui-motion='1'] .nav-btn,
+html[data-ui-motion='1'] .settings-nav-item,
+html[data-ui-motion='1'] .btn,
+html[data-ui-motion='1'] .peer-row,
+html[data-ui-motion='1'] .chat-hub-item,
+html[data-ui-motion='1'] .pixel-toggle,
+html[data-ui-motion='1'] .settings-list-row,
+html[data-ui-motion='1'] .ach-card,
+html[data-ui-motion='1'] .side-nav a,
+html[data-ui-motion='1'] .titlebar-btn {
+  transition:
+    background var(--ui-dur-fast) var(--ui-ease-out),
+    border-color var(--ui-dur-fast) var(--ui-ease-out),
+    color var(--ui-dur-fast) var(--ui-ease-out),
+    box-shadow var(--ui-dur-med) var(--ui-ease-smooth),
+    transform var(--ui-dur-fast) var(--ui-ease-snappy),
+    opacity var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+html[data-ui-motion='1'] .nav-btn:active,
+html[data-ui-motion='1'] .btn:active,
+html[data-ui-motion='1'] .settings-nav-item:active,
+html[data-ui-motion='1'] .peer-row:active,
+html[data-ui-motion='1'] .chat-hub-item:active,
+html[data-ui-motion='1'] .ach-card:active {
+  transform: scale(0.97);
+}
+
+html[data-ui-motion='1'] .nav-btn.active,
+html[data-ui-motion='1'] .settings-nav-item.active {
+  transition:
+    background var(--ui-dur-med) var(--ui-ease-smooth),
+    transform var(--ui-dur-med) var(--ui-ease-snappy),
+    box-shadow var(--ui-dur-med) var(--ui-ease-smooth);
+}
+
+/* —— Modals —— */
+html[data-ui-motion='1'] .blip-modal-backdrop {
+  animation: ui-motion-backdrop-in var(--ui-dur-med) var(--ui-ease-out) both;
+}
+
+html[data-ui-motion='1'] .blip-modal {
+  animation: ui-motion-modal-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+}
+
+@keyframes ui-motion-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ui-motion-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* —— Toasts —— */
+html[data-ui-motion='1'] .toast-stack .toast,
+html[data-ui-motion='1'] .app-toast {
+  animation: ui-motion-toast-in var(--ui-dur-slow) var(--ui-ease-smooth) both;
+}
+
+@keyframes ui-motion-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* —— Settings shell —— */
+html[data-ui-motion='1'] .settings-layout .settings-nav-item {
+  transition:
+    background var(--ui-dur-fast) var(--ui-ease-out),
+    transform var(--ui-dur-fast) var(--ui-ease-snappy),
+    color var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+html[data-ui-motion='1'] .main-content {
+  overflow: hidden;
+}
+
+html[data-ui-motion='0'] .nav-btn,
+html[data-ui-motion='0'] .btn,
+html[data-ui-motion='0'] .peer-row,
+html[data-ui-motion='0'] .blip-modal,
+html[data-ui-motion='0'] .blip-modal-backdrop,
+html[data-ui-motion='0'] .app-toast,
+html[data-ui-motion='0'] .toast-stack .toast {
+  transition: none !important;
+  animation: none !important;
+}
