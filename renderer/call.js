@@ -13,6 +13,7 @@ import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 import { dispatchReactiveAudio } from './reactive-wallpaper.js';
+import { bindCallWaveform } from './call-waveform.js';
 import { rtcConfiguration } from '../shared/ice-servers.js';
 
 let activeCall = null;
@@ -150,6 +151,7 @@ export function createCallUI(config, api, options = {}) {
   }
   voiceWrap.appendChild(avatarSlot);
   voiceWrap.appendChild(waveform);
+  const micWaveform = bindCallWaveform(waveform);
 
   const peerStatus = document.createElement('div');
   peerStatus.className = 'call-peer-status hidden';
@@ -507,6 +509,7 @@ export function createCallUI(config, api, options = {}) {
       localStream.getTracks().forEach((tr) => tr.stop());
       localStream = null;
     }
+    micWaveform.stop();
     if (pc) {
       pc.close();
       pc = null;
@@ -990,6 +993,8 @@ export function createCallUI(config, api, options = {}) {
       }
       if (!result?.ok) throw new Error(result?.error || 'Call failed');
       dispatchReactiveAudio({ active: true, stream: localStream });
+      micWaveform.setMuted(muted);
+      void micWaveform.start(localStream);
     } catch (err) {
       console.error('[call] outgoing:', err);
       hide();
@@ -1003,6 +1008,7 @@ export function createCallUI(config, api, options = {}) {
       localStream.getTracks().forEach((tr) => tr.stop());
       localStream = null;
     }
+    micWaveform.stop();
     if (pc) {
       pc.close();
       pc = null;
@@ -1066,6 +1072,8 @@ export function createCallUI(config, api, options = {}) {
       statusEl.dataset.i18n = 'call.connected';
       showInCallControls();
       dispatchReactiveAudio({ active: true, stream: localStream });
+      micWaveform.setMuted(muted);
+      void micWaveform.start(localStream);
     } catch (err) {
       console.error('[BLIP call] accept:', err);
       rollbackAcceptAttempt();
@@ -1210,6 +1218,7 @@ export function createCallUI(config, api, options = {}) {
     localStream?.getAudioTracks().forEach((tr) => {
       tr.enabled = !muted;
     });
+    micWaveform.setMuted(muted);
     muteBtn.classList.toggle('active', muted);
     broadcastCallState();
   }
