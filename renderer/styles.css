@@ -4667,6 +4667,17 @@ select.blip-select:focus {
   background: color-mix(in srgb, var(--blip-bg) 78%, var(--blip-glass));
   border: 2px solid var(--blip-glass-border);
   box-sizing: border-box;
+  border-radius: 0;
+}
+
+.ach-icon-slot--empty {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--blip-bg) 92%, transparent),
+    color-mix(in srgb, var(--blip-bg) 92%, transparent) 4px,
+    color-mix(in srgb, var(--blip-muted) 14%, transparent) 4px,
+    color-mix(in srgb, var(--blip-muted) 14%, transparent) 8px
+  );
 }
 
 .ach-card--unlocked .ach-icon-slot {
@@ -4686,58 +4697,58 @@ select.blip-select:focus {
 }
 
 .ach-icon-slot__glyph {
-  font-size: 18px;
-  line-height: 1;
-  letter-spacing: -0.06em;
-  color: var(--blip-accent);
-  font-family: var(--blip-font, 'Minecraft', monospace);
-  text-shadow: 0 0 8px color-mix(in srgb, var(--blip-accent) 35%, transparent);
+  display: none;
 }
 
 .ach-card__icon .ach-icon-slot__glyph {
-  font-size: 20px;
+  display: none;
 }
 
 .ach-card:not(.ach-card--unlocked) .ach-icon-slot__glyph {
-  color: color-mix(in srgb, var(--blip-accent) 72%, var(--blip-muted));
-  opacity: 0.92;
-  text-shadow: 0 0 6px color-mix(in srgb, var(--blip-accent) 22%, transparent);
+  display: none;
 }
 
 .ach-card:not(.ach-card--unlocked) .ach-icon-slot {
   background: color-mix(in srgb, var(--blip-bg) 88%, var(--blip-glass));
   border-color: color-mix(in srgb, var(--blip-muted) 40%, var(--blip-glass-border));
+  opacity: 0.85;
 }
 
-.ach-icon-slot--hidden {
+.ach-icon-slot--hidden,
+.ach-icon-slot--locked {
   width: 56px;
   height: 56px;
   padding: 0;
   margin: 0;
   cursor: pointer;
   font: inherit;
-  background: color-mix(in srgb, var(--blip-bg) 92%, var(--blip-glass));
+  color: inherit;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--blip-bg) 92%, transparent),
+    color-mix(in srgb, var(--blip-bg) 92%, transparent) 4px,
+    color-mix(in srgb, var(--blip-muted) 14%, transparent) 4px,
+    color-mix(in srgb, var(--blip-muted) 14%, transparent) 8px
+  );
   border: 2px dashed color-mix(in srgb, var(--blip-muted) 45%, var(--blip-glass-border));
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .ach-icon-slot--hidden:hover,
-.ach-icon-slot--hidden:focus-visible {
+.ach-icon-slot--hidden:focus-visible,
+.ach-icon-slot--locked:hover,
+.ach-icon-slot--locked:focus-visible {
   border-color: color-mix(in srgb, var(--blip-accent) 45%, var(--blip-glass-border));
   outline: none;
 }
 
 .ach-icon-slot__hidden-mark {
-  font-size: 22px;
-  line-height: 1;
-  color: color-mix(in srgb, var(--blip-muted) 75%, var(--blip-text));
-  font-family: var(--blip-font, 'Minecraft', monospace);
-  letter-spacing: 0;
-  text-shadow: none;
+  display: none;
 }
 
 .ach-card--unlocked .ach-icon-slot__img {
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--blip-accent) 45%, transparent));
+  filter: none;
 }
 
 .toast-actions {
@@ -7348,6 +7359,23 @@ body.media-viewer-open {
   );
   border: 2px solid var(--blip-glass-border);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
+  border-radius: 0;
+}
+
+.ach-card--legendary {
+  border-color: color-mix(in srgb, var(--blip-accent) 40%, #c9a227);
+}
+
+.ach-card__tier {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--blip-accent) 70%, #c9a227);
+  margin-bottom: 2px;
+}
+
+.ach-card__tier--extra {
+  color: var(--blip-muted);
 }
 
 .ach-card--unlocked {

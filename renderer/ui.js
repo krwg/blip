@@ -741,7 +741,8 @@ function updateNavActive() {
 }
 
 function getNavKeys() {
-  const keys = ['dial', 'peers', 'chat', 'beacon'];
+  const keys = ['dial', 'peers', 'chat'];
+  if (state.config?.devBeaconEnabled) keys.push('beacon');
   if (state.config?.devProjectsEnabled) keys.push('projects');
   keys.push('settings');
   return keys;
@@ -1839,6 +1840,13 @@ async function runStartupUpdateCheck() {
 
 export function navigateToView(view) {
   if (!state.config?.blipId) return;
+  if (view === 'beacon' && !state.config?.devBeaconEnabled) {
+    showAppToast({
+      title: t('settings.dev_beacon_off'),
+      durationMs: 3500,
+    });
+    return;
+  }
   if (view === 'settings' && state.view !== 'settings') {
     state.settingsSection = null;
   }
@@ -2933,6 +2941,12 @@ function buildSettingsDeveloperPanel() {
     saveConfig: (patch) => api.saveConfig(patch),
     syncAchievements,
     refreshBeaconMesh,
+    onBeaconChanged: (enabled) => {
+      if (!enabled && state.view === 'beacon') {
+        state.view = 'peers';
+      }
+      render();
+    },
     onProjectsChanged: (enabled) => {
       if (!enabled) {
         projectsViewInstance?.destroy?.();
@@ -4127,6 +4141,10 @@ export function initUI(config, blipApi) {
   });
 
   window.addEventListener('blip-open-beacon-seed', (ev) => {
+    if (!state.config?.devBeaconEnabled) {
+      showAppToast({ title: t('settings.dev_beacon_off'), durationMs: 3500 });
+      return;
+    }
     const seedId = String(ev.detail?.seedId || '').trim();
     if (!seedId) return;
     state.view = 'beacon';
@@ -4145,6 +4163,10 @@ export function initUI(config, blipApi) {
   });
 
   window.blip?.onBeaconOpenBlipFile?.((data) => {
+    if (!state.config?.devBeaconEnabled) {
+      showAppToast({ title: t('settings.dev_beacon_off'), durationMs: 3500 });
+      return;
+    }
     const doc = data?.doc;
     const seedId = String(doc?.seedId || '').trim();
     if (!seedId) {

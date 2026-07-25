@@ -89,30 +89,62 @@ function mintLicense(privateKey) {
   const canonical = `${ENTITLEMENT_CANON}|${licenseId}`;
   const sig = sign(null, Buffer.from(canonical, 'utf8'), privateKey);
   const displayKey = formatEntitlementDisplay(licenseId, sig.toString('base64'));
+  return { licenseId, displayKey };
+}
+
+function printLicense(row) {
   console.log('--- MESH+ license (one user) ---');
-  console.log(displayKey);
-  console.log(`licenseId: ${licenseId}`);
+  console.log(row.displayKey);
+  console.log(`licenseId: ${row.licenseId}`);
 }
 
 const rotate = process.argv.includes('--rotate') || process.argv.includes('--force');
 const licenseOnly = process.argv.includes('--license');
+const countIdx = process.argv.indexOf('--count');
+const count = countIdx >= 0 ? Math.max(1, Number(process.argv[countIdx + 1]) || 1) : 1;
+const outIdx = process.argv.indexOf('--out');
+const outPath = outIdx >= 0 ? process.argv[outIdx + 1] : null;
 
-if (rotate || !loadPrivateKey()) {
-  const { privateKey } = rotateKeys();
-  if (!licenseOnly) mintLicense(privateKey);
-} else if (licenseOnly) {
-  const pk = loadPrivateKey();
-  console.log('--- Trust anchor public ---');
-  console.log(publicKeyB64FromPrivate(pk));
-  mintLicense(pk);
-} else {
+function ensurePrivateKey() {
+  if (rotate || !loadPrivateKey()) {
+    return rotateKeys().privateKey;
+  }
   const pk = loadPrivateKey();
   const pubB64 = publicKeyB64FromPrivate(pk);
   writeKeyBundle(
     readFileSync(existsSync(PRIV_PATH) ? PRIV_PATH : LEGACY_PRIV, 'utf8').trim(),
     pubB64,
   );
-  console.log('[mesh-plus-keygen] synced existing key into keys/ + local pub files');
-  console.log(pubB64);
-  mintLicense(pk);
+  return pk;
+}
+
+const pk = ensurePrivateKey();
+console.log('--- Trust anchor public ---');
+console.log(publicKeyB64FromPrivate(pk));
+
+const rows = [];
+for (let i = 0; i < count; i++) {
+  const row = mintLicense(pk);
+  rows.push(row);
+  if (!outPath) printLicense(row);
+}
+
+if (outPath) {
+  mkdirSync(dirname(outPath), { recursive: true });
+  const lines = [
+    '# MESH+ licenses',
+    `# Generated ${new Date().toISOString()}`,
+    `# Count: ${rows.length}`,
+    '',
+  ];
+  rows.forEach((row, i) => {
+    lines.push(`## ${i + 1}. \`${row.licenseId}\``);
+    lines.push('');
+    lines.push('```');
+    lines.push(row.displayKey);
+    lines.push('```');
+    lines.push('');
+  });
+  writeFileSync(outPath, `${lines.join('\n')}\n`, 'utf8');
+  console.log(`[mesh-plus-keygen] wrote ${rows.length} license(s) → ${outPath}`);
 }
