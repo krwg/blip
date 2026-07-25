@@ -59,7 +59,9 @@ import {
   performOutboundHandshake,
   clearSocketSession,
   initInboundSession,
+  getSocketSession,
 } from './mesh-handshake.js';
+import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
 import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
 import {
@@ -687,9 +689,18 @@ function wirePeerSocket(socket, socketKey, peerIp) {
     try {
       for (const line of reader.push(chunk)) {
         try {
-          onSocketLine(JSON.parse(line));
-        } catch {
-
+          const session = getSocketSession(socket);
+          onSocketLine(parseMeshTcpLine(session?.cipher || null, line));
+        } catch (err) {
+          if (
+            err?.code === 'MESH_PLAINTEXT_AFTER_CIPHER' ||
+            err?.code === 'MESH_BAD_ENVELOPE' ||
+            err?.code === 'MESH_NO_CIPHER'
+          ) {
+            console.warn('[TCP] mesh crypto:', err.code);
+            socket.destroy();
+            return;
+          }
         }
       }
     } catch (e) {

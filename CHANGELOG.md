@@ -36,6 +36,7 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 
 - **Announce authenticity** — peers with invalid/missing Ed25519 announce signatures are ignored (no peer row).
 - **LAN clipboard** — enabling sync from Off requires an explicit risk confirm dialog.
+- **Mesh TCP encryption** — after handshake, proto ≥ 2 peers use X25519 ECDH + AES-256-GCM on application payloads; legacy peers stay plaintext with UI warning (`meshLegacy` / `meshTcpEncrypted`).
 
 ### Added
 

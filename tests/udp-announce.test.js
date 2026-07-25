@@ -52,7 +52,12 @@ describe('UDP announce (mesh-identity)', () => {
     expect(parsed.type).toBe('announce');
     expect(parsed.blipId).toBe(17);
     const verified = verifyAnnouncePayload(parsed);
-    expect(verified).toEqual({ ok: true, meshPubkey: config.meshPublicKey });
+    expect(verified).toEqual({
+      ok: true,
+      meshPubkey: config.meshPublicKey,
+      meshProto: MESH_PROTO,
+      meshLegacy: false,
+    });
     expect(packet.meshAnnounceSig).toBeTruthy();
   });
 
