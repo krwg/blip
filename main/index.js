@@ -70,6 +70,7 @@ import {
   pushOverlayUpdate,
   toggleOverlayVisible,
 } from './overlay-window.js';
+import { registerCallIpc } from './ipc/calls.js';
 import { detectForegroundApp } from './presence-detect.js';
 
 import {
@@ -1477,137 +1478,15 @@ function setupIpc() {
     }
   });
 
-  ipcMain.handle('initiate-call', async (_, payload) => {
-    try {
-      const sdp = serializeSdp(payload.sdp);
-      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
-      const packet = {
-        type: 'call-offer',
-        from: config.blipId,
-        to: payload.to,
-        sdp,
-        video: payload.video ?? false,
-      };
-      try {
-        await sendCallToPeer(payload.to, packet);
-      } catch (err) {
-        if (/peer not found/i.test(err?.message || '')) {
-          await new Promise((r) => setTimeout(r, 450));
-          await sendCallToPeer(payload.to, packet);
-        } else {
-          throw err;
-        }
-      }
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('call-accept', async (_, payload) => {
-    try {
-      const sdp = serializeSdp(payload.sdp);
-      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
-      await sendCallToPeer(payload.to, {
-        type: 'call-answer',
-        from: config.blipId,
-        to: payload.to,
-        sdp,
-      });
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('call-reject', async (_, payload) => {
-    try {
-      await sendCallToPeer(payload.to, {
-        type: 'call-reject',
-        from: config.blipId,
-        to: payload.to,
-      });
-      return { ok: true };
-    } catch {
-      return { ok: true };
-    }
-  });
-
-  ipcMain.handle('call-candidate', async (_, payload) => {
-    try {
-      await sendCallToPeer(payload.to, {
-        type: 'call-candidate',
-        from: config.blipId,
-        to: payload.to,
-        candidate: payload.candidate,
-      });
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('call-hangup', async (_, payload) => {
-    try {
-      clearActiveCallPeer(payload.to);
-      await sendCallToPeer(payload.to, {
-        type: 'call-hangup',
-        from: config.blipId,
-        to: payload.to,
-      });
-      return { ok: true };
-    } catch {
-      clearActiveCallPeer();
-      return { ok: true };
-    }
-  });
-
-  ipcMain.handle('call-state', async (_, payload) => {
-    try {
-      await sendCallToPeer(payload.to, {
-        type: 'call-state',
-        from: config.blipId,
-        to: payload.to,
-        muted: !!payload.muted,
-        deafened: !!payload.deafened,
-        screenSharing: !!payload.screenSharing,
-      });
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('call-renegotiate', async (_, payload) => {
-    try {
-      const sdp = serializeSdp(payload.sdp);
-      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
-      await sendCallToPeer(payload.to, {
-        type: 'call-renegotiate',
-        from: config.blipId,
-        to: payload.to,
-        sdp,
-      });
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('call-renegotiate-answer', async (_, payload) => {
-    try {
-      const sdp = serializeSdp(payload.sdp);
-      if (!sdp) return { ok: false, error: 'Invalid local SDP' };
-      await sendCallToPeer(payload.to, {
-        type: 'call-renegotiate-answer',
-        from: config.blipId,
-        to: payload.to,
-        sdp,
-      });
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
+  registerCallIpc({
+    getConfig: () => config,
+    sendCallToPeer,
+    setActiveCallPeer,
+    clearActiveCallPeer,
+    findPeer,
+    ensurePeerSocket,
+    sendToCallWindow,
+    getCallWindow: () => callWindow,
   });
 
   ipcMain.handle('ping-peer', async (_, blipId) => {
@@ -1822,33 +1701,6 @@ function setupIpc() {
 
   ipcMain.handle('get-group-for-call', async (_, groupId) => readGroupFromMainWindow(groupId));
 
-  ipcMain.handle('open-call-outgoing', async (_, payload) => {
-    try {
-      const peerId = Number(payload?.peerId);
-      if (!Number.isFinite(peerId)) return { ok: false, error: 'invalid_peer' };
-      const peer = findPeer(peerId);
-      if (!peer) return { ok: false, error: 'Peer not found' };
-      await ensurePeerSocket(peerId);
-      setActiveCallPeer(peerId);
-      await sendToCallWindow(
-        'call-outgoing',
-        { peerId, video: payload.video ?? false },
-        { focus: true }
-      );
-      return { ok: true };
-    } catch (err) {
-      clearActiveCallPeer();
-      return { ok: false, error: err?.message || String(err) };
-    }
-  });
-
-  ipcMain.handle('close-call-window', () => {
-    if (callWindow && !callWindow.isDestroyed()) {
-      callWindow.hide();
-    }
-    return true;
-  });
-
   ipcMain.handle('open-group-call', async (_, payload) => {
     try {
       await sendToGroupCallWindow(
@@ -1915,16 +1767,6 @@ function setupIpc() {
   });
   ipcMain.on('call-window-close', () => {
     if (callWindow && !callWindow.isDestroyed()) callWindow.hide();
-  });
-  ipcMain.handle('call-window-toggle-fullscreen', () => {
-    if (!callWindow || callWindow.isDestroyed()) return false;
-    const next = !callWindow.isFullScreen();
-    callWindow.setFullScreen(next);
-    return next;
-  });
-  ipcMain.handle('call-window-is-fullscreen', () => {
-    if (!callWindow || callWindow.isDestroyed()) return false;
-    return callWindow.isFullScreen();
   });
 
   ipcMain.on('group-call-window-minimize', () => groupCallWindow?.minimize());

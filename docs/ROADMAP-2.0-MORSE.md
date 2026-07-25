@@ -20,7 +20,9 @@ GitHub Release / installers are **not** cut until explicitly requested — versi
 - [#81](https://github.com/krwg/blip/issues/81) — multiplatform builds (Linux + macOS 12+)
 - [#82](https://github.com/krwg/blip/issues/82) — Discord-style overlay + app/game presence
 - [#84](https://github.com/krwg/blip/issues/84) — UI motion ✅
-- [#86](https://github.com/krwg/blip/issues/86) — chat Markdown + rich overlay HUD
+- [#61](https://github.com/krwg/blip/issues/61) — obfuscator cost ✅ ([`OBFUSCATOR.md`](OBFUSCATOR.md))
+- [#63](https://github.com/krwg/blip/issues/63) — Giphy key model ✅ ([`GIPHY.md`](GIPHY.md))
+- [#58](https://github.com/krwg/blip/issues/58) / [#60](https://github.com/krwg/blip/issues/60) — split ui.js / main IPC (in progress)
 - [#39](https://github.com/krwg/blip/issues/39) — optional STUN/TURN
 - [#40](https://github.com/krwg/blip/issues/40) — TypeScript migration (`shared/` + IPC)
 
