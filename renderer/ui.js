@@ -1633,8 +1633,20 @@ function buildAvatarSettingsSection() {
   return block;
 }
 
+function isDesktopTrayPlatform() {
+  const p = typeof window !== 'undefined' ? window.blip?.platform : null;
+  return p === 'win32' || p === 'darwin' || p === 'linux';
+}
+
+function platformHintKey(baseKey) {
+  const p = typeof window !== 'undefined' ? window.blip?.platform : null;
+  if (p === 'darwin') return `${baseKey}_mac`;
+  if (p === 'linux') return `${baseKey}_linux`;
+  return baseKey;
+}
+
 function buildLaunchAtLoginSection() {
-  if (typeof window === 'undefined' || window.blip?.platform !== 'win32') {
+  if (!isDesktopTrayPlatform()) {
     return null;
   }
 
@@ -1651,14 +1663,14 @@ function buildLaunchAtLoginSection() {
     },
   });
   row.appendChild(toggle.el);
-  row.appendChild(createPixelHintIcon('settings.launch_at_login_hint'));
+  row.appendChild(createPixelHintIcon(platformHintKey('settings.launch_at_login_hint')));
   block.appendChild(row);
 
   return block;
 }
 
 function buildCloseToTraySection() {
-  if (typeof window === 'undefined' || window.blip?.platform !== 'win32') {
+  if (!isDesktopTrayPlatform()) {
     return null;
   }
 
@@ -1675,7 +1687,7 @@ function buildCloseToTraySection() {
     },
   });
   row.appendChild(toggle.el);
-  row.appendChild(createPixelHintIcon('settings.close_to_tray_hint'));
+  row.appendChild(createPixelHintIcon(platformHintKey('settings.close_to_tray_hint')));
   block.appendChild(row);
 
   return block;
@@ -1945,9 +1957,6 @@ function getSettingsSectionIds() {
     'about',
   ];
   let out = ids;
-  if (typeof window !== 'undefined' && window.blip?.platform !== 'win32') {
-    out = out.filter((id) => id !== 'system');
-  }
   if (!isDeveloperMode(state.config)) {
     out = out.filter((id) => id !== 'developer');
   }

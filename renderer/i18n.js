@@ -361,11 +361,19 @@ const locales = {
     'settings.motion_hint': 'Animated backgrounds can be paused here or via the OS “reduce motion” setting.',
     'settings.notifications_enable': 'Desktop alert for new messages',
     'settings.tray_title': 'System tray',
-    'settings.launch_at_login': 'Start BLIP when Windows starts',
+    'settings.launch_at_login': 'Start BLIP when I sign in',
     'settings.launch_at_login_hint': 'Opens BLIP automatically after you sign in.',
+    'settings.launch_at_login_hint_mac':
+      'Adds BLIP to macOS Login Items (System Settings → General → Login Items). You can remove it there anytime; Gatekeeper may still ask to Open the app once.',
+    'settings.launch_at_login_hint_linux':
+      'Registers a desktop autostart entry where the environment supports it. Behavior varies by desktop (GNOME/KDE/others).',
     'settings.close_to_tray': 'Keep running in tray when I close the window',
     'settings.close_to_tray_hint':
       'Tray menu: Show opens BLIP again; Quit stops networking and exits completely.',
+    'settings.close_to_tray_hint_mac':
+      'BLIP stays in the menu bar. Use the tray menu → Show / Quit (left-click opens the menu on macOS; double-click is unreliable). ⌘Q also quits.',
+    'settings.close_to_tray_hint_linux':
+      'Keeps BLIP in the status/tray area. Some GNOME setups hide legacy trays unless an extension is installed.',
     'settings.avatar_title': 'Profile picture',
     'settings.avatar_upload': 'Upload image',
     'settings.avatar_remove': 'Use generated avatar',
@@ -1408,11 +1416,19 @@ const locales = {
     'settings.motion_hint': 'Анимацию фона можно отключить здесь или через системную настройку «уменьшить движение».',
     'settings.notifications_enable': 'Системное уведомление о новом сообщении',
     'settings.tray_title': 'Трей',
-    'settings.launch_at_login': 'Запускать БЛИП при запуске системы',
+    'settings.launch_at_login': 'Запускать БЛИП при входе в систему',
     'settings.launch_at_login_hint': 'Приложение откроется автоматически после входа в систему.',
+    'settings.launch_at_login_hint_mac':
+      'Добавляет БЛИП в объекты входа macOS (Системные настройки → Основные → Объекты входа). Оттуда можно убрать вручную; Gatekeeper может один раз спросить «Открыть».',
+    'settings.launch_at_login_hint_linux':
+      'Регистрирует autostart .desktop, где это поддерживает окружение. Поведение зависит от рабочего стола (GNOME/KDE и др.).',
     'settings.close_to_tray': 'Оставаться в трее при закрытии окна',
     'settings.close_to_tray_hint':
       'Меню в трее: «Показать» снова открывает БЛИП; «Выход» останавливает сеть и полностью закрывает приложение.',
+    'settings.close_to_tray_hint_mac':
+      'БЛИП остаётся в строке меню. Меню трея → Показать / Выход (на macOS клик открывает меню; двойной клик ненадёжен). ⌘Q тоже завершает.',
+    'settings.close_to_tray_hint_linux':
+      'Оставляет БЛИП в области статуса/трея. В части сборок GNOME legacy-трей скрыт без расширения.',
     'settings.avatar_title': 'Фото профиля',
     'settings.avatar_upload': 'Загрузить',
     'settings.avatar_remove': 'Сгенерированный аватар',
