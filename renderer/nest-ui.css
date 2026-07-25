@@ -311,3 +311,18 @@ html[data-ui-skin='nest'][data-theme='dark'] textarea {
   border-color: color-mix(in srgb, #48484a 80%, transparent);
   box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
 }
+
+/* Achievements stay square in NestUI (icon art slots + cards). */
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-card,
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-icon-slot,
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-section .ach-grid,
+html[data-ui-skin='nest'] .settings-panel--achievements .btn,
+html[data-ui-skin='nest'] .achievement-toast,
+html[data-ui-skin='nest'] .achievement-toast__icon .ach-icon-slot {
+  border-radius: 0 !important;
+}
+
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-card {
+  box-shadow: none;
+  border-width: 1px;
+}

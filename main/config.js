@@ -71,7 +71,7 @@ const DEFAULT_CONFIG = {
 
   devMeshTrace: false,
 
-  devBeaconEnabled: true,
+  devBeaconEnabled: false,
 
   devProjectsEnabled: false,
 
