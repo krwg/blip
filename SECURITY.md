@@ -33,6 +33,7 @@ We aim to acknowledge within a few days; timelines depend on maintainer availabi
 - **LAN clipboard sync** can forward secrets. It stays **off** by default; enabling it from Settings → Network requires an explicit **confirm** dialog.
 - Treat the broadcast domain as hostile unless you control it (same guidance as the hardening tips below).
 - **Markdown rendering** (release notes today; chat Markdown if/when enabled) must always go through `marked` → `DOMPurify.sanitize` with an explicit allowlist (`renderer/release-markdown.js`). Never `innerHTML` from peer text without that path ([#65](https://github.com/krwg/blip/issues/65)).
+- **Giphy API keys** are optional demo credentials when bundled — see [`docs/GIPHY.md`](docs/GIPHY.md) ([#63](https://github.com/krwg/blip/issues/63)).
 
 ## Scope (in scope)
 
