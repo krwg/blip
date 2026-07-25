@@ -91,7 +91,7 @@ FREE baseline keeps core chat, calls, Pad, Mesh Pulse, and Clipboard (20 entries
 | **Clipboard** | Mesh sync; gated by `projectsClipboardEnabled` in **Settings → Network**; FREE 20 entries, MESH+ 500 + search. |
 | **UX** | Tool sidebar + **?** hint on pad history; locked MESH+ tools show stub + toast (no tier legend). |
 
-Groups (`groups.js`, voice channels) are beta and gated by `devGroupsEnabled` in **Settings → Developer**; do not route Signal Corps traffic through group relays.
+Groups (`groups.js`, voice channels) are enabled by default for conferences; do not route Signal Corps traffic through group relays. The **Developer** settings section stays hidden until the About version line is tapped seven times (`developerMode`).
 
 ## Persistence
 
