@@ -77,15 +77,6 @@ import {
   applyStashedGroupFile,
 } from './group-file-transfer.js';
 import {
-  FILE_LIMIT_GB_OPTIONS,
-  normalizeFileLimitGb,
-  formatFileLimitLabel,
-} from './file-transfer-limits.js';
-import {
-  FILE_TRANSFER_SPEED_IDS,
-  normalizeFileTransferSpeed,
-} from './file-transfer-speed.js';
-import {
   trackTransferStart,
   trackTransferProgress,
   trackTransferEnd,
@@ -124,6 +115,9 @@ import { buildSettingsAchievementsPanel } from './achievements-settings-panel.js
 import { appendSessionStatsSection } from './session-stats-panel.js';
 import { syncAchievements } from './achievements-tracker.js';
 import { buildAppearanceSection } from './settings-panels/appearance.js';
+import { buildSettingsLanguagePanel as buildLanguagePanelView } from './settings-panels/language.js';
+import { buildSettingsNotificationsPanel as buildNotificationsPanelView } from './settings-panels/notifications.js';
+import { buildSettingsTransferPanel as buildTransferPanelView } from './settings-panels/transfer.js';
 import {
   startClipboardSync,
   stopClipboardSync,
@@ -721,6 +715,11 @@ function updateNavUnreadBadge() {
     badge.textContent = total > 99 ? '99+' : String(total);
   } else {
     badge?.remove();
+  }
+  try {
+    api.overlayPushStats?.({ unread: total });
+  } catch {
+
   }
 }
 
@@ -1948,103 +1947,19 @@ function buildSettingsProfilePanel() {
 }
 
 function buildSettingsLanguagePanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_language');
-
-  const langSelect = buildThemedSelect();
-  fillSettingsDropdown(
-    langSelect,
-    [
-      { value: 'en', label: 'English' },
-      { value: 'ru', label: 'Русский' },
-    ],
-    state.config.language || getLang() || 'en',
-    async (lang) => {
-      setLang(lang);
-      state.config.language = lang;
-      await api.saveConfig({ language: lang });
-      applyLangChange();
-      state.settingsSection = 'language';
-      renderView('settings');
-    }
-  );
-
-  frag.appendChild(buildSettingsField('settings.language', langSelect));
-  return frag;
+  return buildLanguagePanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    renderSettings: () => renderView('settings'),
+  });
 }
 
 function buildSettingsNotificationsPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_notifications');
-
-  frag.appendChild(
-    createPixelToggle({
-      checked: state.config.desktopNotifications !== false,
-      labelKey: 'settings.notifications_enable',
-      onChange: async (checked) => {
-        state.config = await api.saveConfig({ desktopNotifications: checked });
-      },
-    }).el
-  );
-
-  frag.appendChild(
-    createPixelToggle({
-      checked: state.config.desktopCallNotifications !== false,
-      labelKey: 'settings.notifications_calls',
-      onChange: async (checked) => {
-        state.config = await api.saveConfig({ desktopCallNotifications: checked });
-      },
-    }).el
-  );
-
-  const dndRow = document.createElement('div');
-  dndRow.className = 'settings-toggle-with-hint';
-  const dndToggle = createPixelToggle({
-    checked: state.config.doNotDisturb === true,
-    labelKey: 'settings.notifications_dnd',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ doNotDisturb: checked });
-      applySoundPrefsFromConfig(state.config);
-    },
+  return buildNotificationsPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    applySoundPrefs: applySoundPrefsFromConfig,
   });
-  dndRow.appendChild(dndToggle.el);
-  dndRow.appendChild(createPixelHintIcon('settings.notifications_dnd_hint'));
-  frag.appendChild(dndRow);
-
-  const toastSec = Math.max(2, Math.min(60, Number(state.config.toastDurationSec) || 9));
-  const toastRow = document.createElement('label');
-  toastRow.className = 'settings-range-row';
-  const toastLab = document.createElement('span');
-  toastLab.dataset.i18n = 'settings.toast_duration';
-  toastLab.textContent = t('settings.toast_duration');
-  const toastRange = document.createElement('input');
-  toastRange.type = 'range';
-  toastRange.min = '2';
-  toastRange.max = '60';
-  toastRange.step = '1';
-  toastRange.value = String(toastSec);
-  toastRange.className = 'settings-range';
-  const toastVal = document.createElement('span');
-  toastVal.className = 'settings-range-val';
-  toastVal.textContent = `${toastSec}s`;
-  toastRange.addEventListener('input', () => {
-    toastVal.textContent = `${toastRange.value}s`;
-  });
-  toastRange.addEventListener('change', async () => {
-    const sec = Number(toastRange.value) || 9;
-    state.config = await api.saveConfig({ toastDurationSec: sec });
-    setDefaultToastDurationMs(sec * 1000);
-  });
-  toastRow.appendChild(toastLab);
-  toastRow.appendChild(toastRange);
-  toastRow.appendChild(toastVal);
-  frag.appendChild(toastRow);
-
-  return frag;
 }
 
 function buildSettingsPrivacyPanel() {
@@ -2332,44 +2247,10 @@ function fillDeviceSelect(select, devices, currentId, defaultLabelKey, deviceLab
 }
 
 function buildSettingsTransferPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_transfer', 'settings.transfer_hint');
-
-  const limitSelect = buildThemedSelect();
-  const limitOpts = FILE_LIMIT_GB_OPTIONS.map((gb) => ({
-    value: String(gb),
-    label: formatFileLimitLabel(gb, t),
-  }));
-  fillSettingsDropdown(
-    limitSelect,
-    limitOpts,
-    String(normalizeFileLimitGb(state.config.maxFileTransferGb)),
-    async (val) => {
-      state.config = await api.saveConfig({ maxFileTransferGb: Number(val) });
-    }
-  );
-  const speedSelect = buildThemedSelect();
-  const speedOpts = FILE_TRANSFER_SPEED_IDS.map((id) => ({
-    value: id,
-    label: t(`settings.file_speed_${id}`),
-  }));
-  fillSettingsDropdown(
-    speedSelect,
-    speedOpts,
-    normalizeFileTransferSpeed(state.config.fileTransferSpeed),
-    async (val) => {
-      state.config = await api.saveConfig({ fileTransferSpeed: val });
-    }
-  );
-  frag.appendChild(
-    buildSettingsFieldWithHint('settings.file_limit', 'settings.transfer_hint', limitSelect)
-  );
-  frag.appendChild(
-    buildSettingsFieldWithHint('settings.file_speed', 'settings.file_speed_hint', speedSelect)
-  );
-  return frag;
+  return buildTransferPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+  });
 }
 
 function buildSettingsCallPanel() {
