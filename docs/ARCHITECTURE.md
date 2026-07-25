@@ -155,14 +155,14 @@ Codename **Handshake**. Each client has an Ed25519 keypair in `blip-config.json`
 
 | Layer | Mechanism |
 |-------|-----------|
-| UDP/mDNS | Signed announce (`meshAnnounceSig` over canonical fields, `meshProto: 1`) |
-| TCP | `mesh-handshake` → `mesh-handshake-ack` before any other app packet |
-| Binding | Peer IP must match discovery; `msg.from` must match authenticated session |
+| UDP/mDNS | Signed announce (`meshAnnounceSig` over canonical fields, `meshProto: 2`; proto `1` still accepted as legacy) |
+| TCP | `mesh-handshake` → `mesh-handshake-ack` before any other app packet; then AES-256-GCM envelopes when both peers are proto ≥ 2 |
+| Binding | Peer IP must match discovery; `msg.from` must match authenticated session; ephemeral X25519 `ecdhPubkey` covered by Ed25519 sig |
 | TOFU | `knownPeerKeys[blipId]` updated after successful handshake |
 | IP route | If TCP `remoteAddress` ≠ discovery IP (VPN/Tailscale), handshake logs a warning, calls `discovery.noteObservedPeerIp`, and continues when the packet signature is valid |
 | Policy | `blockedPeerIds` dropped in main; `trustedPeerIds` for UI chat gate |
 
-Legacy peers without `meshProto` appear with `meshLegacy` — TCP mesh with 0.5 requires both sides on Handshake.
+Legacy peers (`meshProto` 1 / no ECDH) set `meshLegacy` and keep plaintext TCP with an explicit UI warning — no silent “secure” badge. After a successful encrypted handshake, `meshTcpEncrypted` drives the channel indicator.
 
 ## File transfer
 

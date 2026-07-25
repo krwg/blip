@@ -3221,6 +3221,16 @@ select.blip-select:focus {
   color: var(--blip-danger);
 }
 
+.peer-handshake-badge--encrypted {
+  border-color: var(--blip-accent);
+  color: var(--blip-accent);
+}
+
+.peer-handshake-badge--plaintext {
+  border-color: var(--blip-muted);
+  color: var(--blip-muted);
+}
+
 .chat-file-card {
   display: flex;
   flex-wrap: wrap;
