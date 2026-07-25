@@ -18,6 +18,11 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **Groups (conferences)** — always available (no longer a Developer toggle).
 - **Developer settings** — hidden until the About version line is tapped seven times; can be hidden again from the panel.
 - **Obfuscator** — still afterPack-only (~0.4s on MESH+ targets); skippable via `BLIP_SKIP_OBFUSCATE=1`.
+- **Version label** — UI shows `[2.0.0]` (no leading `v`) in About and Updates.
+
+### Fixed
+
+- **Call waveform** — bars follow local mic level (AnalyserNode) instead of a CSS-only pulse; muted flattens bars.
 
 ### Added
 
