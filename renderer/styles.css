@@ -2547,6 +2547,12 @@ select.blip-select:focus {
   animation-delay: 0.1s;
 }
 
+.call-waveform--live .wave-bar {
+  animation: none;
+  height: 6px;
+  transition: height 0.05s linear;
+}
+
 @keyframes wave-pulse {
   from { height: 8px; }
   to { height: 28px; }

@@ -1,11 +1,7 @@
 import { t } from '../i18n.js';
 import { appendAboutBuildTrustNotice } from '../trust-ui.js';
 import { bindAboutVersionUnlock } from '../dev-mode.js';
-
-function formatAppVersion(meta) {
-  if (!meta) return '—';
-  return meta.displayVersion || meta.version || '—';
-}
+import { formatAppVersionBracket } from '../app-version.js';
 
 function githubRepoBase(meta) {
   const raw = meta?.githubUrl || 'https://github.com/krwg/blip';
@@ -147,8 +143,7 @@ export function buildSettingsAboutPanel({
     .then((meta) => {
       const name = meta?.displayName || 'BLIP';
       aboutLine.textContent = name;
-      const code = meta?.codename ? ` · ${meta.codename}` : '';
-      aboutVersion.textContent = `v${formatAppVersion(meta)}${code}`;
+      aboutVersion.textContent = formatAppVersionBracket(meta, { withCodename: true });
       const repoBase = githubRepoBase(meta);
       if (meta?.githubUrl) {
         githubBtn.addEventListener('click', () => window.blip.openExternal?.(meta.githubUrl));

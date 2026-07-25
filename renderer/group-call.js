@@ -32,6 +32,7 @@ import {
   clearGroupCallRoster,
 } from './group-call-roster.js';
 import { rtcConfiguration } from '../shared/ice-servers.js';
+import { bindCallWaveform } from './call-waveform.js';
 
 export { getOngoingGroupCall };
 
@@ -380,6 +381,7 @@ function createGroupCallShell(config) {
 
   stage.appendChild(avatarGrid);
   stage.appendChild(waveform);
+  const micWaveform = bindCallWaveform(waveform);
 
   const timerEl = document.createElement('div');
   timerEl.className = 'call-timer';
@@ -620,6 +622,7 @@ function createGroupCallShell(config) {
     localStream?.getAudioTracks().forEach((tr) => {
       tr.enabled = !muted;
     });
+    micWaveform.setMuted(muted);
     muteBtn.classList.toggle('active', muted);
     muteBtn.dataset.i18n = muted ? 'call.unmute' : 'call.mute';
     muteBtn.textContent = t(muted ? 'call.unmute' : 'call.mute');
@@ -679,6 +682,12 @@ function createGroupCallShell(config) {
     startTimer,
     stopTimer,
     refreshI18n: () => applyI18n(overlay),
+    startMicWaveform: (stream) => {
+      micWaveform.setMuted(muted);
+      return micWaveform.start(stream);
+    },
+    stopMicWaveform: () => micWaveform.stop(),
+    setMicWaveformMuted: (v) => micWaveform.setMuted(v),
   };
 }
 
@@ -983,6 +992,7 @@ export async function joinGroupCall(groupId, api, opts = {}) {
   shell.showActive();
   shell.startTimer();
   shell.refreshAvatars(group);
+  void shell.startMicWaveform?.(localStream);
   dismissIncomingUi(groupId);
   sounds.stopOutgoingRing();
   if (!opts.skipInvite) sounds.outgoingCall();
@@ -1075,6 +1085,7 @@ export async function leaveGroupCall() {
   remoteVideos.clear();
   localStream?.getTracks().forEach((tr) => tr.stop());
   localStream = null;
+  shell?.stopMicWaveform?.();
   sharingScreen = false;
   screenStream = null;
   activeGroupId = null;
