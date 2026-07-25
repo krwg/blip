@@ -5,10 +5,17 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const privPath = join(root, 'scripts', '.mesh-plus-private.b64');
+const privCandidates = [
+  join(root, 'keys', 'mesh-plus-private.b64'),
+  join(root, 'scripts', '.mesh-plus-private.b64'),
+];
 const metaPath = join(root, 'app-metadata.json');
 const outPath = join(root, 'build', 'build-info.json');
-const pubPath = join(root, 'build', 'mesh-plus-public-key.txt');
+const pubCandidates = [
+  join(root, 'keys', 'mesh-plus-public.b64'),
+  join(root, 'build', 'mesh-plus-public-key.txt'),
+  join(root, 'mesh-plus-public-key.local'),
+];
 
 const ISSUER = 'krwg-official';
 
@@ -21,13 +28,17 @@ function readPriv() {
       type: 'pkcs8',
     });
   }
-  if (!existsSync(privPath)) return null;
-  const b64 = readFileSync(privPath, 'utf8').trim();
-  return createPrivateKey({
-    key: Buffer.from(b64, 'base64'),
-    format: 'der',
-    type: 'pkcs8',
-  });
+  for (const privPath of privCandidates) {
+    if (!existsSync(privPath)) continue;
+    const b64 = readFileSync(privPath, 'utf8').trim();
+    if (!b64) continue;
+    return createPrivateKey({
+      key: Buffer.from(b64, 'base64'),
+      format: 'der',
+      type: 'pkcs8',
+    });
+  }
+  return null;
 }
 
 function readVersion() {
@@ -42,8 +53,12 @@ function readVersion() {
 function readPubHash() {
   const fromEnv = (process.env.BLIP_MESH_PUBLIC_KEY || '').trim();
   let pub = fromEnv;
-  if (!pub && existsSync(pubPath)) {
-    pub = readFileSync(pubPath, 'utf8').trim();
+  if (!pub) {
+    for (const p of pubCandidates) {
+      if (!existsSync(p)) continue;
+      pub = readFileSync(p, 'utf8').trim();
+      if (pub) break;
+    }
   }
   if (!pub) return '';
   return createHash('sha256').update(pub, 'utf8').digest('hex').slice(0, 16);

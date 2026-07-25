@@ -4,12 +4,7 @@ import { createAvatarElement, setSelfAvatarCache, regenerateAvatar } from './ava
 import { openAvatarCropDialog } from './avatar-crop-dialog.js';
 import { openProfileGifPicker } from './profile-gif-picker.js';
 import { premiumTierEnabled, showPremiumLockedToast } from './mesh-plus.js';
-import {
-  getLocalTrustState,
-  resolvePeerMeshPlusTrust,
-  isOfficialBuildTrust,
-} from './trust-ui.js';
-import { OFFICIAL_BUILD_ISSUER } from '../shared/trust-levels.js';
+import { getLocalTrustState, resolvePeerMeshPlusTrust } from './trust-ui.js';
 import {
   readEntitlementMarker,
   gateAllowsCapability,
@@ -224,9 +219,6 @@ export function buildSettingsProfilePanel(state, api, deps = {}) {
       presence: state.config.presenceStatus || 'online',
       presenceText: state.config.presenceText || '',
       meshPlus,
-      buildTrust: trust?.buildTrust,
-      buildVerified: isOfficialBuildTrust(trust?.buildTrust),
-      buildIssuer: isOfficialBuildTrust(trust?.buildTrust) ? OFFICIAL_BUILD_ISSUER : '',
     };
     if (meshPlus) {
       base.meshPlusTrust =

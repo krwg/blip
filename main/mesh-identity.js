@@ -6,6 +6,7 @@ import {
   createPublicKey,
 } from 'crypto';
 import { generateEcdhKeyPair } from './mesh-session-crypto.js';
+import { isValidBlipId } from '../shared/blip-id.js';
 
 /** Mesh protocol: 2 = TCP payload encryption after handshake (AES-GCM). */
 export const MESH_PROTO = 2;
@@ -139,7 +140,7 @@ export function buildHandshakeAckPacket(config, fromId, peerPubkey, ecdhPrivateK
 
 export function verifyHandshakePacket(msg, expectedFrom) {
   const from = Number(msg?.from);
-  if (!Number.isFinite(from) || from < 1 || from > 64) return { ok: false };
+  if (!isValidBlipId(from)) return { ok: false };
   if (expectedFrom != null && from !== Number(expectedFrom)) return { ok: false };
   const meshPubkey = String(msg?.meshPubkey || '');
   const ts = Number(msg?.ts);
