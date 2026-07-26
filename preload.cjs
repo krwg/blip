@@ -73,6 +73,7 @@ const blipApi = {
   callCandidate: (payload) => ipcRenderer.invoke('call-candidate', payload),
   callHangup: (payload) => ipcRenderer.invoke('call-hangup', payload),
   callState: (payload) => ipcRenderer.invoke('call-state', payload),
+  reportCallLocalState: (payload) => ipcRenderer.invoke('call-report-local-state', payload),
   callRenegotiate: (payload) => ipcRenderer.invoke('call-renegotiate', payload),
   callRenegotiateAnswer: (payload) => ipcRenderer.invoke('call-renegotiate-answer', payload),
   pingPeer: (blipId) => ipcRenderer.invoke('ping-peer', blipId),
@@ -234,6 +235,11 @@ const blipApi = {
     ipcRenderer.on('global-hangup', handler);
     return () => ipcRenderer.removeListener('global-hangup', handler);
   },
+  onOverlayToggleMute: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('overlay-toggle-mute', handler);
+    return () => ipcRenderer.removeListener('overlay-toggle-mute', handler);
+  },
   openGroupCall: (payload) => ipcRenderer.invoke('open-group-call', payload),
   openGroupCallIncoming: (payload) => ipcRenderer.invoke('open-group-call-incoming', payload),
   leaveGroupCall: () => ipcRenderer.invoke('leave-group-call'),
@@ -295,4 +301,6 @@ contextBridge.exposeInMainWorld('blipOverlay', {
     return () => ipcRenderer.removeListener('overlay-update', handler);
   },
   ready: () => ipcRenderer.send('overlay-ready'),
+  callMute: () => ipcRenderer.invoke('overlay-call-mute'),
+  callHangup: () => ipcRenderer.invoke('overlay-call-hangup'),
 });

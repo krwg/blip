@@ -5,6 +5,8 @@ import {
   detectForegroundApp,
   classifyActivity,
 } from './presence-detect.js';
+import { pingPeer } from './tcp-client.js';
+import { resolvePorts } from './ports.js';
 
 let overlayWindow = null;
 let presenceTimer = null;
@@ -12,6 +14,25 @@ let lastSharedText = '';
 /** Runtime visibility — hotkey toggles; settings only enable the feature. */
 let overlayShown = false;
 let lastPayload = null;
+
+const ACCENT_HEX = {
+  mint: '#00ffc8',
+  cyan: '#22d3ee',
+  teal: '#14b8a6',
+  blue: '#3b82f6',
+  indigo: '#6366f1',
+  violet: '#a78bfa',
+  purple: '#c084fc',
+  pink: '#f472b6',
+  rose: '#fb7185',
+  red: '#ef4444',
+  orange: '#f97316',
+  amber: '#f59e0b',
+  lime: '#84cc16',
+  green: '#22c55e',
+  slate: '#94a3b8',
+  gold: '#eab308',
+};
 
 export function getOverlayWindow() {
   return overlayWindow;
@@ -28,14 +49,29 @@ function resolveOverlayUrl(rootDir, useViteDev) {
   return 'http://localhost:5173/overlay.html';
 }
 
+function syncOverlayPointer(interactive) {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return;
+  try {
+    if (interactive) {
+      overlayWindow.setIgnoreMouseEvents(false);
+      overlayWindow.setFocusable(true);
+    } else {
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      overlayWindow.setFocusable(false);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     return overlayWindow;
   }
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
-  const width = 420;
-  const height = 420;
+  const width = 360;
+  const height = 380;
   overlayWindow = new BrowserWindow({
     width,
     height,
@@ -63,11 +99,7 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
   });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  try {
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-  } catch {
-
-  }
+  syncOverlayPointer(false);
 
   const url = resolveOverlayUrl(rootDir, useViteDev);
   if (url.startsWith('http')) overlayWindow.loadURL(url);
@@ -118,6 +150,7 @@ export function toggleOverlayVisible(deps) {
 
 export function pushOverlayUpdate(payload) {
   lastPayload = payload || {};
+  syncOverlayPointer(!!lastPayload.callActive);
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayShown) return;
   try {
     overlayWindow.webContents.send('overlay-update', lastPayload);
@@ -136,6 +169,13 @@ function formatCallElapsed(startedAt) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function resolveAccentHex(cfg) {
+  const custom = String(cfg?.accentCustomHex || '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(custom)) return custom.toLowerCase();
+  const id = String(cfg?.accentId || 'mint');
+  return ACCENT_HEX[id] || ACCENT_HEX.mint;
+}
+
 export function startPresenceLoop({
   getConfig,
   patchConfig,
@@ -143,6 +183,8 @@ export function startPresenceLoop({
   getUnreadTotal,
   getCallInfo,
   getTransferInfo,
+  setCallPing,
+  getCallPingAt,
   onOverlayPayload,
 }) {
   stopPresenceLoop();
@@ -165,12 +207,26 @@ export function startPresenceLoop({
     }
 
     const call = getCallInfo?.() || null;
+    if (call?.active && call.peerIp) {
+      const pingAge = Date.now() - (getCallPingAt?.() || 0);
+      if (pingAge > 3500) {
+        const port = call.peerTcpPort || resolvePorts(cfg).tcpPort;
+        const r = await pingPeer(call.peerIp, port);
+        setCallPing?.(r.ok ? r.ms : null);
+      }
+    } else {
+      setCallPing?.(null);
+    }
+    const callFresh = getCallInfo?.() || call;
+
     const transfer = getTransferInfo?.() || null;
     const presence = cfg.doNotDisturb
       ? 'busy'
       : cfg.presenceStatus === 'away' || cfg.presenceStatus === 'busy'
         ? cfg.presenceStatus
         : 'online';
+    const uiSkin = cfg.uiSkin === 'nest' ? 'nest' : 'pixel';
+    const themeMode = cfg.themeMode === 'light' ? 'light' : 'dark';
     const payload = {
       activityKind: activity?.kind || '',
       activityLabel: activity?.label || '',
@@ -184,15 +240,20 @@ export function startPresenceLoop({
       selfBlipId: cfg.blipId ?? null,
       presence,
       doNotDisturb: !!cfg.doNotDisturb,
-      appVersion: String(app.getVersion() || '').replace(/^v/, ''),
-      callActive: !!call?.active,
-      callPeerName: call?.peerName || '',
-      callPeerId: call?.peerId || null,
-      callElapsed: call?.active ? formatCallElapsed(call.startedAt) : '',
-      callVideo: !!call?.video,
-      callEncrypted: !!call?.encrypted,
-      callLegacy: !!call?.legacy,
-      callPeerPresence: call?.presence || '',
+      uiSkin,
+      theme: themeMode,
+      accentId: cfg.accentId || 'mint',
+      accentHex: resolveAccentHex(cfg),
+      callActive: !!callFresh?.active,
+      callPeerName: callFresh?.peerName || '',
+      callPeerId: callFresh?.peerId || null,
+      callElapsed: callFresh?.active ? formatCallElapsed(callFresh.startedAt) : '',
+      callVideo: !!callFresh?.video,
+      callMuted: !!callFresh?.muted,
+      callPingMs: callFresh?.pingMs ?? null,
+      callEncrypted: !!callFresh?.encrypted,
+      callLegacy: !!callFresh?.legacy,
+      callPeerPresence: callFresh?.presence || '',
       transferLabel: transfer?.label || '',
       transferPercent: transfer?.percent || 0,
       now: Date.now(),

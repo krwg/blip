@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [2.0.2] — Morse — 2026-07-26
+
+Patch.
+
+### Changed
+
+- **Overlay call HUD** — mockup-style in-call card: peer avatar, mute/end actions, mic meter, mesh + ping, Legacy pill; hide version stamp, zero unread, and duplicate session timer; skin follows pixel (square slate) or NestUI.
+- **NestUI 1.1** — stronger accent borders on rounded buttons/toggles, accent focus rings, selected peer/nav polish.
+
+### Fixed
+
+- **Multi-homed LAN discovery** — announce on each NIC’s directed broadcast (plus per-interface send sockets), advertise all local IPs, prefer observed source IP, dial alternate peer IPs. Helps Wi‑Fi ↔ Ethernet asymmetry (common when a MacBook is on Wi‑Fi and a PC is wired).
+
 ## [2.0.1] — Morse — 2026-07-26
 
 Patch.

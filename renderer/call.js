@@ -532,6 +532,7 @@ export function createCallUI(config, api, options = {}) {
         screenSharing: sharingScreen,
       })
       .catch(() => {});
+    api.reportCallLocalState?.({ muted, deafened }).catch?.(() => {});
   }
 
   function mergeRemotePlayback(stream) {

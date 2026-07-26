@@ -148,6 +148,9 @@ async function boot() {
   window.blip.onGlobalHangup?.(() => {
     callUI?.hangupCall?.();
   });
+  window.blip.onOverlayToggleMute?.(() => {
+    callUI?.toggleMute?.();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;

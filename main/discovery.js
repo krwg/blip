@@ -1,6 +1,12 @@
 import dgram from 'dgram';
 import mdns from 'multicast-dns';
-import { getLocalIp, getLocalIpv4Set, normalizePeerIp } from './config.js';
+import {
+  getLocalIp,
+  getLocalIpv4List,
+  getLocalIpv4Set,
+  listLanIpv4Interfaces,
+  normalizePeerIp,
+} from './config.js';
 import { resolvePorts, getDiscoveryBroadcastPorts } from './ports.js';
 import {
   MESH_PROTO,
@@ -19,6 +25,21 @@ import {
 const ANNOUNCE_INTERVAL = 5000;
 const PEER_TIMEOUT = 30000;
 const MAX_PRESENCE_TEXT = 48;
+
+function uniqueIps(...lists) {
+  const out = [];
+  const seen = new Set();
+  for (const list of lists) {
+    const values = Array.isArray(list) ? list : [list];
+    for (const raw of values) {
+      const ip = normalizePeerIp(raw);
+      if (!ip || seen.has(ip) || ip === '0.0.0.0') continue;
+      seen.add(ip);
+      out.push(ip);
+    }
+  }
+  return out;
+}
 
 function sanitizePresenceText(raw) {
   if (raw == null) return '';
@@ -41,12 +62,14 @@ export class Discovery {
     this.udpPort = resolvePorts(config).udpPort;
 
     this.onSeedPacket = null;
+    /** @type {Map<string, { socket: import('dgram').Socket, broadcast: string }>} */
+    this.ifaceSenders = new Map();
   }
 
   async start() {
     this.udpPort = resolvePorts(this.config).udpPort;
     this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-    this.socket.on('message', (msg) => this.handleUdpMessage(msg));
+    this.socket.on('message', (msg, rinfo) => this.handleUdpMessage(msg, rinfo));
 
     try {
       await new Promise((resolve, reject) => {
@@ -73,10 +96,88 @@ export class Discovery {
       throw err;
     }
 
+    await this.refreshIfaceSenders();
     this.startMdns();
     this.announce();
     this.announceTimer = setInterval(() => this.announce(), ANNOUNCE_INTERVAL);
     this.cleanupTimer = setInterval(() => this.cleanupStale(), 5000);
+  }
+
+  async refreshIfaceSenders() {
+    const ifaces = listLanIpv4Interfaces();
+    const keep = new Set(ifaces.map((i) => i.address));
+    for (const [addr, entry] of this.ifaceSenders) {
+      if (keep.has(addr)) continue;
+      try {
+        entry.socket.close();
+      } catch {
+        /* ignore */
+      }
+      this.ifaceSenders.delete(addr);
+    }
+    for (const iface of ifaces) {
+      if (this.ifaceSenders.has(iface.address)) {
+        const cur = this.ifaceSenders.get(iface.address);
+        if (cur) cur.broadcast = iface.broadcast;
+        continue;
+      }
+      try {
+        const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+        await new Promise((resolve, reject) => {
+          const onErr = (err) => {
+            socket.off('error', onErr);
+            reject(err);
+          };
+          socket.once('error', onErr);
+          socket.bind({ address: iface.address, port: 0 }, () => {
+            socket.off('error', onErr);
+            socket.on('error', (err) => console.error('[UDP iface]', iface.address, err.message));
+            try {
+              socket.setBroadcast(true);
+            } catch {
+              /* ignore */
+            }
+            resolve();
+          });
+        });
+        this.ifaceSenders.set(iface.address, { socket, broadcast: iface.broadcast });
+      } catch (err) {
+        console.error('[UDP iface] bind failed', iface.address, err?.message || err);
+      }
+    }
+  }
+
+  sendBroadcastBuf(buf) {
+    if (!buf?.length) return;
+    const ports = getDiscoveryBroadcastPorts(this.config);
+    const hosts = new Set(['255.255.255.255']);
+    for (const iface of listLanIpv4Interfaces()) {
+      if (iface.broadcast) hosts.add(iface.broadcast);
+    }
+    if (this.socket) {
+      for (const host of hosts) {
+        for (const port of ports) {
+          try {
+            this.socket.send(buf, 0, buf.length, port, host);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+    for (const { socket, broadcast } of this.ifaceSenders.values()) {
+      const targets = new Set(['255.255.255.255']);
+      if (broadcast) targets.add(broadcast);
+      for (const host of targets) {
+        for (const port of ports) {
+          try {
+            socket.send(buf, 0, buf.length, port, host);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
   }
 
   startMdns() {
@@ -132,6 +233,7 @@ export class Discovery {
     if (this.config.doNotDisturb) presence = 'busy';
     else if (presence === 'online' && this.config.idleAwayActive) presence = 'away';
     const ip = getLocalIp();
+    const ips = getLocalIpv4List();
     const meshAnnounceTs = Date.now();
     const meshPubkey = this.config.meshPublicKey || '';
     const base = {
@@ -141,6 +243,7 @@ export class Discovery {
       presence,
       presenceText: sanitizePresenceText(this.config.presenceText),
       ip,
+      ips,
       udpPort,
       tcpPort,
       meshProto: MESH_PROTO,
@@ -171,29 +274,33 @@ export class Discovery {
       buildIssuer: buildTrust.buildIssuer,
       buildVersion: buildTrust.buildVersion,
       meshPlusTrust: meshPlus ? buildTrust.meshPlusTrust : null,
+      ips,
     };
   }
 
   announce() {
     if (!this.config.blipId || !this.socket) return;
-    const payload = JSON.stringify(this.buildAnnounce());
-    const buf = Buffer.from(payload);
-    for (const port of getDiscoveryBroadcastPorts(this.config)) {
-      this.socket.send(buf, 0, buf.length, port, '255.255.255.255');
-    }
-    this.announceMdns();
+    void (async () => {
+      try {
+        await this.refreshIfaceSenders();
+      } catch {
+        /* ignore */
+      }
+      const payload = JSON.stringify(this.buildAnnounce());
+      const buf = Buffer.from(payload);
+      this.sendBroadcastBuf(buf);
+      this.announceMdns();
+    })();
   }
 
   broadcastPacket(obj) {
     if (!this.config.blipId || !this.socket || !obj) return;
     const payload = JSON.stringify(obj);
     const buf = Buffer.from(payload);
-    for (const port of getDiscoveryBroadcastPorts(this.config)) {
-      this.socket.send(buf, 0, buf.length, port, '255.255.255.255');
-    }
+    this.sendBroadcastBuf(buf);
   }
 
-  handleUdpMessage(msg) {
+  handleUdpMessage(msg, rinfo) {
     try {
       const data = JSON.parse(msg.toString());
       if (data.type === 'seed-announce' || data.type === 'seed-pulse' || data.type === 'seed-gone') {
@@ -201,17 +308,26 @@ export class Discovery {
         return;
       }
       if (data.type === 'announce' && data.blipId) {
-        this.registerPeer(data);
+        this.registerPeer(data, rinfo?.address);
       }
     } catch {
 
     }
   }
 
-  registerPeer(data) {
+  registerPeer(data, observedIp) {
     const selfId = this.config.blipId;
     const announceIp = normalizePeerIp(data.ip);
-    if (selfId != null && data.blipId === selfId && getLocalIpv4Set().has(announceIp)) {
+    const observed = normalizePeerIp(observedIp);
+    const announcedIps = uniqueIps(data.ip, data.ips);
+    if (
+      selfId != null &&
+      data.blipId === selfId &&
+      announcedIps.some((ip) => getLocalIpv4Set().has(ip))
+    ) {
+      return;
+    }
+    if (selfId != null && data.blipId === selfId && observed && getLocalIpv4Set().has(observed)) {
       return;
     }
 
@@ -234,12 +350,17 @@ export class Discovery {
     const meshPubkey = String(data.meshPubkey || '');
     const meshTcpEncrypted = existing?.meshTcpEncrypted === true && !meshLegacy;
 
+    // Prefer packet source IP when present — multi-homed peers often advertise the wrong NIC.
+    const ips = uniqueIps(observed, announceIp, data.ips, existing?.ips);
+    const primaryIp = observed || announceIp || ips[0] || data.ip;
+
     const peer = {
       blipId: data.blipId,
       displayName: data.displayName || `BLIP-${data.blipId}`,
       presence,
       presenceText,
-      ip: announceIp || data.ip,
+      ip: primaryIp,
+      ips,
       tcpPort: peerTcp,
       udpPort: peerUdp,
       lastSeen: Date.now(),
@@ -257,10 +378,15 @@ export class Discovery {
       meshPlusTrust: peerMeshPlusTrustFromAnnounce(data),
     };
 
+    const ipsChanged =
+      !existing ||
+      JSON.stringify(existing.ips || []) !== JSON.stringify(ips);
+
     let changed = false;
     if (
       !existing ||
       existing.ip !== peer.ip ||
+      ipsChanged ||
       existing.displayName !== peer.displayName ||
       existing.presence !== peer.presence ||
       existing.presenceText !== peer.presenceText ||
@@ -297,6 +423,7 @@ export class Discovery {
       existing.buildIssuer = peer.buildIssuer;
       existing.buildVerified = peer.buildVerified;
       existing.meshPlusTrust = peer.meshPlusTrust;
+      existing.ips = ips;
       if (wasOffline) changed = true;
     }
 
@@ -329,8 +456,12 @@ export class Discovery {
     const peer = this.peers.get(id);
     if (!peer) return;
     const nip = normalizePeerIp(ip);
-    if (!nip || peer.ip === nip) return;
+    if (!nip) return;
+    const ips = uniqueIps(nip, peer.ip, peer.ips);
+    const changed = peer.ip !== nip || JSON.stringify(peer.ips || []) !== JSON.stringify(ips);
+    if (!changed) return;
     peer.ip = nip;
+    peer.ips = ips;
     this.emitPeers();
   }
 
@@ -380,6 +511,14 @@ export class Discovery {
       this.socket.close();
       this.socket = null;
     }
+    for (const { socket } of this.ifaceSenders.values()) {
+      try {
+        socket.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.ifaceSenders.clear();
     if (this.mdnsInstance) {
       this.mdnsInstance.destroy();
       this.mdnsInstance = null;

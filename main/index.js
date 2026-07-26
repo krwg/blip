@@ -6,7 +6,7 @@ import { Discovery } from './discovery.js';
 import { createTcpServer } from './tcp-server.js';
 import { connectToPeer } from './tcp-client.js';
 import { createTcpLineReader } from './tcp-framing.js';
-import { loadConfig, saveConfig, initConfigPath } from './config.js';
+import { loadConfig, saveConfig, initConfigPath, peerDialIps } from './config.js';
 import { toPublicConfig } from './config-public.js';
 import { resolveEntitlementState } from './mesh-plus-license.js';
 import {
@@ -119,7 +119,10 @@ let callWindow = null;
 let activeCallPeerId = null;
 let activeCallStartedAt = 0;
 let activeCallVideo = false;
+let activeCallMuted = false;
 let lastTransferInfo = null;
+let lastCallPingMs = null;
+let lastCallPingAt = 0;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
@@ -128,10 +131,16 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
   const id = Number(peerId) || null;
   if (id && id !== activeCallPeerId) {
     activeCallStartedAt = Date.now();
+    activeCallMuted = false;
+    lastCallPingMs = null;
+    lastCallPingAt = 0;
   }
   if (!id) {
     activeCallStartedAt = 0;
     activeCallVideo = false;
+    activeCallMuted = false;
+    lastCallPingMs = null;
+    lastCallPingAt = 0;
   } else if (video != null) {
     activeCallVideo = !!video;
   }
@@ -143,6 +152,9 @@ function clearActiveCallPeer(peerId = null) {
   activeCallPeerId = null;
   activeCallStartedAt = 0;
   activeCallVideo = false;
+  activeCallMuted = false;
+  lastCallPingMs = null;
+  lastCallPingAt = 0;
 }
 
 const pendingCallIpc = [];
@@ -649,13 +661,26 @@ function syncOverlayFeature() {
         active: true,
         peerId: activeCallPeerId,
         peerName: peer?.displayName || `BLIP-${activeCallPeerId}`,
+        peerIp: peer?.ip || '',
+        peerTcpPort: peer?.tcpPort || null,
         startedAt: activeCallStartedAt || Date.now(),
         video: activeCallVideo,
+        muted: activeCallMuted,
+        pingMs: lastCallPingMs,
         encrypted: !!peer?.meshTcpEncrypted,
         legacy: !!peer?.meshLegacy || !!peer?.meshCompat,
         presence: peer?.presence || (peer?.online ? 'online' : 'offline'),
       };
     },
+    setCallPing: (ms) => {
+      if (ms == null || !Number.isFinite(Number(ms))) {
+        lastCallPingMs = null;
+        return;
+      }
+      lastCallPingMs = Number(ms);
+      lastCallPingAt = Date.now();
+    },
+    getCallPingAt: () => lastCallPingAt,
     getTransferInfo: () => lastTransferInfo,
     windowDeps: overlayWindowDeps(),
   });
@@ -844,12 +869,25 @@ async function ensurePeerSocket(blipId) {
     }
 
     const tcpPort = peer.tcpPort || resolvePorts(config).tcpPort;
-    const socketKey = `${peer.ip}:${blipId}:${tcpPort}`;
+    const dialIps = peerDialIps(peer);
+    const primaryIp = dialIps[0] || peer.ip;
+    const socketKey = `${primaryIp}:${blipId}:${tcpPort}`;
 
-    const cached = peerSockets.get(socketKey);
-    if (cached && !cached.destroyed && isSocketAuthenticated(cached)) {
+    const findCached = () => {
+      for (const ip of dialIps) {
+        const key = `${ip}:${blipId}:${tcpPort}`;
+        const cached = peerSockets.get(key);
+        if (cached && !cached.destroyed && isSocketAuthenticated(cached)) {
+          return { socket: cached, key };
+        }
+      }
+      return null;
+    };
+
+    const hit = findCached();
+    if (hit) {
       console.error(`[BLIP dial] reuse cached outbound socket for #${blipId}`);
-      return cached;
+      return hit.socket;
     }
 
     const inflight = peerSocketConnectInflight.get(socketKey);
@@ -863,19 +901,29 @@ async function ensurePeerSocket(blipId) {
       peerSockets.delete(socketKey);
 
       const openWired = async () => {
-        let socket;
-        try {
-          socket = await connectToPeer(peer.ip, blipId, tcpPort);
-        } catch (err) {
-          throw classifyBlipError(err);
+        let lastErr = null;
+        for (const ip of dialIps) {
+          try {
+            const socket = await connectToPeer(ip, blipId, tcpPort);
+            const key = `${ip}:${blipId}:${tcpPort}`;
+            wirePeerSocket(socket, key, ip);
+            if (ip !== peer.ip) {
+              discovery?.noteObservedPeerIp?.(blipId, ip);
+            }
+            return { socket, key };
+          } catch (err) {
+            lastErr = classifyBlipError(err);
+          }
         }
-        wirePeerSocket(socket, socketKey, peer.ip);
-        return socket;
+        throw lastErr || createBlipError(BlipErrorCode.CONNECT_FAILED, `Connect failed for #${blipId}`);
       };
 
       let socket;
+      let connectedKey = socketKey;
       try {
-        socket = await openWired();
+        const opened = await openWired();
+        socket = opened.socket;
+        connectedKey = opened.key;
       } catch (err) {
         logBlipError(err, `ensurePeerSocket #${blipId} connect`);
         throw err;
@@ -914,7 +962,9 @@ async function ensurePeerSocket(blipId) {
             /* ignore */
           }
           try {
-            socket = await openWired();
+            const opened = await openWired();
+            socket = opened.socket;
+            connectedKey = opened.key;
             await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
               registerConnection,
               forcePlaintext: true,
@@ -935,7 +985,7 @@ async function ensurePeerSocket(blipId) {
           );
         }
       }
-      peerSockets.set(socketKey, socket);
+      peerSockets.set(connectedKey, socket);
       return socket;
     })().finally(() => {
       peerSocketConnectInflight.delete(socketKey);
@@ -1193,6 +1243,11 @@ function setupIpc() {
     },
     getPeersOnline: () =>
       (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
+    getCallWindow: () => callWindow,
+    hangupActiveCall: () => hangupActiveCallIfAny(),
+    setActiveCallMuted: (muted) => {
+      activeCallMuted = !!muted;
+    },
   });
 
   ipcMain.handle('save-config', (_, updates) => {
