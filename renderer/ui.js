@@ -150,6 +150,7 @@ import {
   listenReducedMotion,
 } from './appearance.js';
 import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
+import { createViewRouter } from './view-router.js';
 
 async function broadcastCustomAvatar() {
   const dataUrl = getSelfAvatarCache();
@@ -227,8 +228,6 @@ let state = {
   profileReturn: null,
 };
 
-const unreadByGroup = new Map();
-
 let lastUpdateStatus = null;
 
 let rootEl = null;
@@ -247,8 +246,31 @@ let profilePageCleanup = null;
 
 let profilePageApi = null;
 
-const unreadByPeer = new Map();
-let unreadInviteCount = 0;
+const viewRouter = createViewRouter({
+  getState: () => state,
+  getApi: () => api,
+  getMainContent: () => mainContent,
+  setMainContent: (el) => {
+    mainContent = el;
+  },
+  runSettingsPanelCleanup: () => runSettingsPanelCleanup(),
+  renderView: (view, opts) => renderView(view, opts),
+  peerBlipIdEquals,
+});
+
+const {
+  unreadByPeer,
+  unreadByGroup,
+  resolveMainContent,
+  mountMainPanel,
+  bumpInviteUnread,
+  clearInviteUnread,
+  bumpUnread,
+  clearUnread,
+  updateNavUnreadBadge,
+  updateNavActive,
+  createNav,
+} = viewRouter;
 
 const peersTyping = new Set();
 
@@ -508,26 +530,6 @@ function findPeerByBlipId(id) {
   return state.peers.find((p) => normalizeBlipId(p.blipId) === nid);
 }
 
-function resolveMainContent() {
-  if (mainContent?.isConnected) return mainContent;
-  const found =
-    document.querySelector('.app-layout > .main-content') ||
-    document.querySelector('.app-body > .main-content');
-  if (found) mainContent = found;
-  return mainContent;
-}
-
-function mountMainPanel(el, { prevView = null } = {}) {
-  const panel = resolveMainContent();
-  if (!panel || !el) return false;
-  const leaving = prevView ?? state.view;
-  if (leaving === 'settings') runSettingsPanelCleanup();
-  panel.replaceChildren(el);
-  applyI18n(panel);
-  updateNavActive();
-  return true;
-}
-
 function refreshLiveChat(peerId) {
   const id = normalizeBlipId(peerId);
   if (id == null) return;
@@ -662,95 +664,6 @@ function ensureChatView(peerId) {
     state.chatViews.set(id, chat);
   }
   return state.chatViews.get(id);
-}
-
-function getUnreadTotal() {
-  let n = unreadInviteCount;
-  for (const c of unreadByPeer.values()) n += c;
-  for (const c of unreadByGroup.values()) n += c;
-  return n;
-}
-
-function bumpInviteUnread() {
-  unreadInviteCount += 1;
-  updateNavUnreadBadge();
-  if (state.view === 'chat' && !state.activePeer && !state.activeGroup && mainContent) {
-    renderView('chat');
-  }
-}
-
-function clearInviteUnread() {
-  if (unreadInviteCount <= 0) return;
-  unreadInviteCount = 0;
-  updateNavUnreadBadge();
-}
-
-function updateNavUnreadBadge() {
-  const chatBtn = document.querySelector('.nav-btn[data-view="chat"]');
-  if (!chatBtn) return;
-  const total = getUnreadTotal();
-  let badge = chatBtn.querySelector('.nav-unread-badge');
-  if (total > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'nav-unread-badge';
-      chatBtn.appendChild(badge);
-    }
-    badge.textContent = total > 99 ? '99+' : String(total);
-  } else {
-    badge?.remove();
-  }
-  try {
-    api.overlayPushStats?.({ unread: total });
-  } catch {
-
-  }
-}
-
-function bumpUnread(peerId) {
-  if (state.view === 'chat' && peerBlipIdEquals(state.activePeer, peerId)) return;
-  unreadByPeer.set(peerId, (unreadByPeer.get(peerId) || 0) + 1);
-  updateNavUnreadBadge();
-}
-
-function clearUnread(peerId) {
-  if (!unreadByPeer.has(peerId)) return;
-  unreadByPeer.delete(peerId);
-  updateNavUnreadBadge();
-}
-
-function updateNavActive() {
-  document.querySelectorAll('.nav-btn').forEach((btn) => {
-    const view = btn.dataset.view;
-    let active = view === state.view;
-    if (view === 'chat' && state.view === 'chat') active = true;
-    btn.classList.toggle('active', active);
-  });
-  updateNavUnreadBadge();
-}
-
-function getNavKeys() {
-  const keys = ['dial', 'peers', 'chat'];
-  if (state.config?.devBeaconEnabled) keys.push('beacon');
-  if (state.config?.devProjectsEnabled) keys.push('projects');
-  keys.push('settings');
-  return keys;
-}
-
-function createNav(onNavigate) {
-  const nav = document.createElement('nav');
-  nav.className = 'side-nav glass';
-  getNavKeys().forEach((key) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'nav-btn';
-    btn.dataset.view = key;
-    btn.dataset.i18n = `nav.${key}`;
-    btn.textContent = t(`nav.${key}`);
-    btn.addEventListener('click', () => onNavigate(key));
-    nav.appendChild(btn);
-  });
-  return nav;
 }
 
 function renderDialView() {
@@ -1744,21 +1657,7 @@ async function runStartupUpdateCheck() {
 }
 
 export function navigateToView(view) {
-  if (!state.config?.blipId) return;
-  if (view === 'beacon' && !state.config?.devBeaconEnabled) {
-    showAppToast({
-      title: t('settings.dev_beacon_off'),
-      durationMs: 3500,
-    });
-    return;
-  }
-  if (view === 'settings' && state.view !== 'settings') {
-    state.settingsSection = null;
-  }
-  if (view === 'chat' && state.view === 'chat' && state.activePeer) {
-    state.activePeer = null;
-  }
-  renderView(view);
+  viewRouter.navigateToView(view);
 }
 
 export async function toggleDoNotDisturb() {
@@ -1996,7 +1895,7 @@ async function applyFactoryReset() {
   state.activeGroup = null;
   state.settingsSection = null;
   state.view = 'grid';
-  unreadByGroup.clear();
+  viewRouter.clearUnreadMaps();
   lastUpdateStatus = null;
 
   initPeerTrust(state.config, api);
