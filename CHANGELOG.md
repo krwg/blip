@@ -28,7 +28,7 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 - **Overlay / activity** — Shift+Alt+O HUD (call timer, clock, game/app session); game-priority status + pin app; [`docs/OVERLAY.md`](docs/OVERLAY.md).
 - **Chat Markdown** — full GFM in DMs and groups (tables, lists, code, task lists) via sanitized `marked` + DOMPurify.
 - **Docs** — Giphy key distribution ([`docs/GIPHY.md`](docs/GIPHY.md)); afterPack obfuscator timing ([`docs/OBFUSCATOR.md`](docs/OBFUSCATOR.md)).
-- **Maintainability** — call IPC extracted to `main/ipc/calls.js`; semver helpers to `renderer/app-version.js`.
+- **Maintainability** — call IPC extracted to `main/ipc/calls.js`; semver helpers to `renderer/app-version.js`; main nav/unread host to `renderer/view-router.js` (#58).
 
 ### Fixed
 
