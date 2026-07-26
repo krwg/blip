@@ -133,7 +133,8 @@ Windows auto-update for **unsigned** Setup builds is fixed end-to-end (download 
 |----|-------------------|
 | Windows | `BLIP-Setup-2.0.0.exe` |
 | Windows (portable) | `BLIP-2.0.0-Portable.exe` |
-| macOS 12+ | `BLIP-2.0.0-mac-*.dmg` |
+| macOS 12+ (Apple silicon) | `BLIP-2.0.0-mac-arm64.dmg` |
+| macOS 12+ (Intel / updater zip) | `BLIP-2.0.0-mac-*.zip` |
 | Linux | `BLIP-2.0.0-linux-*.AppImage` or `.deb` |
 
 **Auto-update feeds:** `latest.yml` · `latest-mac.yml` · `latest-linux.yml`
