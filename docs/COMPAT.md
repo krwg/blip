@@ -24,4 +24,10 @@ WebRTC media for calls is separate from mesh TCP crypto; this setting only cover
 
 ## Calling BLIP ≤1.1.x
 
-Legacy peers often **close TCP** on unknown `mesh-handshake` frames. Morse therefore **skips** encrypted handshake when discovery marks the peer legacy (`meshProto < 2` / `meshLegacy` / no pubkey) and opens a plaintext compat session instead. If a handshake still races and the socket dies, Morse reconnects once in plaintext mode. Failures surface as numbered codes (`104`, `109`, …) — see README Error codes.
+BLIP **1.1.x** speaks mesh-handshake **v1** (`meshProto: 1`, no ECDH) and **drops** TCP frames until authenticated. Morse must:
+
+1. Detect legacy peers (`meshProto < 2` / `meshLegacy`).
+2. Complete a **v1** handshake (not skip auth, not send Morse v2 — v2 signatures make 1.1.x destroy the socket → classic `Socket closed`).
+3. Keep the session **plaintext** (no AES wrap).
+
+Manual `ping` still works on 1.1.x because it uses a short unauthenticated TCP probe. Chat/calls need the v1 handshake path above.

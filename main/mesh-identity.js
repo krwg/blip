@@ -85,11 +85,30 @@ export function announceCanonical(fields) {
   return `${ANNOUNCE_CANON}|${fields.blipId}|${fields.displayName}|${fields.presence}|${fields.presenceText}|${fields.ip}|${fields.udpPort}|${fields.tcpPort}|${fields.meshAnnounceTs}|${fields.meshPubkey}`;
 }
 
-export function buildHandshakePacket(config, fromId) {
+export function buildHandshakePacket(config, fromId, opts = {}) {
   const from = Number(fromId);
   const ts = Date.now();
   const nonce = `${ts}-${Math.random().toString(36).slice(2, 10)}`;
   const meshPubkey = config.meshPublicKey;
+  const legacy = !!opts.legacy;
+
+  if (legacy) {
+    const canonical = handshakeCanonical(from, ts, nonce, meshPubkey, '');
+    const sig = signCanonical(config, canonical);
+    return {
+      packet: {
+        type: 'mesh-handshake',
+        meshProto: 1,
+        from,
+        ts,
+        nonce,
+        meshPubkey,
+        sig,
+      },
+      ecdhPrivateKey: null,
+    };
+  }
+
   const ecdh = generateEcdhKeyPair();
   const canonical = handshakeCanonical(from, ts, nonce, meshPubkey, ecdh.publicKeyB64);
   const sig = signCanonical(config, canonical);
@@ -108,11 +127,38 @@ export function buildHandshakePacket(config, fromId) {
   };
 }
 
-export function buildHandshakeAckPacket(config, fromId, peerPubkey, ecdhPrivateKey, ecdhPublicKeyB64) {
+export function buildHandshakeAckPacket(
+  config,
+  fromId,
+  peerPubkey,
+  ecdhPrivateKey,
+  ecdhPublicKeyB64,
+  opts = {}
+) {
   const from = Number(fromId);
   const ts = Date.now();
   const nonce = `${ts}-${Math.random().toString(36).slice(2, 10)}`;
   const meshPubkey = config.meshPublicKey;
+  const legacy = !!opts.legacy;
+
+  if (legacy) {
+    const canonical = handshakeCanonical(from, ts, nonce, meshPubkey, '');
+    const sig = signCanonical(config, canonical);
+    return {
+      packet: {
+        type: 'mesh-handshake-ack',
+        meshProto: 1,
+        from,
+        ts,
+        nonce,
+        meshPubkey,
+        sig,
+        peerPubkey: peerPubkey || undefined,
+      },
+      ecdhPrivateKey: null,
+    };
+  }
+
   let ecdhPriv = ecdhPrivateKey;
   let ecdhPub = ecdhPublicKeyB64;
   if (!ecdhPriv || !ecdhPub) {

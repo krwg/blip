@@ -166,17 +166,27 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
     session.peerId = v.from;
     session.meshPubkey = v.meshPubkey;
 
-    const ackBuilt = buildHandshakeAckPacket(config, config.blipId, v.meshPubkey);
+    const legacyPeer = !v.encryptedCapable;
+    const ackBuilt = buildHandshakeAckPacket(
+      config,
+      config.blipId,
+      v.meshPubkey,
+      null,
+      null,
+      { legacy: legacyPeer }
+    );
     if (v.encryptedCapable) {
       armSessionCipher(session, ackBuilt.ecdhPrivateKey, v.ecdhPubkey, 'responder');
     } else {
       session.encrypted = false;
       session.cipher = null;
+      session.compat = true;
     }
 
     session.authenticated = true;
     tcpServer?.registerConnection(v.from, socket);
     notePeerChannel(discovery, v.from, session.encrypted);
+    if (legacyPeer) discovery?.notePeerCompat?.(v.from, true);
 
     const nextConfig = rememberPeerPubkey(config, v.from, v.meshPubkey);
     if (nextConfig !== config) onConfigPatch?.({ knownPeerKeys: nextConfig.knownPeerKeys });
@@ -239,6 +249,7 @@ export function assertAuthenticated(socket, msg) {
 
 export function performOutboundHandshake(socket, config, expectedPeerId, discovery, opts = {}) {
   const softFail = !!opts.softFail;
+  const legacy = !!opts.legacy;
   const remoteIp = normalizePeerIp(socket.remoteAddress);
   const session = initInboundSession(socket, remoteIp);
 
@@ -318,7 +329,7 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
 
     let built;
     try {
-      built = buildHandshakePacket(config, config.blipId);
+      built = buildHandshakePacket(config, config.blipId, { legacy });
     } catch (err) {
       clearTimeout(timer);
       outboundWait.delete(socket);
@@ -332,6 +343,11 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
       return;
     }
     session.ecdhPrivateKey = built.ecdhPrivateKey;
+    if (legacy) {
+      session.encrypted = false;
+      session.cipher = null;
+      session.compat = true;
+    }
     const waiter = outboundWait.get(socket);
     if (waiter) waiter.handshakeSent = true;
     sendOnSocket(socket, built.packet).catch((err) => {
@@ -391,14 +407,47 @@ export async function performOutboundHandshakeOrCompat(
     `[BLIP E${legacy ? BlipErrorCode.PEER_CLASSIFIED_LEGACY : BlipErrorCode.PEER_CLASSIFIED_MODERN}/${legacy ? 'LEGACY' : 'MODERN'}] dial ${formatPeerDialDebug(peer)} softFail=${softFail} forcePlaintext=${!!forcePlaintext}`
   );
 
+  // BLIP ≤1.1.x requires mesh-handshake v1 (no ECDH). Skipping auth makes them
+  // drop all frames; sending Morse v2 makes them destroy the socket ("Socket closed").
   if (forcePlaintext || (softFail && legacy)) {
     if (socket.destroyed) {
       throw createBlipError(
         BlipErrorCode.HANDSHAKE_PEER_CLOSED,
-        `Cannot open compat on destroyed socket for #${expectedPeerId}`
+        `Cannot open legacy handshake on destroyed socket for #${expectedPeerId}`
       );
     }
-    return applyOutboundCompatSession(socket, expectedPeerId, discovery, registerConnection);
+    try {
+      await performOutboundHandshake(socket, config, expectedPeerId, discovery, {
+        softFail: false,
+        legacy: true,
+      });
+      const session = getSocketSession(socket);
+      if (session) {
+        session.encrypted = false;
+        session.cipher = null;
+        session.compat = true;
+        session.ecdhPrivateKey = null;
+      }
+      registerConnection?.(expectedPeerId, socket);
+      notePeerChannel(discovery, expectedPeerId, false);
+      discovery?.notePeerCompat?.(expectedPeerId, true);
+      logBlipError(
+        createBlipError(
+          BlipErrorCode.COMPAT_PLAINTEXT,
+          `Legacy v1 handshake OK with #${expectedPeerId}`
+        ),
+        'legacy-handshake'
+      );
+      return expectedPeerId;
+    } catch (err) {
+      const classified = classifyBlipError(err);
+      logBlipError(classified, `legacy handshake #${expectedPeerId}`);
+      throw createBlipError(
+        BlipErrorCode.ENSURE_HANDSHAKE_FAILED,
+        `Legacy v1 handshake failed for #${expectedPeerId}`,
+        classified
+      );
+    }
   }
 
   try {
@@ -407,16 +456,15 @@ export async function performOutboundHandshakeOrCompat(
     });
   } catch (err) {
     const classified = classifyBlipError(err);
-    // Any close-family failure can retry plaintext when consent is on (covers
-    // misclassified ≤1.1.x peers that announce like Morse but RST handshake).
+    // Misclassified modern peer that is actually ≤1.1.x: retry with v1 handshake.
     if (isUnencryptedMeshAllowed(config) && (socket.destroyed || isSocketCloseFamily(classified.blipCode))) {
       const closed = createBlipError(
         BlipErrorCode.HANDSHAKE_PEER_CLOSED,
-        `Peer #${expectedPeerId} closed TCP during handshake (will retry plaintext if allowed)`,
+        `Peer #${expectedPeerId} closed during v2 handshake (will retry legacy v1)`,
         classified
       );
       closed.needCompatReconnect = true;
-      logBlipError(closed, 'need compat reconnect');
+      logBlipError(closed, 'need legacy v1 reconnect');
       throw closed;
     }
     if (!softFail) {

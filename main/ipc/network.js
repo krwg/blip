@@ -9,6 +9,7 @@ import { getLocalIp, getLocalIpv4Set } from '../config.js';
 import { resolvePorts } from '../ports.js';
 import { pingPeer } from '../tcp-client.js';
 import { sendOnSocket } from '../tcp-client.js';
+import { blipErrorIpcPayload, createBlipError, BlipErrorCode } from '../../shared/blip-errors.js';
 
 /**
  * @param {object} deps
@@ -77,7 +78,11 @@ export function registerNetworkIpc(deps) {
       await sendOnSocket(socket, packet);
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err.message };
+      return blipErrorIpcPayload(
+        err?.blipCode != null
+          ? err
+          : createBlipError(BlipErrorCode.ENSURE_HANDSHAKE_FAILED, err?.message || 'send failed', err)
+      );
     }
   });
 
