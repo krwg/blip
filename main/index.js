@@ -118,16 +118,23 @@ let callWindow = null;
 
 let activeCallPeerId = null;
 let activeCallStartedAt = 0;
+let activeCallVideo = false;
+let lastTransferInfo = null;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
 
-function setActiveCallPeer(peerId) {
+function setActiveCallPeer(peerId, { video = null } = {}) {
   const id = Number(peerId) || null;
   if (id && id !== activeCallPeerId) {
     activeCallStartedAt = Date.now();
   }
-  if (!id) activeCallStartedAt = 0;
+  if (!id) {
+    activeCallStartedAt = 0;
+    activeCallVideo = false;
+  } else if (video != null) {
+    activeCallVideo = !!video;
+  }
   activeCallPeerId = id;
 }
 
@@ -135,6 +142,7 @@ function clearActiveCallPeer(peerId = null) {
   if (peerId != null && Number(peerId) !== Number(activeCallPeerId)) return;
   activeCallPeerId = null;
   activeCallStartedAt = 0;
+  activeCallVideo = false;
 }
 
 const pendingCallIpc = [];
@@ -642,8 +650,13 @@ function syncOverlayFeature() {
         peerId: activeCallPeerId,
         peerName: peer?.displayName || `BLIP-${activeCallPeerId}`,
         startedAt: activeCallStartedAt || Date.now(),
+        video: activeCallVideo,
+        encrypted: !!peer?.meshTcpEncrypted,
+        legacy: !!peer?.meshLegacy || !!peer?.meshCompat,
+        presence: peer?.presence || (peer?.online ? 'online' : 'offline'),
       };
     },
+    getTransferInfo: () => lastTransferInfo,
     windowDeps: overlayWindowDeps(),
   });
 }
@@ -998,7 +1011,7 @@ function handleTcpPayload(msg, fromBlipId) {
       break;
     case 'call-offer': {
       const callerId = msg.from ?? fromBlipId;
-      setActiveCallPeer(callerId);
+      setActiveCallPeer(callerId, { video: msg.video });
       if (config?.desktopCallNotifications !== false && !config?.doNotDisturb) {
         showDesktopNotification({
           kind: 'call',
@@ -1290,7 +1303,18 @@ function setupIpc() {
   registerFileIpc({
     getConfig: () => config,
     ensurePeerSocket,
-    setTrayTransferProgress,
+    setTrayTransferProgress: (info) => {
+      const pct = Math.round(Number(info?.percent) || 0);
+      if (info && pct > 0 && pct < 100) {
+        lastTransferInfo = {
+          label: String(info.label || 'Transfer').trim(),
+          percent: pct,
+        };
+      } else {
+        lastTransferInfo = null;
+      }
+      setTrayTransferProgress(info);
+    },
   });
 
   registerCallIpc({

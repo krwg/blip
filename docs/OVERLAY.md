@@ -16,12 +16,16 @@ Discord-style **always-on-top overlay** and opt-in **foreground app/game** detec
 1. Enable **Enable desktop overlay** in Settings → System.
 2. Toggle visibility with **Shift+Alt+O** (not shown continuously).
 3. HUD shows:
-   - Clock + date (corner)
-   - Current game/app + session time (Steam/Discord-style)
-   - Active call peer + call timer when in a call
-   - Online peer count / unread badge
+   - Self name + BLIP ID
+   - Clock + date
+   - Status / mesh peer count / unread (stat row)
+   - Current game/app + window title + session time
+   - Active call: peer, id, voice/video, mesh crypto/legacy, timer
+   - Live file-transfer progress when a transfer is running
+   - App version + DND hint
 
 Click-through is on (`setIgnoreMouseEvents`) so the HUD does not steal focus.
+Window size is **420×420** so the call block is fully visible.
 
 ## Status (mesh presence)
 
