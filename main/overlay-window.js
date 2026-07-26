@@ -168,8 +168,8 @@ export function startPresenceLoop({
     const transfer = getTransferInfo?.() || null;
     const presence = cfg.doNotDisturb
       ? 'busy'
-      : cfg.presence === 'away' || cfg.presence === 'busy'
-        ? cfg.presence
+      : cfg.presenceStatus === 'away' || cfg.presenceStatus === 'busy'
+        ? cfg.presenceStatus
         : 'online';
     const payload = {
       activityKind: activity?.kind || '',
