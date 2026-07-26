@@ -18,14 +18,16 @@ Discord-style **always-on-top overlay** and opt-in **foreground app/game** detec
 3. HUD shows:
    - Self name + BLIP ID
    - Clock + date
-   - Status / mesh peer count / unread (stat row)
-   - Current game/app + window title + session time
-   - Active call: peer, id, voice/video, mesh crypto/legacy, timer
+   - Status / mesh peer count (unread only when > 0)
+   - Current game/app + window title (no duplicate session timer in chips)
+   - Active call card: peer avatar, voice/video + timer, mute/end actions, mesh + ping, mic meter, Legacy pill
    - Live file-transfer progress when a transfer is running
-   - App version + DND hint
+   - Footer: foreground app (+ elapsed) or DND — no permanent app version stamp
 
-Click-through is on (`setIgnoreMouseEvents`) so the HUD does not steal focus.
-Window size is **420×420** so the call block is fully visible.
+Skin follows the main window: **pixel** (slate, square) or **NestUI** (soft radii).
+
+Click-through is on while idle; during an active call the panel accepts clicks for mute/end.
+Window size is **360×380**.
 
 ## Status (mesh presence)
 
