@@ -4,7 +4,7 @@ import {
   buildHandshakeAckPacket,
   buildHandshakePacket,
   rememberPeerPubkey,
-  pubkeyMatchesKnown,
+  acceptPeerPubkey,
   verifyHandshakePacket,
 } from './mesh-identity.js';
 import {
@@ -30,6 +30,11 @@ export function getSocketSession(socket) {
 }
 
 export function initInboundSession(socket, remoteIp) {
+  const existing = sessions.get(socket);
+  if (existing) {
+    if (remoteIp) existing.remoteIp = normalizePeerIp(remoteIp);
+    return existing;
+  }
   const session = {
     remoteIp: normalizePeerIp(remoteIp),
     peerId: null,
@@ -109,10 +114,15 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
       );
       discovery?.noteObservedPeerIp?.(v.from, session.remoteIp);
     }
-    if (!pubkeyMatchesKnown(config, v.from, v.meshPubkey)) {
+    const discoveryPeer = discovery?.getPeers()?.find((p) => p.blipId === v.from);
+    const accept = acceptPeerPubkey(config, v.from, v.meshPubkey, discoveryPeer);
+    if (!accept.ok) {
       console.warn(`[Handshake] pubkey mismatch for #${v.from}`);
       socket.destroy();
       return true;
+    }
+    if (accept.rebind) {
+      console.warn(`[Handshake] TOFU rebind for #${v.from} from verified announce`);
     }
 
     session.peerId = v.from;
@@ -190,6 +200,27 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
   const remoteIp = normalizePeerIp(socket.remoteAddress);
   const session = initInboundSession(socket, remoteIp);
 
+  if (session.authenticated && (!expectedPeerId || session.peerId === expectedPeerId)) {
+    return Promise.resolve(session.peerId ?? expectedPeerId);
+  }
+
+  const existingWait = outboundWait.get(socket);
+  if (existingWait) {
+    return new Promise((resolve, reject) => {
+      const prevResolve = existingWait.resolve;
+      const prevReject = existingWait.reject;
+      existingWait.expectedPeerId = expectedPeerId ?? existingWait.expectedPeerId;
+      existingWait.resolve = (id) => {
+        prevResolve(id);
+        resolve(id);
+      };
+      existingWait.reject = (err) => {
+        prevReject(err);
+        reject(err);
+      };
+    });
+  }
+
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       outboundWait.delete(socket);
@@ -263,15 +294,23 @@ export async function performOutboundHandshakeOrCompat(
       softFail,
     });
   } catch (err) {
-    if (!softFail || socket.destroyed) throw err;
+    const closed =
+      err?.message === 'Socket closed' || err?.code === 'HANDSHAKE_SOCKET_CLOSED';
+    const failure = closed
+      ? Object.assign(new Error('Peer closed handshake (key changed or rejected)'), {
+          code: 'HANDSHAKE_SOCKET_CLOSED',
+          cause: err,
+        })
+      : err;
+    if (!softFail || socket.destroyed) throw failure;
     const session = getSocketSession(socket);
-    if (!session) throw err;
+    if (!session) throw failure;
     markOutboundCompatSession(session, expectedPeerId);
     registerConnection?.(expectedPeerId, socket);
     notePeerChannel(discovery, expectedPeerId, false);
     discovery?.notePeerCompat?.(expectedPeerId, true);
     console.warn(
-      `[Handshake] compat plaintext session with #${expectedPeerId}: ${err?.message || err}`
+      `[Handshake] compat plaintext session with #${expectedPeerId}: ${failure?.message || failure}`
     );
     return expectedPeerId;
   }

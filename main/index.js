@@ -767,11 +767,18 @@ async function ensurePeerSocket(blipId) {
   const gate = assertMayUseUnencryptedPeer(config, peer);
   if (!gate.ok) throw new Error(gate.error);
 
+  const inbound = tcpServer?.getConnection?.(blipId);
+  if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
+    return inbound;
+  }
+
   const tcpPort = peer.tcpPort || resolvePorts(config).tcpPort;
   const socketKey = `${peer.ip}:${blipId}:${tcpPort}`;
 
   const cached = peerSockets.get(socketKey);
-  if (cached && !cached.destroyed) return cached;
+  if (cached && !cached.destroyed && isSocketAuthenticated(cached)) {
+    return cached;
+  }
 
   const inflight = peerSocketConnectInflight.get(socketKey);
   if (inflight) return inflight;
