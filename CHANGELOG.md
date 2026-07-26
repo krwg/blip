@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
-## [Unreleased] — 2.0.0 Morse
+## [2.0.0] — Morse — 2026-07-26
 
-Development line **Morse**. No GitHub Release until explicitly cut — see [`docs/ROADMAP-2.0-MORSE.md`](docs/ROADMAP-2.0-MORSE.md).
+Major release (codename **Morse**). Full notes: [`docs/release-notes-v2.0.0-github.md`](docs/release-notes-v2.0.0-github.md). Roadmap: [`docs/ROADMAP-2.0-MORSE.md`](docs/ROADMAP-2.0-MORSE.md).
 
 ### Changed
 
