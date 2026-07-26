@@ -1,6 +1,10 @@
 /**
  * Publish macOS artifacts with sequential DMG builds so x64 and arm64
  * do not race on the same /Volumes mount name (hdiutil detach flakes in CI).
+ *
+ * ZIP is published **last** so `latest-mac.yml` lists zip (required by
+ * electron-updater / Squirrel.Mac). Publishing DMG last overwrote the feed
+ * with only .dmg and caused "ZIP file not provided".
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -25,7 +29,6 @@ function run(args) {
 
 const publish = process.argv.includes('--publish') ? ['--publish', 'always'] : [];
 
-run(['--mac', 'zip', '--x64', '--arm64', ...publish]);
 run([
   '--mac',
   'dmg',
@@ -40,3 +43,5 @@ run([
   `--config.dmg.title=BLIP-${version}-x64`,
   ...publish,
 ]);
+// Last: zip feed wins in latest-mac.yml
+run(['--mac', 'zip', '--x64', '--arm64', ...publish]);

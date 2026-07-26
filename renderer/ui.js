@@ -1,6 +1,6 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
 import { createIdGrid } from './grid.js';
-import { createChatView, getMessages, addMessage } from './chat.js';
+import { createChatView, getMessages, addMessage, addMissedCallMessage } from './chat.js';
 import { isFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
 import {
   getGroup,
@@ -2160,6 +2160,24 @@ function handleTypingTcp(msg) {
   const label = formatPeerDisplayName(peer, peerId);
   state.chatViews.get(peerId)?.setTyping?.(!!msg.active, label);
   peersView.refreshPeersTypingDom();
+}
+
+export function handleMissedCall(payload) {
+  const peerId = Number(payload?.peerId);
+  if (!Number.isFinite(peerId)) return;
+  addMissedCallMessage(peerId, {
+    reason: payload?.reason,
+    video: !!payload?.video,
+    at: payload?.at,
+  });
+  bumpUnread(peerId);
+  ensureChatView(peerId);
+  state.chatViews.get(peerId)?.render?.();
+  if (state.view === 'chat' && !state.activePeer && mainContent) {
+    renderView('chat');
+  } else if (state.view === 'chat' && state.activePeer === peerId) {
+    state.chatViews.get(peerId)?.render?.();
+  }
 }
 
 export function handleTcpMessage(msg) {

@@ -110,7 +110,9 @@ async function applyUpdateFeed(config) {
 
 function isStaleFeedError(err) {
   const msg = err?.message || String(err);
-  return /latest\.yml|CHANNEL_FILE_NOT_FOUND|release artifacts|404/i.test(msg);
+  return /latest\.yml|latest-mac\.yml|CHANNEL_FILE_NOT_FOUND|release artifacts|404|ZIP file not provided/i.test(
+    msg
+  );
 }
 
 function notify(payload) {

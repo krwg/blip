@@ -74,6 +74,12 @@ const blipApi = {
   callHangup: (payload) => ipcRenderer.invoke('call-hangup', payload),
   callState: (payload) => ipcRenderer.invoke('call-state', payload),
   reportCallLocalState: (payload) => ipcRenderer.invoke('call-report-local-state', payload),
+  reportMissedCall: (payload) => ipcRenderer.invoke('report-missed-call', payload),
+  onMissedCall: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('missed-call', handler);
+    return () => ipcRenderer.removeListener('missed-call', handler);
+  },
   callRenegotiate: (payload) => ipcRenderer.invoke('call-renegotiate', payload),
   callRenegotiateAnswer: (payload) => ipcRenderer.invoke('call-renegotiate-answer', payload),
   pingPeer: (blipId) => ipcRenderer.invoke('ping-peer', blipId),

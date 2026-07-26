@@ -81,6 +81,13 @@ async function boot() {
       window.blip.closeCallWindow?.();
     },
     getRemotePeer: () => remotePeerTrust,
+    onMissedCall: (peerId, meta) => {
+      void window.blip.reportMissedCall?.({
+        peerId,
+        reason: meta?.reason || 'missed',
+        video: !!meta?.video,
+      });
+    },
   });
   root.appendChild(callUI.el);
 
