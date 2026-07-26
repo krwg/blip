@@ -11,6 +11,8 @@ Move LAN file distribution beyond one-uploader TCP seeding toward **BitTorrent-l
 | Module | Role today |
 |--------|------------|
 | `beacon-store.js` | Local seed meta, chunk files, have-bitmap helpers |
+| `shared/beacon-swarm.js` | Swarm scheduling + bitmap decode (renderer-safe) |
+| `shared/beacon-swarm-crypto.js` | Per-chunk / `infoHash` SHA-256 (main process) |
 | `beacon-mesh.js` / UDP announce | Seed discovery on LAN |
 | `beacon-tcp-serve.js` / `file-tcp-send.js` | One peer serves chunks over TCP |
 | `tcp-framing.js` | NDJSON framing |
