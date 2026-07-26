@@ -10,13 +10,7 @@ export function connectToPeer(ip, blipId, tcpPort = DEFAULT_TCP_PORT) {
   if (existing) return existing;
 
   const promise = new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host: ip, port: tcpPort }, () => {
-      socket.setNoDelay(true);
-      resolve(socket);
-    });
-
-    socket.setTimeout(5000);
-    socket.on('timeout', () => {
+    const onConnectTimeout = () => {
       socket.destroy();
       reject(
         createBlipError(
@@ -24,7 +18,19 @@ export function connectToPeer(ip, blipId, tcpPort = DEFAULT_TCP_PORT) {
           `Connection timeout to ${ip}:${tcpPort} (#${blipId})`
         )
       );
+    };
+
+    const socket = net.createConnection({ host: ip, port: tcpPort }, () => {
+      // Connect-stall timeout only — leave it armed and idle mesh sockets die mid-call.
+      socket.setTimeout(0);
+      socket.off('timeout', onConnectTimeout);
+      socket.setNoDelay(true);
+      socket.setKeepAlive(true, 10_000);
+      resolve(socket);
     });
+
+    socket.setTimeout(5000);
+    socket.on('timeout', onConnectTimeout);
 
     socket.on('error', (err) => {
       reject(
