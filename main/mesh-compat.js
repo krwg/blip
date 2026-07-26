@@ -10,13 +10,28 @@ export function isUnencryptedMeshAllowed(config) {
 }
 
 /**
+ * True when discovery says this peer will not complete Morse mesh-handshake.
+ * Older builds often **destroy** the TCP socket on unknown `mesh-handshake` frames.
+ */
+export function peerPrefersPlaintextCompat(peer) {
+  if (!peer) return false;
+  if (peer.meshLegacy || peer.meshCompat) return true;
+  if (!peer.meshPubkey) return true;
+  return Number(peer.meshProto || 0) < 2;
+}
+
+export function shouldSoftFailHandshake(config, peer) {
+  return isUnencryptedMeshAllowed(config) && peerPrefersPlaintextCompat(peer);
+}
+
+/**
  * Refuse starting a session to a known-legacy / unencrypted peer when user opted out.
  * @returns {{ ok: true } | { ok: false, error: string }}
  */
 export function assertMayUseUnencryptedPeer(config, peer) {
   if (isUnencryptedMeshAllowed(config)) return { ok: true };
   if (peer?.meshTcpEncrypted) return { ok: true };
-  if (peer?.meshLegacy || peer?.meshCompat) {
+  if (peer?.meshLegacy || peer?.meshCompat || peerPrefersPlaintextCompat(peer)) {
     return { ok: false, error: 'unencrypted_mesh_disabled' };
   }
   return { ok: true };

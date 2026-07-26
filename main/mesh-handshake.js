@@ -17,7 +17,15 @@ import {
   markOutboundCompatSession,
   assertMayUseUnencryptedPeer,
   isUnencryptedMeshAllowed,
+  peerPrefersPlaintextCompat,
+  shouldSoftFailHandshake,
 } from './mesh-compat.js';
+import {
+  BlipErrorCode,
+  createBlipError,
+  classifyBlipError,
+  logBlipError,
+} from '../shared/blip-errors.js';
 
 const sessions = new Map();
 
@@ -54,7 +62,9 @@ export function clearSocketSession(socket) {
   const pending = outboundWait.get(socket);
   if (pending) {
     outboundWait.delete(socket);
-    pending.reject(new Error('Socket closed'));
+    pending.reject(
+      createBlipError(BlipErrorCode.SOCKET_CLOSED, 'Socket closed during handshake')
+    );
   }
 }
 
@@ -117,12 +127,16 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
     const discoveryPeer = discovery?.getPeers()?.find((p) => p.blipId === v.from);
     const accept = acceptPeerPubkey(config, v.from, v.meshPubkey, discoveryPeer);
     if (!accept.ok) {
-      console.warn(`[Handshake] pubkey mismatch for #${v.from}`);
+      const err = createBlipError(
+        BlipErrorCode.HANDSHAKE_PUBKEY_MISMATCH,
+        `TOFU pubkey mismatch for #${v.from}`
+      );
+      logBlipError(err, 'inbound handshake');
       socket.destroy();
       return true;
     }
     if (accept.rebind) {
-      console.warn(`[Handshake] TOFU rebind for #${v.from} from verified announce`);
+      console.warn(`[BLIP E${BlipErrorCode.HANDSHAKE_PUBKEY_MISMATCH}/rebind] TOFU rebind for #${v.from}`);
     }
 
     session.peerId = v.from;
@@ -151,7 +165,11 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
     const pending = outboundWait.get(socket);
     const v = verifyHandshakePacket(msg, pending?.expectedPeerId);
     if (!v.ok) {
-      pending?.reject(new Error('Invalid handshake ack'));
+      const err = createBlipError(
+        BlipErrorCode.HANDSHAKE_INVALID_ACK,
+        'Invalid handshake ack'
+      );
+      pending?.reject(err);
       socket.destroy();
       return true;
     }
@@ -224,7 +242,10 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       outboundWait.delete(socket);
-      const err = new Error('Handshake timeout');
+      const err = createBlipError(
+        BlipErrorCode.HANDSHAKE_TIMEOUT,
+        `Handshake timeout for #${expectedPeerId}`
+      );
       err.code = 'HANDSHAKE_TIMEOUT';
       if (!softFail) {
         try {
@@ -252,7 +273,9 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
     if (!peer?.online) {
       clearTimeout(timer);
       outboundWait.delete(socket);
-      reject(new Error('Peer not found'));
+      reject(
+        createBlipError(BlipErrorCode.PEER_NOT_FOUND, `Peer #${expectedPeerId} not online`)
+      );
       return;
     }
 
@@ -261,59 +284,102 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
     sendOnSocket(socket, built.packet).catch((err) => {
       clearTimeout(timer);
       outboundWait.delete(socket);
-      reject(err);
+      reject(
+        createBlipError(
+          BlipErrorCode.HANDSHAKE_SEND_FAILED,
+          err?.message || 'Handshake send failed',
+          err
+        )
+      );
     });
   });
 }
 
+export function applyOutboundCompatSession(
+  socket,
+  expectedPeerId,
+  discovery,
+  registerConnection
+) {
+  const session =
+    getSocketSession(socket) || initInboundSession(socket, socket.remoteAddress);
+  markOutboundCompatSession(session, expectedPeerId);
+  registerConnection?.(expectedPeerId, socket);
+  notePeerChannel(discovery, expectedPeerId, false);
+  discovery?.notePeerCompat?.(expectedPeerId, true);
+  const info = createBlipError(
+    BlipErrorCode.COMPAT_PLAINTEXT,
+    `Plaintext compat session with #${expectedPeerId}`
+  );
+  logBlipError(info, 'compat');
+  return expectedPeerId;
+}
+
 /**
- * Handshake when possible; if peer never answers and unencrypted mesh is allowed,
- * fall back to plaintext compat session (older BLIP builds).
+ * Handshake when possible; if peer cannot speak Morse handshake and unencrypted mesh
+ * is allowed, use plaintext compat (skip handshake for known-legacy — they often RST).
  */
 export async function performOutboundHandshakeOrCompat(
   socket,
   config,
   expectedPeerId,
   discovery,
-  { registerConnection } = {}
+  { registerConnection, forcePlaintext = false } = {}
 ) {
   const peer = discovery?.getPeers()?.find((p) => p.blipId === expectedPeerId);
   const gate = assertMayUseUnencryptedPeer(config, peer);
-  if (!gate.ok && (peer?.meshLegacy || peer?.meshCompat)) {
-    throw new Error(gate.error);
+  if (!gate.ok && peerPrefersPlaintextCompat(peer)) {
+    throw createBlipError(BlipErrorCode.UNENCRYPTED_DISABLED, gate.error);
   }
 
-  const softFail =
-    isUnencryptedMeshAllowed(config) &&
-    (!!peer?.meshLegacy ||
-      !!peer?.meshCompat ||
-      Number(peer?.meshProto || 0) < 2 ||
-      !peer?.meshPubkey);
+  const softFail = shouldSoftFailHandshake(config, peer);
+
+  if (forcePlaintext || (softFail && peerPrefersPlaintextCompat(peer))) {
+    if (socket.destroyed) {
+      throw createBlipError(
+        BlipErrorCode.HANDSHAKE_PEER_CLOSED,
+        `Cannot open compat on destroyed socket for #${expectedPeerId}`
+      );
+    }
+    return applyOutboundCompatSession(socket, expectedPeerId, discovery, registerConnection);
+  }
+
   try {
     return await performOutboundHandshake(socket, config, expectedPeerId, discovery, {
       softFail,
     });
   } catch (err) {
-    const closed =
-      err?.message === 'Socket closed' || err?.code === 'HANDSHAKE_SOCKET_CLOSED';
-    const failure = closed
-      ? Object.assign(new Error('Peer closed handshake (key changed or rejected)'), {
-          code: 'HANDSHAKE_SOCKET_CLOSED',
-          cause: err,
-        })
-      : err;
-    if (!softFail || socket.destroyed) throw failure;
+    const classified = classifyBlipError(err);
+    if (!softFail) {
+      logBlipError(classified, `handshake #${expectedPeerId}`);
+      throw classified;
+    }
+    if (socket.destroyed) {
+      const closed = createBlipError(
+        BlipErrorCode.HANDSHAKE_PEER_CLOSED,
+        `Peer #${expectedPeerId} closed TCP during handshake`,
+        classified
+      );
+      closed.needCompatReconnect = true;
+      logBlipError(closed, 'need compat reconnect');
+      throw closed;
+    }
     const session = getSocketSession(socket);
-    if (!session) throw failure;
-    markOutboundCompatSession(session, expectedPeerId);
-    registerConnection?.(expectedPeerId, socket);
-    notePeerChannel(discovery, expectedPeerId, false);
-    discovery?.notePeerCompat?.(expectedPeerId, true);
-    console.warn(
-      `[Handshake] compat plaintext session with #${expectedPeerId}: ${failure?.message || failure}`
-    );
-    return expectedPeerId;
+    if (!session) {
+      throw createBlipError(
+        BlipErrorCode.SESSION_MISSING,
+        `No session after handshake failure for #${expectedPeerId}`,
+        classified
+      );
+    }
+    return applyOutboundCompatSession(socket, expectedPeerId, discovery, registerConnection);
   }
 }
 
-export { tryLegacyCompatAuth, assertMayUseUnencryptedPeer, isUnencryptedMeshAllowed };
+export {
+  tryLegacyCompatAuth,
+  assertMayUseUnencryptedPeer,
+  isUnencryptedMeshAllowed,
+  peerPrefersPlaintextCompat,
+  shouldSoftFailHandshake,
+};

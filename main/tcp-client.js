@@ -1,5 +1,6 @@
 import net from 'net';
 import { DEFAULT_TCP_PORT } from './ports.js';
+import { BlipErrorCode, createBlipError } from '../shared/blip-errors.js';
 
 const connectInflight = new Map();
 
@@ -17,11 +18,22 @@ export function connectToPeer(ip, blipId, tcpPort = DEFAULT_TCP_PORT) {
     socket.setTimeout(5000);
     socket.on('timeout', () => {
       socket.destroy();
-      reject(new Error('Connection timeout'));
+      reject(
+        createBlipError(
+          BlipErrorCode.CONNECT_TIMEOUT,
+          `Connection timeout to ${ip}:${tcpPort} (#${blipId})`
+        )
+      );
     });
 
     socket.on('error', (err) => {
-      reject(err);
+      reject(
+        createBlipError(
+          BlipErrorCode.CONNECT_FAILED,
+          err?.message || `Connect failed to ${ip}:${tcpPort}`,
+          err
+        )
+      );
     });
   }).finally(() => {
     connectInflight.delete(key);
