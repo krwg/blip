@@ -10,7 +10,7 @@ import {
   rm,
 } from 'fs/promises';
 import { constants } from 'fs';
-import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm.js';
+import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm-crypto.js';
 
 export function getBeaconSeedsRoot() {
   return join(app.getPath('userData'), 'seeds');

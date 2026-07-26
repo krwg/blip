@@ -4,10 +4,9 @@ import {
   countHavePerChunk,
   pickRarestFirstChunks,
   peersWithChunk,
-  computeInfoHashFromChunkHashes,
-  hashChunkBytes,
   computeSwarmCoverage,
 } from '../shared/beacon-swarm.js';
+import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm-crypto.js';
 
 describe('beacon-swarm bitmap', () => {
   it('decodes LSB-first bits matching beacon-store encoding', () => {

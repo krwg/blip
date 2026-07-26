@@ -3,7 +3,7 @@ import { stat, open, readFile } from 'fs/promises';
 import { rename, rm } from 'fs/promises';
 import { basename, extname, join } from 'path';
 import { getSeedDir, writeSeedMeta, seedDirExists } from './beacon-store.js';
-import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm.js';
+import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm-crypto.js';
 import { mkdir, writeFile } from 'fs/promises';
 
 const WRITE_POOL = 8;

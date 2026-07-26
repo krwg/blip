@@ -1,30 +1,19 @@
 /**
  * Pure helpers for multi-peer BEACON swarm scheduling (#68).
+ * Browser-safe (no Node crypto). Integrity hashing: `beacon-swarm-crypto.js`.
  * @see docs/BEACON-SWARM.md
  */
 
-import { createHash } from 'node:crypto';
-
-/**
- * SHA-256 hex digest of raw chunk bytes.
- * @param {Buffer|Uint8Array} buf
- * @returns {string}
- */
-export function hashChunkBytes(buf) {
-  return createHash('sha256').update(buf).digest('hex');
-}
-
-/**
- * Integrity root: SHA-256 of concatenated per-chunk digests (32-byte each, in order).
- * @param {string[]} chunkHashes hex digests
- * @returns {string}
- */
-export function computeInfoHashFromChunkHashes(chunkHashes) {
-  const h = createHash('sha256');
-  for (const hex of chunkHashes || []) {
-    if (hex) h.update(Buffer.from(hex, 'hex'));
+function bitmapToBytes(bitmap) {
+  if (/^[0-9a-fA-F]+$/.test(bitmap) && bitmap.length % 2 === 0) {
+    const len = bitmap.length / 2;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = parseInt(bitmap.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
-  return h.digest('hex');
+  return Uint8Array.from(atob(bitmap), (c) => c.charCodeAt(0));
 }
 
 /**
@@ -71,11 +60,7 @@ export function decodeHaveBitmap(bitmap, totalChunks) {
   if (!bitmap || !n) return out;
   let bytes;
   try {
-    if (/^[0-9a-fA-F]+$/.test(bitmap) && bitmap.length % 2 === 0) {
-      bytes = Buffer.from(bitmap, 'hex');
-    } else {
-      bytes = Buffer.from(bitmap, 'base64');
-    }
+    bytes = bitmapToBytes(bitmap);
   } catch {
     return out;
   }

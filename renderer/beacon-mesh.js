@@ -5,9 +5,7 @@ import { recordBandwidthSample } from './bandwidth-monitor.js';
 import {
   decodeHaveBitmap,
   pickRarestFirstChunks,
-  computeInfoHashFromChunkHashes,
   computeSwarmCoverage,
-  hashChunkBytes,
 } from '../shared/beacon-swarm.js';
 
 export const BEACON_CHUNK_SIZE = 1048576;
@@ -515,12 +513,30 @@ async function refreshLocalHaveCache(seedId, totalChunks) {
 
 async function sha256HexFromBase64(b64) {
   const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  try {
-    return hashChunkBytes(bin);
-  } catch {
-    const digest = await crypto.subtle.digest('SHA-256', bin);
-    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const digest = await crypto.subtle.digest('SHA-256', bin);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function computeInfoHashFromChunkHashesAsync(chunkHashes) {
+  let len = 0;
+  const parts = [];
+  for (const hex of chunkHashes || []) {
+    if (!hex) continue;
+    const buf = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < buf.length; i++) {
+      buf[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    parts.push(buf);
+    len += buf.length;
   }
+  const cat = new Uint8Array(len);
+  let off = 0;
+  for (const p of parts) {
+    cat.set(p, off);
+    off += p.length;
+  }
+  const digest = await crypto.subtle.digest('SHA-256', cat);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function decodeBitmap(bitmapB64, totalChunks) {
@@ -1259,7 +1275,7 @@ export async function publishBeaconFile(file) {
     }
 
     meta.chunkHashes = chunkHashes;
-    meta.infoHash = computeInfoHashFromChunkHashes(chunkHashes);
+    meta.infoHash = await computeInfoHashFromChunkHashesAsync(chunkHashes);
     await ipcWriteMeta(seedId, meta);
 
     localComplete.add(seedId);
