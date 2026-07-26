@@ -254,6 +254,32 @@ function appendVideoBubble(block, attachment) {
 }
 
 export function appendChatMessageBody(block, m, opts = {}) {
+  if (m.kind === 'missed-call') {
+    const row = document.createElement('div');
+    row.className = 'chat-missed-call';
+    const icon = document.createElement('span');
+    icon.className = 'chat-missed-call-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML =
+      '<svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M6.62 10.79a15.15 15.15 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1C10.4 21 3 13.6 3 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1.02l-2.2 2.2z"/><path fill="currentColor" d="M21 5.5L18.5 3 16 5.5 18.5 8z" opacity=".9"/></svg>';
+    const text = document.createElement('span');
+    text.className = 'chat-missed-call-text';
+    const key =
+      m.missedReason === 'busy'
+        ? m.video
+          ? 'chat.missed_video_busy'
+          : 'chat.missed_voice_busy'
+        : m.video
+          ? 'chat.missed_video'
+          : 'chat.missed_voice';
+    text.dataset.i18n = key;
+    text.textContent = t(key);
+    row.appendChild(icon);
+    row.appendChild(text);
+    block.appendChild(row);
+    return;
+  }
+
   if (m.forwardFrom) appendForwardBlock(block, m.forwardFrom);
   if (m.forwardFrom) appendForwardSeedNotice(block, m.forwardFrom, opts);
   if (m.replyTo) appendQuoteBlock(block, m.replyTo, opts.onQuoteClick);

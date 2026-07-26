@@ -19,15 +19,17 @@
       --ease: cubic-bezier(0.33, 1, 0.68, 1);
       --font: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
     }
+    html[data-ui-skin='pixel'] {
+      --radius: 0px;
+      --pill-radius: 0px;
+      --font: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    }
     html[data-ui-skin='nest'] {
       --radius: 14px;
+      --pill-radius: 999px;
       --bg: rgba(28, 28, 30, 0.82);
       --border: rgba(72, 72, 74, 0.7);
       --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-    }
-    html[data-ui-skin='pixel'] {
-      --radius: 0px;
-      --font: ui-monospace, "Cascadia Mono", Consolas, monospace;
     }
     html, body {
       margin: 0;
@@ -139,7 +141,7 @@
     .chip {
       font-size: 11px;
       padding: 3px 8px;
-      border-radius: calc(var(--radius) + 999px);
+      border-radius: var(--pill-radius, 0px);
       border: 1px solid var(--border);
       color: var(--accent);
       background: rgba(15, 23, 42, 0.4);
@@ -216,7 +218,7 @@
       flex-shrink: 0;
       font-size: 10px;
       padding: 3px 8px;
-      border-radius: calc(var(--radius) + 999px);
+      border-radius: var(--pill-radius, 0px);
       border: 1px solid color-mix(in srgb, var(--call) 45%, transparent);
       color: var(--call);
       text-transform: lowercase;
@@ -313,7 +315,7 @@
     .legacy-pill {
       font-size: 10px;
       padding: 3px 8px;
-      border-radius: calc(var(--radius) + 999px);
+      border-radius: var(--pill-radius, 0px);
       border: 1px solid color-mix(in srgb, #60a5fa 45%, transparent);
       color: #93c5fd;
       background: color-mix(in srgb, #3b82f6 14%, transparent);
@@ -356,7 +358,7 @@
     .badge {
       font-size: 11px;
       padding: 2px 7px;
-      border-radius: calc(var(--radius) + 999px);
+      border-radius: var(--pill-radius, 0px);
       border: 1px solid var(--border);
       color: var(--accent);
     }
@@ -379,15 +381,15 @@
 
     <div class="stats" id="stats">
       <div class="stat">
-        <div class="stat-label">Status</div>
+        <div class="stat-label" id="labelStatus">Status</div>
         <div class="stat-value" id="statPresence">Online</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Mesh</div>
+        <div class="stat-label" id="labelMesh">Mesh</div>
         <div class="stat-value" id="statPeers">0 online</div>
       </div>
       <div class="stat hidden" id="statUnreadWrap">
-        <div class="stat-label">Unread</div>
+        <div class="stat-label" id="labelUnread">Unread</div>
         <div class="stat-value" id="statUnread">0</div>
       </div>
     </div>
@@ -409,7 +411,7 @@
               <div class="call-peer-sub" id="callElapsed"></div>
             </div>
           </div>
-          <div class="call-badge">in call</div>
+          <div class="call-badge" id="callBadge">in call</div>
         </div>
         <div class="call-actions">
           <button type="button" class="call-btn call-btn--mute" id="muteBtn">mute</button>
@@ -418,11 +420,11 @@
         <div class="call-foot">
           <div class="call-metrics">
             <div>
-              <div class="metric-label">Mesh</div>
+              <div class="metric-label" id="labelCallMesh">Mesh</div>
               <div class="metric-value" id="callMesh">—</div>
             </div>
             <div>
-              <div class="metric-label">Ping</div>
+              <div class="metric-label" id="labelCallPing">Ping</div>
               <div class="metric-value metric-value--ok" id="callPing">—</div>
             </div>
             <div class="mic-meter" id="micMeter" title="Microphone">

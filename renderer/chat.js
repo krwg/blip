@@ -97,6 +97,22 @@ export function addMessage(peerId, msg) {
   return list;
 }
 
+export function addMissedCallMessage(peerId, { reason = 'missed', video = false, at = Date.now() } = {}) {
+  const id = Number(peerId);
+  if (!Number.isFinite(id)) return null;
+  const msg = {
+    id: createMessageId(),
+    text: '',
+    outgoing: false,
+    ts: at || Date.now(),
+    kind: 'missed-call',
+    missedReason: reason === 'busy' ? 'busy' : 'missed',
+    video: !!video,
+  };
+  addMessage(id, msg);
+  return msg;
+}
+
 export function findMessage(peerId, messageId) {
   if (!messageId) return null;
   return getMessages(peerId).find((m) => m.id === messageId) || null;
@@ -1011,6 +1027,7 @@ export function createChatView(
     msgs.forEach((m) => {
       const block = document.createElement('div');
       block.className = `chat-block ${m.outgoing ? 'outgoing' : 'incoming'}`;
+      if (m.kind === 'missed-call') block.classList.add('chat-block--missed-call');
       block.dataset.messageId = m.id || '';
 
       appendChatMessageBody(block, m, {

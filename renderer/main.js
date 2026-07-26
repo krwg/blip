@@ -3,6 +3,7 @@ import {
   initUI,
   updatePeers,
   handleTcpMessage,
+  handleMissedCall,
   navigateToView,
   toggleDoNotDisturb,
 } from './ui.js';
@@ -73,6 +74,7 @@ async function boot() {
 
   window.blip.onPeersUpdated((data) => updatePeers(data));
   window.blip.onTcpMessage((msg) => handleTcpMessage(msg));
+  window.blip.onMissedCall?.((payload) => handleMissedCall(payload));
 
   window.blip.onGlobalNavigate?.((payload) => {
     if (payload?.view) navigateToView(payload.view);

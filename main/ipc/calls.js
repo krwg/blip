@@ -21,6 +21,7 @@ import {
  * @param {(peerId: number) => Promise<void>} deps.ensurePeerSocket
  * @param {(channel: string, data: object, opts?: object) => Promise<void>} deps.sendToCallWindow
  * @param {() => import('electron').BrowserWindow|null} deps.getCallWindow
+ * @param {(channel: string, data?: object) => void} [deps.sendToRenderer]
  */
 export function registerCallIpc(deps) {
   const {
@@ -32,6 +33,7 @@ export function registerCallIpc(deps) {
     ensurePeerSocket,
     sendToCallWindow,
     getCallWindow,
+    sendToRenderer,
   } = deps;
 
   ipcMain.handle('initiate-call', async (_, payload) => {
@@ -232,5 +234,17 @@ export function registerCallIpc(deps) {
     const callWindow = getCallWindow?.();
     if (!callWindow || callWindow.isDestroyed()) return false;
     return callWindow.isFullScreen();
+  });
+
+  ipcMain.handle('report-missed-call', (_, payload) => {
+    const peerId = Number(payload?.peerId);
+    if (!Number.isFinite(peerId)) return { ok: false };
+    sendToRenderer?.('missed-call', {
+      peerId,
+      reason: payload?.reason === 'busy' ? 'busy' : 'missed',
+      video: !!payload?.video,
+      at: Date.now(),
+    });
+    return { ok: true };
   });
 }

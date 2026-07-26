@@ -84,7 +84,7 @@ export function createCallUI(config, api, options = {}) {
 
   const streamExitBtn = document.createElement('button');
   streamExitBtn.type = 'button';
-  streamExitBtn.className = 'call-video-stream-exit-btn btn btn-lang hidden';
+  streamExitBtn.className = 'call-video-stream-exit-btn btn btn-accent hidden';
   streamExitBtn.dataset.i18n = 'call.exit_stream';
   streamExitBtn.textContent = t('call.exit_stream');
   streamExitBtn.title = t('call.exit_stream');
@@ -113,6 +113,23 @@ export function createCallUI(config, api, options = {}) {
   voiceWrap.appendChild(avatarSlot);
   voiceWrap.appendChild(waveform);
   const micWaveform = bindCallWaveform(waveform);
+
+  const streamPip = document.createElement('button');
+  streamPip.type = 'button';
+  streamPip.className = 'call-stream-pip hidden';
+  streamPip.title = t('call.watch_stream');
+  const streamPipVideo = document.createElement('video');
+  streamPipVideo.className = 'call-stream-pip-video';
+  streamPipVideo.autoplay = true;
+  streamPipVideo.playsInline = true;
+  streamPipVideo.muted = true;
+  const streamPipLabel = document.createElement('span');
+  streamPipLabel.className = 'call-stream-pip-label';
+  streamPipLabel.dataset.i18n = 'call.watch_stream';
+  streamPipLabel.textContent = t('call.watch_stream');
+  streamPip.appendChild(streamPipVideo);
+  streamPip.appendChild(streamPipLabel);
+  voiceWrap.appendChild(streamPip);
 
   const peerStatus = document.createElement('div');
   peerStatus.className = 'call-peer-status hidden';
@@ -206,6 +223,8 @@ export function createCallUI(config, api, options = {}) {
   let incomingOffer = null;
   let stageActive = false;
   let remotePeerScreenSharing = false;
+  let remoteScreenHeld = false;
+  let heldRemoteScreenStream = null;
   let pseudoFullscreen = false;
   let stateHeartbeat = null;
 
@@ -214,6 +233,40 @@ export function createCallUI(config, api, options = {}) {
   function hasLiveVideo(stream) {
     const track = stream?.getVideoTracks?.()?.[0];
     return !!(track && track.readyState === 'live' && track.enabled);
+  }
+
+  function clearHeldRemoteScreen() {
+    remoteScreenHeld = false;
+    heldRemoteScreenStream = null;
+    streamPipVideo.srcObject = null;
+    streamPip.classList.add('hidden');
+  }
+
+  function showStreamPip(stream) {
+    if (!stream || !hasLiveVideo(stream)) {
+      clearHeldRemoteScreen();
+      return;
+    }
+    remoteScreenHeld = true;
+    heldRemoteScreenStream = stream;
+    streamPipVideo.srcObject = stream;
+    streamPip.classList.remove('hidden');
+    void streamPipVideo.play?.().catch(() => {});
+  }
+
+  function enterRemoteStreamView() {
+    if (!heldRemoteScreenStream || !hasLiveVideo(heldRemoteScreenStream)) {
+      clearHeldRemoteScreen();
+      refreshStageLayout();
+      return;
+    }
+    remotePeerScreenSharing = true;
+    remoteVideo.srcObject = heldRemoteScreenStream;
+    videoWrap.classList.remove('hidden');
+    voiceWrap.classList.add('hidden');
+    streamPip.classList.add('hidden');
+    setStageView('remote');
+    void remoteVideo.play?.().catch(() => {});
   }
 
   function startStateHeartbeat() {
@@ -236,14 +289,18 @@ export function createCallUI(config, api, options = {}) {
   }
 
   function exitRemoteStreamView() {
+    const screenStream =
+      remoteVideo.srcObject && hasLiveVideo(remoteVideo.srcObject)
+        ? remoteVideo.srcObject
+        : heldRemoteScreenStream;
     remotePeerScreenSharing = false;
-    remoteVideo.srcObject = null;
-    if (remotePlayback) {
-      for (const tr of [...remotePlayback.getVideoTracks()]) remotePlayback.removeTrack(tr);
+    // Keep remote screen media for PiP + continued audio; leave theater mode.
+    if (screenStream && hasLiveVideo(screenStream)) {
+      showStreamPip(screenStream);
+    } else {
+      clearHeldRemoteScreen();
     }
-    const audioTracks =
-      remotePlayback?.getAudioTracks().filter((t) => t.readyState !== 'ended') || [];
-    syncRemotePlayback(audioTracks.length ? remotePlayback : null);
+    remoteVideo.srcObject = null;
     setStageView('off');
     videoWrap.classList.add('hidden');
     voiceWrap.classList.remove('hidden');
@@ -254,6 +311,12 @@ export function createCallUI(config, api, options = {}) {
   function reconcileRemoteVideo() {
     if (sharingScreen) return;
     if (remotePeerScreenSharing) return;
+    if (remoteScreenHeld) {
+      if (!heldRemoteScreenStream || !hasLiveVideo(heldRemoteScreenStream)) {
+        clearHeldRemoteScreen();
+      }
+      return;
+    }
     const vTrack = remoteVideo.srcObject?.getVideoTracks?.()?.[0];
     if (vTrack && trackLooksLikeScreen(vTrack)) {
       exitRemoteStreamView();
@@ -452,6 +515,7 @@ export function createCallUI(config, api, options = {}) {
     exitPseudoFullscreen();
     setStageView('off');
     remotePeerScreenSharing = false;
+    clearHeldRemoteScreen();
     clearInterval(timerInterval);
     clearInterval(pulseTimer);
     pulseTimer = null;
@@ -515,9 +579,21 @@ export function createCallUI(config, api, options = {}) {
     remoteMuted = !!state?.muted;
     remoteDeafened = !!state?.deafened;
     if (typeof state?.screenSharing === 'boolean') {
-      remotePeerScreenSharing = state.screenSharing;
-      if (!state.screenSharing) exitRemoteStreamView();
-      else refreshStageLayout();
+      if (!state.screenSharing) {
+        remotePeerScreenSharing = false;
+        clearHeldRemoteScreen();
+        remoteVideo.srcObject = null;
+        setStageView('off');
+        videoWrap.classList.add('hidden');
+        voiceWrap.classList.remove('hidden');
+        streamExitBtn.classList.add('hidden');
+        void exitPseudoFullscreen();
+      } else {
+        remotePeerScreenSharing = true;
+        remoteScreenHeld = false;
+        streamPip.classList.add('hidden');
+        refreshStageLayout();
+      }
     }
     updateRemoteBadges();
   }
@@ -1055,6 +1131,12 @@ export function createCallUI(config, api, options = {}) {
     if (!from) return;
 
     if (pc || (incomingOffer && activeCall?.pending)) {
+      try {
+        await api.callReject?.({ to: from });
+      } catch {
+        /* ignore */
+      }
+      options.onMissedCall?.(from, { reason: 'busy', video: !!data.video });
       return;
     }
 
@@ -1170,6 +1252,9 @@ export function createCallUI(config, api, options = {}) {
 
   function handleEnded(data) {
     if (!isForCurrentPeer(data)) return;
+    if (incomingOffer && !pc && peerId) {
+      options.onMissedCall?.(peerId, { reason: 'missed', video: withVideo });
+    }
     sounds.callEnd();
     hide();
   }
@@ -1208,6 +1293,9 @@ export function createCallUI(config, api, options = {}) {
   });
   streamExitBtn.addEventListener('click', () => {
     exitRemoteStreamView();
+  });
+  streamPip.addEventListener('click', () => {
+    enterRemoteStreamView();
   });
 
   async function hangupCall() {
