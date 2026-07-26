@@ -1,10 +1,11 @@
 /**
  * Numbered BLIP error codes for mesh / call diagnostics.
- * UI shows only the number (e.g. `104`); full text lives in README + main-process logs.
+ * UI shows only the number (e.g. `117`); full text lives in README + main-process logs.
  *
  * Ranges:
  *   0       — reserved / OK
- *   100–199 — discovery, TCP, handshake, compat
+ *   100–116 — discovery / connect / handshake (base)
+ *   117–139 — granular TCP close / destroy reasons (was lumped as “Socket closed”)
  *   200–299 — calls / signalling
  *   900–999 — unknown / wrap
  */
@@ -16,6 +17,7 @@ export const BlipErrorCode = Object.freeze({
   PEER_OFFLINE: 101,
   CONNECT_TIMEOUT: 102,
   CONNECT_FAILED: 103,
+  /** @deprecated umbrella — prefer 117–125 */
   SOCKET_CLOSED: 104,
   HANDSHAKE_TIMEOUT: 105,
   HANDSHAKE_INVALID_ACK: 106,
@@ -30,20 +32,33 @@ export const BlipErrorCode = Object.freeze({
   HANDSHAKE_SEND_FAILED: 115,
   SESSION_MISSING: 116,
 
+  SOCKET_CLOSED_REMOTE_EOF: 117,
+  SOCKET_CLOSED_AFTER_ERROR: 118,
+  SOCKET_CLOSED_LINE_TOO_LARGE: 119,
+  SOCKET_CLOSED_MESH_CRYPTO: 120,
+  SOCKET_CLOSED_HANDSHAKE_BAD: 121,
+  SOCKET_CLOSED_PEER_BLOCKED: 122,
+  SOCKET_CLOSED_AUTH_GATE: 123,
+  SOCKET_CLOSED_LOCAL_TIMEOUT: 124,
+  SOCKET_ERROR: 125,
+  ENSURE_HANDSHAKE_FAILED: 126,
+  ENSURE_COMPAT_RETRY: 127,
+  SOCKET_CLOSED_BEFORE_WRITE: 128,
+  SOCKET_CLOSED_DURING_WAIT: 129,
+  PEER_CLASSIFIED_MODERN: 130,
+  PEER_CLASSIFIED_LEGACY: 131,
+
   CALL_OPEN_FAILED: 200,
   CALL_SIGNAL_FAILED: 201,
   CALL_PEER_UNREACHABLE: 202,
+  CALL_ENSURE_FAILED: 203,
 
   UNKNOWN: 999,
 });
 
 /** @type {Record<number, { id: string, summary: string, detail: string }>} */
 export const BLIP_ERROR_CATALOG = Object.freeze({
-  0: {
-    id: 'OK',
-    summary: 'Success',
-    detail: 'No error.',
-  },
+  0: { id: 'OK', summary: 'Success', detail: 'No error.' },
   100: {
     id: 'PEER_NOT_FOUND',
     summary: 'Peer not in discovery table',
@@ -66,8 +81,9 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
   },
   104: {
     id: 'SOCKET_CLOSED',
-    summary: 'Socket closed',
-    detail: 'TCP socket closed while a handshake waiter was still pending.',
+    summary: 'Socket closed (unspecified)',
+    detail:
+      'Legacy umbrella. Prefer 117–129. TCP closed while a handshake waiter was pending without a tagged reason.',
   },
   105: {
     id: 'HANDSHAKE_TIMEOUT',
@@ -93,7 +109,7 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
     id: 'HANDSHAKE_PEER_CLOSED',
     summary: 'Peer closed during handshake',
     detail:
-      'Typical for BLIP ≤1.1.x: unknown mesh-handshake frame closes TCP. Morse retries plaintext compat.',
+      'Peer closed TCP during/after mesh-handshake. Morse retries plaintext compat when allowed.',
   },
   110: {
     id: 'COMPAT_PLAINTEXT',
@@ -118,7 +134,7 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
   114: {
     id: 'COMPAT_RECONNECT_FAILED',
     summary: 'Compat reconnect failed',
-    detail: 'Second TCP connect after handshake peer-close did not stay up.',
+    detail: 'Second TCP connect after handshake close did not stay up.',
   },
   115: {
     id: 'HANDSHAKE_SEND_FAILED',
@@ -129,6 +145,81 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
     id: 'SESSION_MISSING',
     summary: 'Mesh session missing',
     detail: 'No session map entry for the socket after handshake failure.',
+  },
+  117: {
+    id: 'SOCKET_CLOSED_REMOTE_EOF',
+    summary: 'Remote closed TCP (EOF)',
+    detail: 'Peer sent FIN/RST with no local destroy tag — common on ≤1.1.x unknown frames.',
+  },
+  118: {
+    id: 'SOCKET_CLOSED_AFTER_ERROR',
+    summary: 'Socket closed after error',
+    detail: 'TCP close followed a socket error event (see cause in log).',
+  },
+  119: {
+    id: 'SOCKET_CLOSED_LINE_TOO_LARGE',
+    summary: 'Line too large',
+    detail: 'TCP framing rejected an oversized line; socket destroyed locally.',
+  },
+  120: {
+    id: 'SOCKET_CLOSED_MESH_CRYPTO',
+    summary: 'Mesh crypto framing error',
+    detail: 'AES envelope / plaintext-after-cipher mismatch; socket destroyed locally.',
+  },
+  121: {
+    id: 'SOCKET_CLOSED_HANDSHAKE_BAD',
+    summary: 'Bad handshake packet',
+    detail: 'Inbound mesh-handshake failed verify; socket destroyed locally.',
+  },
+  122: {
+    id: 'SOCKET_CLOSED_PEER_BLOCKED',
+    summary: 'Blocked peer handshake',
+    detail: 'Inbound handshake from a blocked blipId; socket destroyed locally.',
+  },
+  123: {
+    id: 'SOCKET_CLOSED_AUTH_GATE',
+    summary: 'Unauthenticated frame on inbound',
+    detail: 'TCP server got an application frame before auth/compat; socket destroyed.',
+  },
+  124: {
+    id: 'SOCKET_CLOSED_LOCAL_TIMEOUT',
+    summary: 'Local handshake timeout destroy',
+    detail: 'We destroyed the socket after HANDSHAKE_TIMEOUT (non-softFail path).',
+  },
+  125: {
+    id: 'SOCKET_ERROR',
+    summary: 'Socket error event',
+    detail: 'net.Socket emitted error (ECONNRESET, EPIPE, …).',
+  },
+  126: {
+    id: 'ENSURE_HANDSHAKE_FAILED',
+    summary: 'ensurePeerSocket handshake stage failed',
+    detail: 'Outbound handshake/compat stage threw; see nested cause code.',
+  },
+  127: {
+    id: 'ENSURE_COMPAT_RETRY',
+    summary: 'Retrying plaintext compat',
+    detail: 'Informational: first socket died; opening a fresh plaintext session.',
+  },
+  128: {
+    id: 'SOCKET_CLOSED_BEFORE_WRITE',
+    summary: 'Socket dead before handshake write',
+    detail: 'TCP connected then closed before mesh-handshake could be sent.',
+  },
+  129: {
+    id: 'SOCKET_CLOSED_DURING_WAIT',
+    summary: 'Socket closed while waiting for ack',
+    detail: 'Handshake was sent; peer closed before mesh-handshake-ack.',
+  },
+  130: {
+    id: 'PEER_CLASSIFIED_MODERN',
+    summary: 'Peer classified as Morse (encrypted)',
+    detail: 'Discovery: meshProto≥2 + pubkey + verified — encrypted handshake attempted.',
+  },
+  131: {
+    id: 'PEER_CLASSIFIED_LEGACY',
+    summary: 'Peer classified as legacy/compat',
+    detail: 'Discovery: legacy/compat/unverified — plaintext path preferred.',
   },
   200: {
     id: 'CALL_OPEN_FAILED',
@@ -144,6 +235,11 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
     id: 'CALL_PEER_UNREACHABLE',
     summary: 'Call peer unreachable',
     detail: 'Peer not online when starting the call UI path.',
+  },
+  203: {
+    id: 'CALL_ENSURE_FAILED',
+    summary: 'Call ensurePeerSocket failed',
+    detail: 'Outgoing call blocked at mesh socket ensure; see nested code in terminal.',
   },
   999: {
     id: 'UNKNOWN',
@@ -175,6 +271,47 @@ export function formatBlipErrorCode(errOrCode) {
   return String(BlipErrorCode.UNKNOWN);
 }
 
+export function isSocketCloseFamily(code) {
+  const n = Number(code);
+  if (!Number.isFinite(n)) return false;
+  return (
+    n === BlipErrorCode.SOCKET_CLOSED ||
+    n === BlipErrorCode.HANDSHAKE_PEER_CLOSED ||
+    (n >= 117 && n <= 129)
+  );
+}
+
+/**
+ * Tag a socket before destroy so close→clearSocketSession can emit a specific code.
+ * @param {import('net').Socket|null|undefined} socket
+ * @param {number} code
+ * @param {string} [detail]
+ */
+export function tagSocketClose(socket, code, detail = '') {
+  if (!socket) return;
+  socket._blipCloseCode = code;
+  socket._blipCloseDetail = detail || BLIP_ERROR_CATALOG[code]?.summary || '';
+}
+
+/**
+ * Destroy with a tagged blip close code (logged).
+ * @param {import('net').Socket|null|undefined} socket
+ * @param {number} code
+ * @param {string} [detail]
+ */
+export function destroySocketTagged(socket, code, detail = '') {
+  if (!socket || socket.destroyed) return;
+  tagSocketClose(socket, code, detail);
+  console.error(
+    `[BLIP E${code}/${BLIP_ERROR_CATALOG[code]?.id || '?'}] destroy: ${detail || BLIP_ERROR_CATALOG[code]?.summary || ''}`
+  );
+  try {
+    socket.destroy();
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Map legacy string / node errors onto catalog codes.
  * @param {unknown} err
@@ -199,19 +336,22 @@ export function classifyBlipError(err) {
   if (/invalid handshake ack/i.test(msg)) {
     return createBlipError(BlipErrorCode.HANDSHAKE_INVALID_ACK, msg, err);
   }
+  if (/socket closed during handshake wait/i.test(msg)) {
+    return createBlipError(BlipErrorCode.SOCKET_CLOSED_DURING_WAIT, msg, err);
+  }
   if (/socket closed/i.test(msg)) {
     return createBlipError(BlipErrorCode.SOCKET_CLOSED, msg, err);
   }
   if (/peer closed handshake/i.test(msg)) {
     return createBlipError(BlipErrorCode.HANDSHAKE_PEER_CLOSED, msg, err);
   }
-  if (codeName === 'ETIMEDOUT' || /timeout/i.test(msg)) {
+  if (codeName === 'ETIMEDOUT' || /connection timeout/i.test(msg)) {
     return createBlipError(BlipErrorCode.CONNECT_TIMEOUT, msg, err);
   }
-  if (codeName === 'ECONNREFUSED' || codeName === 'ECONNRESET' || codeName === 'ENETUNREACH') {
+  if (codeName === 'ECONNREFUSED' || codeName === 'ECONNRESET' || codeName === 'ENETUNREACH' || codeName === 'EPIPE') {
     return createBlipError(BlipErrorCode.CONNECT_FAILED, msg, err);
   }
-  if (/connection timeout/i.test(msg)) {
+  if (/timeout/i.test(msg)) {
     return createBlipError(BlipErrorCode.CONNECT_TIMEOUT, msg, err);
   }
   return createBlipError(BlipErrorCode.UNKNOWN, msg, err);
@@ -233,8 +373,10 @@ export function logBlipError(err, context = '') {
   }
   const doc = BLIP_ERROR_CATALOG[code];
   if (doc?.detail) console.error(`  detail: ${doc.detail}`);
-  if (classified.cause && classified.cause !== err) {
-    console.error(`  cause: ${classified.cause?.message || classified.cause}`);
+  if (classified.cause) {
+    const c = classified.cause;
+    const nested = typeof c?.blipCode === 'number' ? `E${c.blipCode}/${c.blipId || ''} ` : '';
+    console.error(`  cause: ${nested}${c?.message || c}`);
   }
   return classified;
 }
@@ -247,4 +389,20 @@ export function blipErrorIpcPayload(err) {
     errorCode: classified.blipCode,
     errorId: classified.blipId,
   };
+}
+
+/** Snapshot peer discovery fields for dial diagnostics. */
+export function formatPeerDialDebug(peer) {
+  if (!peer) return 'peer=<null>';
+  return [
+    `blipId=${peer.blipId}`,
+    `ip=${peer.ip}`,
+    `tcp=${peer.tcpPort}`,
+    `meshProto=${peer.meshProto ?? '?'}`,
+    `meshLegacy=${!!peer.meshLegacy}`,
+    `meshCompat=${!!peer.meshCompat}`,
+    `meshVerified=${!!peer.meshVerified}`,
+    `meshPubkey=${peer.meshPubkey ? 'yes' : 'no'}`,
+    `encrypted=${!!peer.meshTcpEncrypted}`,
+  ].join(' ');
 }

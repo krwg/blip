@@ -40,6 +40,10 @@ import {
   createBlipError,
   classifyBlipError,
   logBlipError,
+  destroySocketTagged,
+  tagSocketClose,
+  formatPeerDialDebug,
+  isSocketCloseFamily,
 } from '../shared/blip-errors.js';
 import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
@@ -707,11 +711,11 @@ function wirePeerSocket(socket, socketKey, peerIp) {
   initInboundSession(socket, peerIp || socket.remoteAddress || '');
 
   const reader = createTcpLineReader(() => {
-    try {
-      socket.destroy();
-    } catch {
-
-    }
+    destroySocketTagged(
+      socket,
+      BlipErrorCode.SOCKET_CLOSED_LINE_TOO_LARGE,
+      'TCP line reader overflow'
+    );
   });
 
   const onSocketLine = (msg) => {
@@ -748,18 +752,49 @@ function wirePeerSocket(socket, socketKey, peerIp) {
             err?.code === 'MESH_BAD_ENVELOPE' ||
             err?.code === 'MESH_NO_CIPHER'
           ) {
-            console.warn('[TCP] mesh crypto:', err.code);
-            socket.destroy();
+            destroySocketTagged(
+              socket,
+              BlipErrorCode.SOCKET_CLOSED_MESH_CRYPTO,
+              err.code
+            );
             return;
           }
         }
       }
     } catch (e) {
-      if (e?.code === 'LINE_TOO_LARGE') socket.destroy();
+      if (e?.code === 'LINE_TOO_LARGE') {
+        destroySocketTagged(
+          socket,
+          BlipErrorCode.SOCKET_CLOSED_LINE_TOO_LARGE,
+          'LINE_TOO_LARGE'
+        );
+      }
     }
   });
 
-  socket.on('close', () => {
+  socket.on('error', (err) => {
+    if (!socket._blipCloseCode) {
+      tagSocketClose(
+        socket,
+        BlipErrorCode.SOCKET_ERROR,
+        err?.message || String(err)
+      );
+    }
+    console.error(
+      `[BLIP E${BlipErrorCode.SOCKET_ERROR}/SOCKET_ERROR] outbound ${socketKey}: ${err?.message || err}`
+    );
+  });
+
+  socket.on('close', (hadError) => {
+    if (!socket._blipCloseCode) {
+      tagSocketClose(
+        socket,
+        hadError
+          ? BlipErrorCode.SOCKET_CLOSED_AFTER_ERROR
+          : BlipErrorCode.SOCKET_CLOSED_REMOTE_EOF,
+        hadError ? 'close after error' : 'remote EOF'
+      );
+    }
     clearSocketSession(socket);
     peerSockets.delete(socketKey);
     socket._blipPeerWired = false;
@@ -775,82 +810,123 @@ async function ensurePeerSocket(blipId) {
     throw createBlipError(BlipErrorCode.PEER_OFFLINE, `Peer #${blipId} offline`);
   }
 
+  console.error(`[BLIP dial] ensurePeerSocket ${formatPeerDialDebug(peer)}`);
+
   const gate = assertMayUseUnencryptedPeer(config, peer);
   if (!gate.ok) {
     throw createBlipError(BlipErrorCode.UNENCRYPTED_DISABLED, gate.error);
   }
 
-  const inbound = tcpServer?.getConnection?.(blipId);
-  if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
-    return inbound;
-  }
+  try {
+    const inbound = tcpServer?.getConnection?.(blipId);
+    if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
+      console.error(`[BLIP dial] reuse inbound authenticated socket for #${blipId}`);
+      return inbound;
+    }
 
-  const tcpPort = peer.tcpPort || resolvePorts(config).tcpPort;
-  const socketKey = `${peer.ip}:${blipId}:${tcpPort}`;
+    const tcpPort = peer.tcpPort || resolvePorts(config).tcpPort;
+    const socketKey = `${peer.ip}:${blipId}:${tcpPort}`;
 
-  const cached = peerSockets.get(socketKey);
-  if (cached && !cached.destroyed && isSocketAuthenticated(cached)) {
-    return cached;
-  }
+    const cached = peerSockets.get(socketKey);
+    if (cached && !cached.destroyed && isSocketAuthenticated(cached)) {
+      console.error(`[BLIP dial] reuse cached outbound socket for #${blipId}`);
+      return cached;
+    }
 
-  const inflight = peerSocketConnectInflight.get(socketKey);
-  if (inflight) return inflight;
+    const inflight = peerSocketConnectInflight.get(socketKey);
+    if (inflight) return inflight;
 
-  const registerConnection = (id, sock) => tcpServer?.registerConnection?.(id, sock);
+    const registerConnection = (id, sock) => tcpServer?.registerConnection?.(id, sock);
 
-  const connectPromise = (async () => {
-    peerSockets.delete(socketKey);
+    const connectPromise = (async () => {
+      peerSockets.delete(socketKey);
 
-    const openWired = async () => {
+      const openWired = async () => {
+        let socket;
+        try {
+          socket = await connectToPeer(peer.ip, blipId, tcpPort);
+        } catch (err) {
+          throw classifyBlipError(err);
+        }
+        wirePeerSocket(socket, socketKey, peer.ip);
+        return socket;
+      };
+
       let socket;
       try {
-        socket = await connectToPeer(peer.ip, blipId, tcpPort);
+        socket = await openWired();
       } catch (err) {
-        throw classifyBlipError(err);
+        logBlipError(err, `ensurePeerSocket #${blipId} connect`);
+        throw err;
       }
-      wirePeerSocket(socket, socketKey, peer.ip);
-      return socket;
-    };
 
-    let socket = await openWired();
-    try {
-      await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
-        registerConnection,
-      });
-    } catch (err) {
-      if (err?.needCompatReconnect || err?.blipCode === BlipErrorCode.HANDSHAKE_PEER_CLOSED) {
-        logBlipError(err, `ensurePeerSocket #${blipId} reconnect plaintext`);
-        try {
-          if (!socket.destroyed) socket.destroy();
-        } catch {
-          /* ignore */
-        }
-        try {
-          socket = await openWired();
-          await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
-            registerConnection,
-            forcePlaintext: true,
-          });
-        } catch (retryErr) {
+      try {
+        await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
+          registerConnection,
+        });
+      } catch (err) {
+        const classified = classifyBlipError(err);
+        const mayCompat =
+          err?.needCompatReconnect ||
+          isSocketCloseFamily(classified.blipCode) ||
+          classified.blipCode === BlipErrorCode.HANDSHAKE_PEER_CLOSED ||
+          classified.blipCode === BlipErrorCode.ENSURE_HANDSHAKE_FAILED;
+
+        if (mayCompat && config?.allowUnencryptedMesh !== false) {
+          logBlipError(
+            createBlipError(
+              BlipErrorCode.ENSURE_COMPAT_RETRY,
+              `Retry plaintext compat for #${blipId}`,
+              classified
+            ),
+            `ensurePeerSocket #${blipId}`
+          );
+          try {
+            if (!socket.destroyed) {
+              destroySocketTagged(
+                socket,
+                BlipErrorCode.ENSURE_COMPAT_RETRY,
+                'closing before compat reconnect'
+              );
+            }
+          } catch {
+            /* ignore */
+          }
+          try {
+            socket = await openWired();
+            await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
+              registerConnection,
+              forcePlaintext: true,
+            });
+          } catch (retryErr) {
+            throw createBlipError(
+              BlipErrorCode.COMPAT_RECONNECT_FAILED,
+              `Compat reconnect failed for #${blipId}`,
+              retryErr
+            );
+          }
+        } else {
+          logBlipError(classified, `ensurePeerSocket #${blipId}`);
           throw createBlipError(
-            BlipErrorCode.COMPAT_RECONNECT_FAILED,
-            `Compat reconnect failed for #${blipId}`,
-            retryErr
+            BlipErrorCode.ENSURE_HANDSHAKE_FAILED,
+            `ensurePeerSocket handshake failed for #${blipId}`,
+            classified
           );
         }
-      } else {
-        logBlipError(err, `ensurePeerSocket #${blipId}`);
-        throw classifyBlipError(err);
       }
-    }
-    peerSockets.set(socketKey, socket);
-    return socket;
-  })().finally(() => {
-    peerSocketConnectInflight.delete(socketKey);
-  });
+      peerSockets.set(socketKey, socket);
+      return socket;
+    })().finally(() => {
+      peerSocketConnectInflight.delete(socketKey);
+    });
 
-  peerSocketConnectInflight.set(socketKey, connectPromise);
-  return connectPromise;
+    peerSocketConnectInflight.set(socketKey, connectPromise);
+    return connectPromise;
+  } catch (err) {
+    const classified = classifyBlipError(err);
+    logBlipError(classified, `ensurePeerSocket #${blipId} outer`);
+    throw classified;
+  }
 }
 
 function sendCallToPeer(peerBlipId, payload) {
@@ -993,11 +1069,11 @@ function createTcpHandlers() {
 
       const auth = assertAuthenticated(socket, msg);
       if (!auth.ok) {
-        try {
-          socket.destroy();
-        } catch {
-
-        }
+        destroySocketTagged(
+          socket,
+          BlipErrorCode.SOCKET_CLOSED_AUTH_GATE,
+          `unauthenticated frame type=${msg?.type} from ${remoteIp}`
+        );
         return;
       }
 
