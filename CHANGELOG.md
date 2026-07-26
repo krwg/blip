@@ -38,7 +38,8 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 
 ### Added
 
-- **NestUI 1.0** — Settings → Appearance toggle for an alternate soft system design (`data-ui-skin=nest`) via `shared/floke-kit` tokens; layout unchanged; accent preserved.
+- **BEACON swarm UI (#68)** — row badge shows swarm peer count and mesh chunk coverage %; `seed-have` carries `infoHash`.
+- **BEACON integrity (#68)** — per-chunk SHA-256 + `infoHash` at publish; verify chunks on download and full root on assemble (`beacon-store`).
 - **Chat Markdown** — GFM formatting in regular messages (bold/lists/code/links) via sanitized `marked` + DOMPurify; release notes sheet fills the window with improved tables/images.
 - **Vitest** core suite — UDP announce sign/verify round-trip, TCP line framing, EN/RU i18n key parity (`npm test` in CI).
 - **NSIS Setup wizard** — network tips page, richer welcome/finish, uninstall optional AppData wipe, publish repo `krwg/blip`.

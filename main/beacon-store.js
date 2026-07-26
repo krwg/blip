@@ -10,6 +10,7 @@ import {
   rm,
 } from 'fs/promises';
 import { constants } from 'fs';
+import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm.js';
 
 export function getBeaconSeedsRoot() {
   return join(app.getPath('userData'), 'seeds');
@@ -169,6 +170,31 @@ export async function listLocalSeedMetas() {
   return metas;
 }
 
+export async function verifySeedIntegrity(seedId, meta) {
+  const m = meta || (await readSeedMeta(seedId));
+  if (!m?.infoHash || !Array.isArray(m.chunkHashes) || !m.chunkHashes.length) {
+    return { ok: true, skipped: true };
+  }
+  const total = Number(m.totalChunks) || 0;
+  if (total !== m.chunkHashes.length) {
+    return { ok: false, error: 'info_hash_mismatch' };
+  }
+  const recomputed = [];
+  for (let i = 0; i < total; i++) {
+    const buf = await readFile(chunkPath(getSeedDir(seedId), i));
+    const hex = hashChunkBytes(buf);
+    if (hex !== m.chunkHashes[i]) {
+      return { ok: false, error: 'chunk_integrity', chunkIndex: i };
+    }
+    recomputed.push(hex);
+  }
+  const infoHash = computeInfoHashFromChunkHashes(recomputed);
+  if (infoHash !== m.infoHash) {
+    return { ok: false, error: 'info_hash_mismatch' };
+  }
+  return { ok: true };
+}
+
 export async function assembleSeedToPath(seedId, filePath) {
   const meta = await readSeedMeta(seedId);
   if (!meta) throw new Error('no_meta');
@@ -176,6 +202,8 @@ export async function assembleSeedToPath(seedId, filePath) {
   for (let i = 0; i < total; i++) {
     if (!(await chunkExists(seedId, i))) throw new Error('incomplete');
   }
+  const integrity = await verifySeedIntegrity(seedId, meta);
+  if (!integrity.ok) throw new Error(integrity.error || 'info_hash_mismatch');
   const fh = await open(filePath, 'w');
   try {
     for (let i = 0; i < total; i++) {

@@ -72,4 +72,6 @@ Already partially present for single-source fetch. Swarm mode:
 
 - ~~Extend announce payload + peer UI “have %”~~ (have-bitmap already on wire)
 - ~~Parallel fetch scheduler using rarest-first (`shared/beacon-swarm.js`)~~ wired in `beacon-mesh.js`
-- Remaining: UI swarm badge + resume polish + integrity `infoHash` end-to-end
+- ~~UI swarm badge (peer count + mesh have %)~~ `beacon-ui.js` + `computeSwarmCoverage`
+- ~~Integrity `infoHash`~~ per-chunk hashes at publish, verify on assemble, chunk check on download
+- Remaining: resume polish (partial local bitmap UX), aggregate speed in row badge

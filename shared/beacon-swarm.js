@@ -3,6 +3,61 @@
  * @see docs/BEACON-SWARM.md
  */
 
+import { createHash } from 'node:crypto';
+
+/**
+ * SHA-256 hex digest of raw chunk bytes.
+ * @param {Buffer|Uint8Array} buf
+ * @returns {string}
+ */
+export function hashChunkBytes(buf) {
+  return createHash('sha256').update(buf).digest('hex');
+}
+
+/**
+ * Integrity root: SHA-256 of concatenated per-chunk digests (32-byte each, in order).
+ * @param {string[]} chunkHashes hex digests
+ * @returns {string}
+ */
+export function computeInfoHashFromChunkHashes(chunkHashes) {
+  const h = createHash('sha256');
+  for (const hex of chunkHashes || []) {
+    if (hex) h.update(Buffer.from(hex, 'hex'));
+  }
+  return h.digest('hex');
+}
+
+/**
+ * Swarm coverage: union of local + peer have-maps.
+ * @param {object} opts
+ * @param {boolean[]} [opts.localHave]
+ * @param {boolean[][]} [opts.peerHaves]
+ * @param {number} totalChunks
+ * @returns {{ peerCount: number, havePct: number }}
+ */
+export function computeSwarmCoverage({ localHave, peerHaves, totalChunks }) {
+  const n = Math.max(0, Number(totalChunks) || 0);
+  if (!n) return { peerCount: 0, havePct: 0 };
+  let peerCount = 0;
+  for (const h of peerHaves || []) {
+    if (h?.some(Boolean)) peerCount += 1;
+  }
+  let haveBits = 0;
+  for (let i = 0; i < n; i++) {
+    if (localHave?.[i]) {
+      haveBits += 1;
+      continue;
+    }
+    for (const h of peerHaves || []) {
+      if (h?.[i]) {
+        haveBits += 1;
+        break;
+      }
+    }
+  }
+  return { peerCount, havePct: Math.round((haveBits / n) * 100) };
+}
+
 /**
  * Parse a have-bitmap into a boolean array (true = peer has chunk).
  * Accepts base64 (preferred) or hex. Length padded/truncated to totalChunks.

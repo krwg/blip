@@ -5,6 +5,9 @@ import { recordBandwidthSample } from './bandwidth-monitor.js';
 import {
   decodeHaveBitmap,
   pickRarestFirstChunks,
+  computeInfoHashFromChunkHashes,
+  computeSwarmCoverage,
+  hashChunkBytes,
 } from '../shared/beacon-swarm.js';
 
 export const BEACON_CHUNK_SIZE = 1048576;
@@ -18,6 +21,9 @@ const CHUNK_TIMEOUT_MS = 45_000;
 const HAVE_QUERY_MS = 12_000;
 
 const peerHaveBitmaps = new Map();
+
+/** @type {Map<string, boolean[]>} */
+const localHaveCache = new Map();
 
 const pendingHave = new Map();
 
@@ -157,6 +163,8 @@ function upsertCatalogEntry(data) {
       leechers: Number(data.leechers) || 0,
       updatedAt: Date.now(),
       previewB64: data.previewB64 || data.preview || '',
+      infoHash: data.infoHash || '',
+      chunkHashes: Array.isArray(data.chunkHashes) ? data.chunkHashes : undefined,
     };
     catalog.set(seedId, entry);
   }
@@ -167,6 +175,8 @@ function upsertCatalogEntry(data) {
   if (Number.isFinite(blipId) && blipId > 0) entry.seeders.set(blipId, Date.now());
   if (data.leechers != null) entry.leechers = Number(data.leechers) || 0;
   if (data.previewB64 || data.preview) entry.previewB64 = String(data.previewB64 || data.preview);
+  if (data.infoHash) entry.infoHash = String(data.infoHash);
+  if (Array.isArray(data.chunkHashes)) entry.chunkHashes = data.chunkHashes;
   entry.updatedAt = Date.now();
 }
 
@@ -255,7 +265,19 @@ async function reconcileLocalSeeds() {
 
 async function ensureLocalMeta(seedId, entry) {
   let meta = await meshApi?.beaconReadMeta?.({ seedId });
-  if (meta?.seedId) return meta;
+  if (meta?.seedId) {
+    let dirty = false;
+    if (!meta.infoHash && entry.infoHash) {
+      meta.infoHash = entry.infoHash;
+      dirty = true;
+    }
+    if (!meta.chunkHashes?.length && entry.chunkHashes?.length) {
+      meta.chunkHashes = entry.chunkHashes;
+      dirty = true;
+    }
+    if (dirty) await meshApi?.beaconWriteMeta?.({ seedId, meta });
+    return meta;
+  }
   meta = {
     seedId,
     filename: entry.filename || 'file',
@@ -264,6 +286,8 @@ async function ensureLocalMeta(seedId, entry) {
     totalChunks: entry.totalChunks || 0,
     mime: 'application/octet-stream',
     publishedAt: Date.now(),
+    infoHash: entry.infoHash,
+    chunkHashes: entry.chunkHashes,
   };
   const res = await meshApi?.beaconWriteMeta?.({ seedId, meta });
   if (res?.ok === false) throw new Error('no_meta');
@@ -292,7 +316,10 @@ async function loadLocalSeeds() {
       seedId: meta.seedId,
       totalChunks: meta.totalChunks,
     });
-    if (have >= meta.totalChunks) localComplete.add(meta.seedId);
+    if (have >= meta.totalChunks) {
+      localComplete.add(meta.seedId);
+      void refreshLocalHaveCache(meta.seedId, meta.totalChunks);
+    }
   }
   await reconcileLocalSeeds();
   emitCatalog();
@@ -300,6 +327,10 @@ async function loadLocalSeeds() {
 
 export async function refreshBeaconLocalState() {
   await reconcileLocalSeeds();
+  for (const seedId of localSeedIds) {
+    const entry = catalog.get(seedId);
+    if (entry?.totalChunks) await refreshLocalHaveCache(seedId, entry.totalChunks);
+  }
   emitCatalog();
 }
 
@@ -445,6 +476,51 @@ export async function resolveBeaconPreviewUrl(seedId, previewB64) {
 
 function peerHaveKey(seedId, peerId) {
   return `${seedId}:${peerId}`;
+}
+
+function swarmStatsForSeed(seedId, entry, local) {
+  const total = entry?.totalChunks || 0;
+  if (!total) {
+    return { swarmPeerCount: entry?.seeders?.size || 0, swarmHavePct: local ? 100 : null };
+  }
+  const seederIds = [...(entry?.seeders?.keys() || [])];
+  const peerHaves = [];
+  for (const id of seederIds) {
+    const b64 = peerHaveBitmaps.get(peerHaveKey(seedId, id));
+    if (b64) peerHaves.push(decodeHaveBitmap(b64, total));
+  }
+  const cachedLocal = localHaveCache.get(seedId);
+  const localHave =
+    local && !cachedLocal
+      ? Array(total).fill(true)
+      : cachedLocal || Array(total).fill(false);
+  const { peerCount, havePct } = computeSwarmCoverage({
+    localHave,
+    peerHaves,
+    totalChunks: total,
+  });
+  const swarmPeerCount = Math.max(peerCount, seederIds.length);
+  const swarmHavePct = peerHaves.length || local ? havePct : null;
+  return { swarmPeerCount, swarmHavePct };
+}
+
+async function refreshLocalHaveCache(seedId, totalChunks) {
+  const total = Number(totalChunks) || 0;
+  if (!total || !meshApi?.beaconHaveBitmap) return;
+  const res = await meshApi.beaconHaveBitmap({ seedId, totalChunks: total });
+  const haveSet = decodeBitmap(res?.bitmap || '', total);
+  const arr = Array.from({ length: total }, (_, i) => haveSet.has(i));
+  localHaveCache.set(seedId, arr);
+}
+
+async function sha256HexFromBase64(b64) {
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  try {
+    return hashChunkBytes(bin);
+  } catch {
+    const digest = await crypto.subtle.digest('SHA-256', bin);
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
 }
 
 function decodeBitmap(bitmapB64, totalChunks) {
@@ -626,6 +702,9 @@ async function collectMissingChunks(seedId, total) {
 async function requestChunksFromPeer(peerId, seedId, indices) {
   if (!indices.length || !meshApi?.sendTcpMessage) return [];
 
+  const meta = await meshApi?.beaconReadMeta?.({ seedId });
+  const expected = Array.isArray(meta?.chunkHashes) ? meta.chunkHashes : null;
+
   const waiters = indices.map((idx) =>
     waitForChunk(seedId, idx).then((data) => ({ chunkIndex: idx, data }))
   );
@@ -639,10 +718,16 @@ async function requestChunksFromPeer(peerId, seedId, indices) {
   });
 
   const settled = await Promise.allSettled(waiters);
-  const chunks = settled
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter((c) => c?.data);
+  const chunks = [];
+  for (const r of settled) {
+    if (r.status !== 'fulfilled' || !r.value?.data) continue;
+    const { chunkIndex, data } = r.value;
+    if (expected?.[chunkIndex]) {
+      const hex = await sha256HexFromBase64(data);
+      if (hex !== expected[chunkIndex]) continue;
+    }
+    chunks.push({ chunkIndex, data });
+  }
 
   if (!chunks.length) return [];
 
@@ -654,6 +739,8 @@ async function requestChunksFromPeer(peerId, seedId, indices) {
     );
   }
   localSeedIds.add(seedId);
+  const entry = catalog.get(seedId);
+  if (entry?.totalChunks) void refreshLocalHaveCache(seedId, entry.totalChunks);
   return chunks.map((c) => c.chunkIndex);
 }
 
@@ -737,10 +824,13 @@ async function respondSeedHaveRequest(msg, api, config) {
   const totalChunks = Number(msg.totalChunks) || 0;
   if (!seedId || !Number.isFinite(from) || !localComplete.has(seedId)) return;
   let bitmap = '';
+  let infoHash = '';
+  const meta = await meshApi?.beaconReadMeta?.({ seedId });
   if (meshApi?.beaconHaveBitmap) {
     const res = await meshApi.beaconHaveBitmap({ seedId, totalChunks });
     bitmap = res?.bitmap || '';
   }
+  if (meta?.infoHash) infoHash = meta.infoHash;
   await api.sendTcpMessage({
     type: 'seed-have',
     to: from,
@@ -748,6 +838,8 @@ async function respondSeedHaveRequest(msg, api, config) {
     seedId,
     totalChunks,
     bitmap,
+    chunkSize: meta?.chunkSize || BEACON_CHUNK_SIZE,
+    infoHash,
   });
 }
 
@@ -757,6 +849,10 @@ function ingestPeerHave(msg) {
   const bitmap = String(msg.bitmap || '');
   if (!seedId || !Number.isFinite(from)) return;
   peerHaveBitmaps.set(peerHaveKey(seedId, from), bitmap);
+  if (msg.infoHash) {
+    const entry = catalog.get(seedId);
+    if (entry && !entry.infoHash) entry.infoHash = String(msg.infoHash);
+  }
   const pending = pendingHave.get(peerHaveKey(seedId, from));
   if (pending) pending(bitmap);
 }
@@ -864,6 +960,7 @@ export async function deleteBeaconSeed(seedId) {
   localSeedIds.delete(seedId);
   jobProgress.delete(seedId);
   catalog.delete(seedId);
+  localHaveCache.delete(seedId);
   peerHaveBitmaps.forEach((_, key) => {
     if (key.startsWith(`${seedId}:`)) peerHaveBitmaps.delete(key);
   });
@@ -973,6 +1070,7 @@ export function getBeaconCatalog() {
     const paused = pausedSeeds.has(e.seedId);
     const stopped = stoppedSeeding.has(e.seedId);
     const activelySeeding = local && !stopped && !paused;
+    const swarm = swarmStatsForSeed(e.seedId, e, local);
     return {
       seedId: e.seedId,
       filename: e.filename,
@@ -980,6 +1078,8 @@ export function getBeaconCatalog() {
       chunkSize: e.chunkSize,
       totalChunks: e.totalChunks,
       seederCount: e.seeders.size,
+      swarmPeerCount: swarm.swarmPeerCount,
+      swarmHavePct: swarm.swarmHavePct,
       leechers: e.leechers || 0,
       updatedAt: e.updatedAt,
       local,
@@ -1009,6 +1109,8 @@ export function getBeaconCatalog() {
       chunkSize: BEACON_CHUNK_SIZE,
       totalChunks: 0,
       seederCount: 0,
+      swarmPeerCount: 0,
+      swarmHavePct: null,
       leechers: 0,
       updatedAt: Date.now(),
       local: false,
@@ -1131,6 +1233,7 @@ export async function publishBeaconFile(file) {
   }
 
   try {
+    const chunkHashes = [];
     await ipcWriteMeta(seedId, meta);
     localSeedIds.add(seedId);
 
@@ -1141,6 +1244,7 @@ export async function publishBeaconFile(file) {
         const start = j * chunkSize;
         const sliceEnd = Math.min(file.size, start + chunkSize);
         const data = await readFileSliceAsBase64(file, start, sliceEnd);
+        chunkHashes[j] = await sha256HexFromBase64(data);
         batch.push({ chunkIndex: j, data });
       }
       if (meshApi?.beaconWriteChunksBatch) {
@@ -1153,6 +1257,10 @@ export async function publishBeaconFile(file) {
       i = end - 1;
       setJobProgress(seedId, Math.round(8 + (end / totalChunks) * 82), 'publishing');
     }
+
+    meta.chunkHashes = chunkHashes;
+    meta.infoHash = computeInfoHashFromChunkHashes(chunkHashes);
+    await ipcWriteMeta(seedId, meta);
 
     localComplete.add(seedId);
     localSeedIds.add(seedId);

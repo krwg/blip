@@ -4,6 +4,9 @@ import {
   countHavePerChunk,
   pickRarestFirstChunks,
   peersWithChunk,
+  computeInfoHashFromChunkHashes,
+  hashChunkBytes,
+  computeSwarmCoverage,
 } from '../shared/beacon-swarm.js';
 
 describe('beacon-swarm bitmap', () => {
@@ -40,5 +43,25 @@ describe('beacon-swarm bitmap', () => {
     ];
     expect(countHavePerChunk(peerHaves, 2)).toEqual([2, 1]);
     expect(peersWithChunk(peerHaves, 1)).toEqual([1]);
+  });
+
+  it('computes infoHash from ordered chunk digests', () => {
+    const h0 = hashChunkBytes(Buffer.from('aaa'));
+    const h1 = hashChunkBytes(Buffer.from('bbb'));
+    const info = computeInfoHashFromChunkHashes([h0, h1]);
+    expect(info).toHaveLength(64);
+    expect(computeInfoHashFromChunkHashes([h0, h1])).toBe(info);
+  });
+
+  it('computes swarm coverage union', () => {
+    const localHave = [true, false, false, false];
+    const peerHaves = [
+      [true, true, false, false],
+      [true, false, true, false],
+    ];
+    expect(computeSwarmCoverage({ localHave, peerHaves, totalChunks: 4 })).toEqual({
+      peerCount: 2,
+      havePct: 75,
+    });
   });
 });
