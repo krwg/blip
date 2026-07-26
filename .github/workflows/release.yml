@@ -64,5 +64,6 @@ jobs:
         run: npm run electron:publish:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_HARD_LINKS: 'false'
           # Optional signing / notarization (set in repo secrets when ready):
           # CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
