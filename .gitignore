@@ -2,6 +2,13 @@ node_modules
 dist-electron
 dist
 
+# TypeScript output emitted beside the transitional shared sources.
+shared/*.d.ts
+shared/*.d.ts.map
+shared/blip-errors.js
+shared/blip-id.js
+!shared/preload-api.d.ts
+
 # Local roadmap / ideas (not shipped)
 IDEAS.local.md
 SECURITY.local.md
