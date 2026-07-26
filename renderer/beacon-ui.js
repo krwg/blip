@@ -483,7 +483,10 @@ function renderTableRows() {
 
     const seedsCell = document.createElement('div');
     seedsCell.className = 'beacon-col beacon-col-seeds';
-    seedsCell.innerHTML = `<span class="beacon-seed-pip">${item.seederCount}</span>`;
+    const peerN = item.swarmPeerCount ?? item.seederCount;
+    const swarmPct = item.swarmHavePct;
+    const pctLabel = swarmPct == null ? '—' : `${swarmPct}%`;
+    seedsCell.innerHTML = `<span class="beacon-swarm-badge" title="${t('beacon.swarm_hint')}"><span class="beacon-seed-pip">${peerN}</span><span class="beacon-swarm-pct">${pctLabel}</span></span>`;
 
     const statusCell = document.createElement('div');
     statusCell.className = 'beacon-col beacon-col-status';
