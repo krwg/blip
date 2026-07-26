@@ -30,6 +30,9 @@ const out1x = join(buildDir, 'dmg-background.png');
 const out2x = join(buildDir, 'dmg-background@2x.png');
 await sharp(Buffer.from(dmgSvg(540, 380))).png().toFile(out1x);
 await sharp(Buffer.from(dmgSvg(1080, 760))).png().toFile(out2x);
+// electron-builder DMG cleanup also looks at project-root copies.
+await sharp(Buffer.from(dmgSvg(540, 380))).png().toFile(join(root, 'dmg-background.png'));
+await sharp(Buffer.from(dmgSvg(1080, 760))).png().toFile(join(root, 'dmg-background@2x.png'));
 writeFileSync(join(buildDir, '.gitkeep'), '');
 console.log('[build-dmg-background]', out1x);
 console.log('[build-dmg-background]', out2x);
