@@ -17,3 +17,7 @@ Older builds may only speak plaintext TCP (or skip handshake). To keep **all BLI
 | Consent off + legacy peer | Connection refused |
 
 WebRTC media for calls is separate from mesh TCP crypto; this setting only covers the signalling / chat channel.
+
+## TOFU key rotation
+
+`knownPeerKeys` remembers the last successful mesh pubkey per blipId. If a peer **rotates** keys (dev rebuild, factory reset) but keeps the same number, Morse accepts the new key when the current LAN **announce** is signature-verified for that exact pubkey (rebind). A hard mismatch with no matching verified announce still rejects the handshake.

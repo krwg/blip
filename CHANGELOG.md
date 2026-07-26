@@ -32,6 +32,7 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 
 ### Fixed
 
+- **Call “Socket closed”** — reuse authenticated inbound mesh sockets for dial; TOFU rebind when a peer rotates mesh keys but LAN announce verifies the new pubkey (common on dev rebuilds).
 - **Call waveform** — bars follow local mic level (AnalyserNode) instead of a CSS-only pulse; muted flattens bars.
 
 ### Added
