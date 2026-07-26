@@ -1,6 +1,8 @@
 node_modules
 dist-electron
 dist
+dmg-background.png
+dmg-background@2x.png
 
 # TypeScript output emitted beside the transitional shared sources.
 shared/*.d.ts
