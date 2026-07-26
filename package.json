@@ -1,6 +1,6 @@
 {
   "name": "blip",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "P2P LAN messenger — text, voice, and video. No cloud, no servers, no accounts.",
   "author": {
     "name": "krwg",
@@ -32,10 +32,10 @@
     "electron:build:portable": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win portable",
     "electron:build:win": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win",
     "electron:build:all": "npm run electron:build:win",
-    "electron:build:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --mac",
+    "electron:build:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/publish-mac.mjs",
     "electron:build:linux": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --linux",
     "electron:publish:win": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --publish always",
-    "electron:publish:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --mac --publish always",
+    "electron:publish:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/publish-mac.mjs --publish",
     "electron:publish:linux": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --linux --publish always",
     "release:assets": "node scripts/publish-release-notes.mjs",
     "electron:build:dir": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --dir",
