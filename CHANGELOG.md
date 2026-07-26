@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [2.0.1] — Morse — 2026-07-26
+
+Patch.
+
+### Fixed
+
+- **Overlay clipping** — HUD window enlarged to **420×420** so the in-call block is fully visible.
+- **macOS Intel DMG** — ship `BLIP-*-mac-x64.dmg` via sequential DMG builds (unique volume titles) so CI no longer drops x64.
+
+### Changed
+
+- **Overlay HUD** — Discord/Steam-style denser panel: self id, status/mesh/unread stats, activity window title, call voice/video + mesh crypto/legacy chips, live transfer %, app version / DND.
+
 ## [2.0.0] — Morse — 2026-07-26
 
 Major release (codename **Morse**). Full notes: [`docs/release-notes-v2.0.0-github.md`](docs/release-notes-v2.0.0-github.md). Roadmap: [`docs/ROADMAP-2.0-MORSE.md`](docs/ROADMAP-2.0-MORSE.md).

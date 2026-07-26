@@ -195,7 +195,7 @@ export function registerCallIpc(deps) {
         );
       }
       await ensurePeerSocket(peerId);
-      setActiveCallPeer(peerId);
+      setActiveCallPeer(peerId, { video: payload.video ?? false });
       await sendToCallWindow(
         'call-outgoing',
         { peerId, video: payload.video ?? false },
