@@ -1,4 +1,11 @@
-const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer: electronIpcRenderer, webUtils } = require('electron');
+
+/** @typedef {import('./shared/preload-api').BlipInvoke} BlipInvoke */
+/** @typedef {import('./shared/preload-api').BlipPreloadApi} BlipPreloadApi */
+/** @typedef {Omit<typeof electronIpcRenderer, 'invoke'> & { invoke: BlipInvoke }} TypedIpcRenderer */
+
+/** @type {TypedIpcRenderer} */
+const ipcRenderer = electronIpcRenderer;
 
 let groupCallActive = false;
 let groupCallGroupId = null;
@@ -18,7 +25,8 @@ ipcRenderer.on('trust-state', (_, t) => {
 
 contextBridge.exposeInMainWorld('trustState', trustStateLive);
 
-contextBridge.exposeInMainWorld('blip', {
+/** @type {BlipPreloadApi} */
+const blipApi = {
   platform: process.platform,
   getTrustState: () => ipcRenderer.invoke('get-trust-state'),
   onTrustState: (cb) => {
@@ -276,7 +284,9 @@ contextBridge.exposeInMainWorld('blip', {
   getGroupForCall: (groupId) => ipcRenderer.invoke('get-group-for-call', groupId),
   getForegroundPresence: () => ipcRenderer.invoke('get-foreground-presence'),
   overlayPushStats: (stats) => ipcRenderer.invoke('overlay-push-stats', stats),
-});
+};
+
+contextBridge.exposeInMainWorld('blip', blipApi);
 
 contextBridge.exposeInMainWorld('blipOverlay', {
   onUpdate: (cb) => {
