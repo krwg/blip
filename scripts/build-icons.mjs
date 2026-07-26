@@ -91,8 +91,20 @@ const icoPath = join(buildDir, 'icon.ico');
 writeFileSync(icoPath, await toIco(pngBuffers));
 console.log('[build-icons] Wrote', icoPath);
 
-copyFileSync(main.png256, join(buildDir, 'icon.png'));
-console.log('[build-icons] Wrote', join(buildDir, 'icon.png'));
+// macOS electron-builder requires icon.png ≥ 512×512 (prefer 1024 for Retina ICNS).
+const iconPngPath = join(buildDir, 'icon.png');
+await sharp(main.svg, { density: 576 })
+  .resize(1024, 1024, { kernel: sharp.kernel.nearest })
+  .png()
+  .toFile(iconPngPath);
+console.log('[build-icons] Wrote', iconPngPath);
+
+for (const size of [512, 256, 128, 64, 48, 32, 16]) {
+  await sharp(main.svg, { density: 576 })
+    .resize(size, size, { kernel: sharp.kernel.nearest })
+    .png()
+    .toFile(join(iconsDir, `${size}x${size}.png`));
+}
 
 copyFileSync(main.tray16, join(buildDir, 'tray-16.png'));
 console.log('[build-icons] Wrote', join(buildDir, 'tray-16.png'));

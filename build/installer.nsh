@@ -1,27 +1,10 @@
 !include "nsDialogs.nsh"
 
-Var BlipTipsDialog
-Var BlipTipsLabel
-
 !macro customWelcomePage
   !define MUI_WELCOMEPAGE_TITLE "Welcome to BLIP Setup"
-  !define MUI_WELCOMEPAGE_TEXT "BLIP is a LAN-only P2P messenger — text, voice, video, and mesh files.$\r$\n$\r$\n• No cloud, no accounts, no mandatory internet$\r$\n• Same Wi‑Fi / Hamachi / Radmin / Tailscale mesh$\r$\n• Publisher: krwg · License: GNU GPL v3$\r$\n$\r$\nClick Next to review network tips, choose install mode, and pick a folder."
+  !define MUI_WELCOMEPAGE_TEXT "BLIP is a LAN-only P2P messenger — text, voice, video, and mesh files.$\r$\n$\r$\n• No cloud, no accounts, no mandatory internet$\r$\n• Same Wi‑Fi / Hamachi / Radmin / Tailscale mesh$\r$\n• Publisher: krwg · License: GNU GPL v3$\r$\n$\r$\nBefore install: allow UDP 42069 / TCP 42070 on private networks; one BLIP copy per PC (ports cannot be shared).$\r$\n$\r$\nClick Next to choose install mode and folder."
   !insertmacro MUI_PAGE_WELCOME
-  Page custom BlipTipsPage
 !macroend
-
-Function BlipTipsPage
-  nsDialogs::Create 1018
-  Pop $BlipTipsDialog
-  ${If} $BlipTipsDialog == error
-    Abort
-  ${EndIf}
-
-  ${NSD_CreateLabel} 0 0 100% 180u "Before you install$\r$\n$\r$\n1. Firewall — allow BLIP for private networks (UDP 42069 discovery, TCP 42070 chat/signaling).$\r$\n$\r$\n2. One copy per PC — two BLIP windows on the same machine cannot share those ports; use a VM or a second device to test.$\r$\n$\r$\n3. Install mode — per-user (no admin) or per-machine (all users, elevation).$\r$\n$\r$\n4. Folder — on the next pages you can change the install location.$\r$\n$\r$\n5. After install — .blip seed files and blip:// links open in BLIP automatically."
-  Pop $BlipTipsLabel
-
-  nsDialogs::Show
-FunctionEnd
 
 !macro customFinishPage
   !define MUI_FINISHPAGE_TITLE "BLIP is ready"

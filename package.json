@@ -2,7 +2,10 @@
   "name": "blip",
   "version": "2.0.0",
   "description": "P2P LAN messenger — text, voice, and video. No cloud, no servers, no accounts.",
-  "author": "krwg",
+  "author": {
+    "name": "krwg",
+    "email": "blipteam@icloud.com"
+  },
   "homepage": "https://krwg.github.io/blip/",
   "repository": {
     "type": "git",
