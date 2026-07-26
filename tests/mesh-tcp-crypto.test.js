@@ -16,6 +16,7 @@ import {
   ensureMeshIdentity,
   signCanonical,
   announceCanonical,
+  acceptPeerPubkey,
 } from '../main/mesh-identity.js';
 
 describe('mesh-session-crypto', () => {
@@ -61,6 +62,21 @@ describe('mesh-identity handshake v2', () => {
     const va = verifyHandshakePacket(ack.packet, 7);
     expect(va.ok).toBe(true);
     expect(va.encryptedCapable).toBe(true);
+  });
+
+  it('rebinds TOFU when verified announce carries a new mesh pubkey', () => {
+    const cfg = {
+      knownPeerKeys: { '9': 'old-key' },
+    };
+    expect(acceptPeerPubkey(cfg, 9, 'new-key', null).ok).toBe(false);
+    expect(
+      acceptPeerPubkey(cfg, 9, 'new-key', {
+        blipId: 9,
+        meshVerified: true,
+        meshPubkey: 'new-key',
+      })
+    ).toEqual({ ok: true, rebind: true });
+    expect(acceptPeerPubkey(cfg, 9, 'old-key', null)).toEqual({ ok: true, rebind: false });
   });
 
   it('accepts announce proto 1 as legacy and proto 2 as current', () => {

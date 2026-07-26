@@ -216,3 +216,25 @@ export function pubkeyMatchesKnown(config, blipId, meshPubkey) {
   if (!known) return true;
   return known === meshPubkey;
 }
+
+/**
+ * TOFU check with optional rebind when LAN announce already verified this key.
+ * Dev rebuilds / factory reset rotate mesh keys while blipId stays the same;
+ * without rebind the callee destroys the socket → caller sees "Socket closed".
+ */
+export function acceptPeerPubkey(config, blipId, meshPubkey, discoveryPeer) {
+  if (pubkeyMatchesKnown(config, blipId, meshPubkey)) {
+    return { ok: true, rebind: false };
+  }
+  const peerId = Number(discoveryPeer?.blipId);
+  if (
+    Number.isFinite(peerId) &&
+    peerId === Number(blipId) &&
+    discoveryPeer.meshVerified &&
+    discoveryPeer.meshPubkey &&
+    discoveryPeer.meshPubkey === meshPubkey
+  ) {
+    return { ok: true, rebind: true };
+  }
+  return { ok: false, rebind: false };
+}
