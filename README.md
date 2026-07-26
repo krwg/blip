@@ -58,6 +58,7 @@
 | Community | [Community](#en-community) | [Сообщество](#ru-community) |
 | Landing | [Pages](https://krwg.github.io/blip/) | [Сайт](https://krwg.github.io/blip/) |
 | Troubleshooting | [Troubleshooting](#en-troubleshooting) | [Устранение неполадок](#ru-troubleshooting) |
+| Error codes | [Error codes](#en-error-codes) | [Коды ошибок](#ru-error-codes) |
 
 ---
 
@@ -386,6 +387,38 @@ blip/
 2. On Tailscale or multi-subnet VPN: **Settings → Network → STUN / TURN**, enable, and add `stun:` / `turn:` lines; start a **new** call after saving.
 3. Check that no corporate firewall blocks peer-to-peer UDP between the devices.
 4. Retry after both peers show online in **Peers** with a fresh Mesh Pulse latency.
+5. Toast shows **Error NNN** only — look up the number below (dev builds also print `[BLIP ENNN/…]` in the terminal).
+
+<h3 id="en-error-codes">Error codes</h3>
+
+UI shows the **number only**. Full text is logged in the **main-process terminal** on a dev build (`[BLIP E104/SOCKET_CLOSED] …`). Source of truth: `shared/blip-errors.js`.
+
+| Code | Id | Meaning |
+|------|-----|---------|
+| **0** | `OK` | Success |
+| **100** | `PEER_NOT_FOUND` | No online peer with that blipId in discovery |
+| **101** | `PEER_OFFLINE` | Peer row exists but `online=false` |
+| **102** | `CONNECT_TIMEOUT` | Outbound TCP connect timed out |
+| **103** | `CONNECT_FAILED` | TCP connect error (refused / reset / unreachable) |
+| **104** | `SOCKET_CLOSED` | Socket closed while handshake waiter pending |
+| **105** | `HANDSHAKE_TIMEOUT` | No `mesh-handshake-ack` in time |
+| **106** | `HANDSHAKE_INVALID_ACK` | Ack failed signature / fields |
+| **107** | `HANDSHAKE_PUBKEY_MISMATCH` | TOFU key mismatch without verified announce rebind |
+| **108** | `HANDSHAKE_REJECTED` | Peer rejected / destroyed handshake |
+| **109** | `HANDSHAKE_PEER_CLOSED` | Peer closed TCP during handshake (common on ≤1.1.x); Morse retries plaintext compat |
+| **110** | `COMPAT_PLAINTEXT` | Plaintext compat session (legacy / consent path) |
+| **111** | `UNENCRYPTED_DISABLED` | “Allow older BLIP versions” is off |
+| **112** | `PEER_BLOCKED` | Local block list |
+| **113** | `INVALID_PEER_ID` | Bad call peerId payload |
+| **114** | `COMPAT_RECONNECT_FAILED` | Second connect after peer-close failed |
+| **115** | `HANDSHAKE_SEND_FAILED` | Could not write handshake frame |
+| **116** | `SESSION_MISSING` | No mesh session after failure |
+| **200** | `CALL_OPEN_FAILED` | Outgoing call open failed |
+| **201** | `CALL_SIGNAL_FAILED` | Call signalling TCP write failed |
+| **202** | `CALL_PEER_UNREACHABLE` | Peer not online when starting call |
+| **999** | `UNKNOWN` | Unclassified — see terminal log |
+
+Cross-version calls (Morse → 1.1.x): keep **Settings → Network → Allow older BLIP versions** on. Morse skips encrypted handshake for legacy peers and uses plaintext signalling.
 
 ### File transfer fails
 1. Check **Settings → Network** size limit (1–100 GB).
@@ -692,6 +725,38 @@ blip/
 2. Tailscale или разные подсети: **Настройки → Сеть → STUN / TURN**, включите и добавьте строки `stun:` / `turn:`; начните **новый** звонок после сохранения.
 3. Проверьте, что корпоративный firewall не блокирует P2P UDP между устройствами.
 4. Убедитесь, что оба пира online в **Абоненты** и есть свежий Mesh Pulse.
+5. В тосте только **Ошибка NNN** — расшифровка ниже (в дев-сборке детали в терминале: `[BLIP ENNN/…]`).
+
+<h3 id="ru-error-codes">Коды ошибок</h3>
+
+В клиенте показывается **только номер**. Полный текст — в терминале main-процесса на дев-сборке. Каталог: `shared/blip-errors.js`.
+
+| Код | Id | Смысл |
+|-----|-----|--------|
+| **0** | `OK` | Успех |
+| **100** | `PEER_NOT_FOUND` | Нет online-пира с таким номером в discovery |
+| **101** | `PEER_OFFLINE` | Пир есть, но `online=false` |
+| **102** | `CONNECT_TIMEOUT` | Таймаут исходящего TCP |
+| **103** | `CONNECT_FAILED` | Ошибка TCP (refuse / reset / unreachable) |
+| **104** | `SOCKET_CLOSED` | Сокет закрыт во время ожидания handshake |
+| **105** | `HANDSHAKE_TIMEOUT` | Нет `mesh-handshake-ack` вовремя |
+| **106** | `HANDSHAKE_INVALID_ACK` | Ack не прошёл проверку |
+| **107** | `HANDSHAKE_PUBKEY_MISMATCH` | TOFU: ключ не совпал и announce не дал rebind |
+| **108** | `HANDSHAKE_REJECTED` | Пир отклонил / разорвал handshake |
+| **109** | `HANDSHAKE_PEER_CLOSED` | Пир закрыл TCP на handshake (часто ≤1.1.x); Morse повторяет plaintext compat |
+| **110** | `COMPAT_PLAINTEXT` | Plaintext compat-сессия (legacy / согласие) |
+| **111** | `UNENCRYPTED_DISABLED` | Выкл. «Разрешить старые версии BLIP» |
+| **112** | `PEER_BLOCKED` | Локальный блок |
+| **113** | `INVALID_PEER_ID` | Некорректный peerId в вызове |
+| **114** | `COMPAT_RECONNECT_FAILED` | Второй connect после peer-close не удался |
+| **115** | `HANDSHAKE_SEND_FAILED` | Не удалось отправить handshake |
+| **116** | `SESSION_MISSING` | Нет mesh-сессии после ошибки |
+| **200** | `CALL_OPEN_FAILED` | Не открылся исходящий звонок |
+| **201** | `CALL_SIGNAL_FAILED` | Сбой TCP signalling звонка |
+| **202** | `CALL_PEER_UNREACHABLE` | Пир не online при старте звонка |
+| **999** | `UNKNOWN` | Не классифицировано — смотри лог терминала |
+
+Звонки Morse → 1.1.x: держите **Настройки → Сеть → Разрешить старые версии BLIP** включённым. Для legacy Morse не шлёт encrypted handshake и сразу идёт в plaintext signalling.
 
 ### Файл не передаётся
 1. Проверьте лимит в **Настройки → Сеть** (1–100 ГБ).

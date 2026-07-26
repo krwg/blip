@@ -35,6 +35,12 @@ import {
   initInboundSession,
   getSocketSession,
 } from './mesh-handshake.js';
+import {
+  BlipErrorCode,
+  createBlipError,
+  classifyBlipError,
+  logBlipError,
+} from '../shared/blip-errors.js';
 import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
 import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
@@ -762,10 +768,17 @@ function wirePeerSocket(socket, socketKey, peerIp) {
 
 async function ensurePeerSocket(blipId) {
   const peer = findPeer(blipId);
-  if (!peer) throw new Error('Peer not found');
+  if (!peer) {
+    throw createBlipError(BlipErrorCode.PEER_NOT_FOUND, `Peer #${blipId} not found`);
+  }
+  if (!peer.online) {
+    throw createBlipError(BlipErrorCode.PEER_OFFLINE, `Peer #${blipId} offline`);
+  }
 
   const gate = assertMayUseUnencryptedPeer(config, peer);
-  if (!gate.ok) throw new Error(gate.error);
+  if (!gate.ok) {
+    throw createBlipError(BlipErrorCode.UNENCRYPTED_DISABLED, gate.error);
+  }
 
   const inbound = tcpServer?.getConnection?.(blipId);
   if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
@@ -783,13 +796,53 @@ async function ensurePeerSocket(blipId) {
   const inflight = peerSocketConnectInflight.get(socketKey);
   if (inflight) return inflight;
 
+  const registerConnection = (id, sock) => tcpServer?.registerConnection?.(id, sock);
+
   const connectPromise = (async () => {
     peerSockets.delete(socketKey);
-    const socket = await connectToPeer(peer.ip, blipId, tcpPort);
-    wirePeerSocket(socket, socketKey, peer.ip);
-    await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
-      registerConnection: (id, sock) => tcpServer?.registerConnection?.(id, sock),
-    });
+
+    const openWired = async () => {
+      let socket;
+      try {
+        socket = await connectToPeer(peer.ip, blipId, tcpPort);
+      } catch (err) {
+        throw classifyBlipError(err);
+      }
+      wirePeerSocket(socket, socketKey, peer.ip);
+      return socket;
+    };
+
+    let socket = await openWired();
+    try {
+      await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
+        registerConnection,
+      });
+    } catch (err) {
+      if (err?.needCompatReconnect || err?.blipCode === BlipErrorCode.HANDSHAKE_PEER_CLOSED) {
+        logBlipError(err, `ensurePeerSocket #${blipId} reconnect plaintext`);
+        try {
+          if (!socket.destroyed) socket.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          socket = await openWired();
+          await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
+            registerConnection,
+            forcePlaintext: true,
+          });
+        } catch (retryErr) {
+          throw createBlipError(
+            BlipErrorCode.COMPAT_RECONNECT_FAILED,
+            `Compat reconnect failed for #${blipId}`,
+            retryErr
+          );
+        }
+      } else {
+        logBlipError(err, `ensurePeerSocket #${blipId}`);
+        throw classifyBlipError(err);
+      }
+    }
     peerSockets.set(socketKey, socket);
     return socket;
   })().finally(() => {

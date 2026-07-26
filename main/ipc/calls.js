@@ -5,6 +5,11 @@
 
 import { ipcMain } from 'electron';
 import { serializeSdp } from '../call-wire.js';
+import {
+  BlipErrorCode,
+  createBlipError,
+  blipErrorIpcPayload,
+} from '../../shared/blip-errors.js';
 
 /**
  * @param {object} deps
@@ -173,9 +178,22 @@ export function registerCallIpc(deps) {
   ipcMain.handle('open-call-outgoing', async (_, payload) => {
     try {
       const peerId = Number(payload?.peerId);
-      if (!Number.isFinite(peerId)) return { ok: false, error: 'invalid_peer' };
+      if (!Number.isFinite(peerId)) {
+        return blipErrorIpcPayload(
+          createBlipError(BlipErrorCode.INVALID_PEER_ID, 'invalid_peer')
+        );
+      }
       const peer = findPeer(peerId);
-      if (!peer) return { ok: false, error: 'Peer not found' };
+      if (!peer) {
+        return blipErrorIpcPayload(
+          createBlipError(BlipErrorCode.PEER_NOT_FOUND, 'Peer not found')
+        );
+      }
+      if (!peer.online) {
+        return blipErrorIpcPayload(
+          createBlipError(BlipErrorCode.PEER_OFFLINE, 'Peer offline')
+        );
+      }
       await ensurePeerSocket(peerId);
       setActiveCallPeer(peerId);
       await sendToCallWindow(
@@ -186,7 +204,11 @@ export function registerCallIpc(deps) {
       return { ok: true };
     } catch (err) {
       clearActiveCallPeer();
-      return { ok: false, error: err?.message || String(err) };
+      const payload = blipErrorIpcPayload(err);
+      return {
+        ...payload,
+        errorCode: payload.errorCode ?? BlipErrorCode.CALL_OPEN_FAILED,
+      };
     }
   });
 
