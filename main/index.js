@@ -28,7 +28,9 @@ import {
   handleMeshHandshakeMessage,
   assertAuthenticated,
   isSocketAuthenticated,
-  performOutboundHandshake,
+  performOutboundHandshakeOrCompat,
+  tryLegacyCompatAuth,
+  assertMayUseUnencryptedPeer,
   clearSocketSession,
   initInboundSession,
   getSocketSession,
@@ -709,7 +711,19 @@ function wirePeerSocket(socket, socketKey, peerIp) {
   const onSocketLine = (msg) => {
     if (msg.type === 'ping') return;
     if (handleMeshHandshakeMessage(msg, socket, meshHandshakeContext())) return;
-    if (!isSocketAuthenticated(socket)) return;
+    if (!isSocketAuthenticated(socket)) {
+      const compat = tryLegacyCompatAuth({
+        session: getSocketSession(socket),
+        msg,
+        config,
+        discovery,
+        remoteIp: peerIp || socket.remoteAddress || '',
+      });
+      if (!compat.ok) return;
+      tcpServer?.registerConnection?.(compat.from, socket);
+      discovery?.notePeerCompat?.(compat.from, true);
+      discovery?.notePeerChannelCrypto?.(compat.from, false);
+    }
     const auth = assertAuthenticated(socket, msg);
     if (!auth.ok) return;
     if (isPeerBlocked(config, auth.from)) return;
@@ -750,6 +764,9 @@ async function ensurePeerSocket(blipId) {
   const peer = findPeer(blipId);
   if (!peer) throw new Error('Peer not found');
 
+  const gate = assertMayUseUnencryptedPeer(config, peer);
+  if (!gate.ok) throw new Error(gate.error);
+
   const tcpPort = peer.tcpPort || resolvePorts(config).tcpPort;
   const socketKey = `${peer.ip}:${blipId}:${tcpPort}`;
 
@@ -763,7 +780,9 @@ async function ensurePeerSocket(blipId) {
     peerSockets.delete(socketKey);
     const socket = await connectToPeer(peer.ip, blipId, tcpPort);
     wirePeerSocket(socket, socketKey, peer.ip);
-    await performOutboundHandshake(socket, config, blipId, discovery);
+    await performOutboundHandshakeOrCompat(socket, config, blipId, discovery, {
+      registerConnection: (id, sock) => tcpServer?.registerConnection?.(id, sock),
+    });
     peerSockets.set(socketKey, socket);
     return socket;
   })().finally(() => {
@@ -899,7 +918,17 @@ function createTcpHandlers() {
       if (handleMeshHandshakeMessage(msg, socket, meshHandshakeContext())) return;
 
       if (!isSocketAuthenticated(socket)) {
-        return;
+        const compat = tryLegacyCompatAuth({
+          session: getSocketSession(socket),
+          msg,
+          config,
+          discovery,
+          remoteIp,
+        });
+        if (!compat.ok) return;
+        tcpServer?.registerConnection?.(compat.from, socket);
+        discovery?.notePeerCompat?.(compat.from, true);
+        discovery?.notePeerChannelCrypto?.(compat.from, false);
       }
 
       const auth = assertAuthenticated(socket, msg);

@@ -335,6 +335,21 @@ export class Discovery {
     this.emitPeers();
   }
 
+  notePeerCompat(blipId, compat) {
+    const id = Number(blipId);
+    if (!Number.isFinite(id)) return;
+    const peer = this.peers.get(id);
+    if (!peer) return;
+    const next = !!compat;
+    if (peer.meshCompat === next) return;
+    peer.meshCompat = next;
+    if (next) {
+      peer.meshTcpEncrypted = false;
+      peer.meshLegacy = true;
+    }
+    this.emitPeers();
+  }
+
   getOccupiedIds() {
     return Array.from(this.occupiedIds);
   }

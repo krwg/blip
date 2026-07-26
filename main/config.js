@@ -105,6 +105,13 @@ const DEFAULT_CONFIG = {
 
   knownPeerKeys: {},
 
+  /**
+   * Allow chat/calls with older BLIP builds over plaintext TCP (no mesh crypto).
+   * When both peers support meshProto ≥ 2, traffic is still encrypted automatically.
+   * Turn off for a encrypted-only LAN.
+   */
+  allowUnencryptedMesh: true,
+
   receiveBetaUpdates: false,
 
   noiseSuppression: true,
