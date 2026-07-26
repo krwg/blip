@@ -8,6 +8,11 @@ import {
 } from './mesh-handshake.js';
 import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { sendOnSocketQueued } from './tcp-write-queue.js';
+import {
+  BlipErrorCode,
+  destroySocketTagged,
+  tagSocketClose,
+} from '../shared/blip-errors.js';
 
 const connections = new Map();
 
@@ -18,11 +23,11 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
     initInboundSession(socket, remoteIp);
 
     const reader = createTcpLineReader(() => {
-      try {
-        socket.destroy();
-      } catch {
-        /* ignore */
-      }
+      destroySocketTagged(
+        socket,
+        BlipErrorCode.SOCKET_CLOSED_LINE_TOO_LARGE,
+        `inbound line overflow from ${remoteIp}`
+      );
     });
 
     socket.on('data', (chunk) => {
@@ -39,41 +44,57 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
               err?.code === 'MESH_BAD_ENVELOPE' ||
               err?.code === 'MESH_NO_CIPHER'
             ) {
-              console.warn('[TCP] mesh crypto:', err.code, remoteIp);
-              try {
-                socket.destroy();
-              } catch {
-                /* ignore */
-              }
+              destroySocketTagged(
+                socket,
+                BlipErrorCode.SOCKET_CLOSED_MESH_CRYPTO,
+                `${err.code} from ${remoteIp}`
+              );
               return;
             }
           }
         }
       } catch (e) {
         if (e?.code === 'LINE_TOO_LARGE') {
-          console.warn('[TCP] line too large from', remoteIp);
-        }
-        try {
-          socket.destroy();
-        } catch {
-          /* ignore */
+          destroySocketTagged(
+            socket,
+            BlipErrorCode.SOCKET_CLOSED_LINE_TOO_LARGE,
+            `LINE_TOO_LARGE from ${remoteIp}`
+          );
+        } else {
+          destroySocketTagged(
+            socket,
+            BlipErrorCode.SOCKET_ERROR,
+            e?.message || `inbound parse error from ${remoteIp}`
+          );
         }
       }
     });
 
-    socket.on('close', () => {
+    socket.on('error', (err) => {
+      if (!socket._blipCloseCode) {
+        tagSocketClose(socket, BlipErrorCode.SOCKET_ERROR, err?.message || String(err));
+      }
+      clearSocketSession(socket);
+      destroySocketTagged(
+        socket,
+        socket._blipCloseCode || BlipErrorCode.SOCKET_ERROR,
+        err?.message || 'inbound socket error'
+      );
+    });
+
+    socket.on('close', (hadError) => {
+      if (!socket._blipCloseCode) {
+        tagSocketClose(
+          socket,
+          hadError
+            ? BlipErrorCode.SOCKET_CLOSED_AFTER_ERROR
+            : BlipErrorCode.SOCKET_CLOSED_REMOTE_EOF,
+          hadError ? 'inbound close after error' : 'inbound remote EOF'
+        );
+      }
       clearSocketSession(socket);
       for (const [key, s] of connections) {
         if (s === socket) connections.delete(key);
-      }
-    });
-
-    socket.on('error', () => {
-      clearSocketSession(socket);
-      try {
-        socket.destroy();
-      } catch {
-        /* ignore */
       }
     });
   });

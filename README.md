@@ -391,7 +391,7 @@ blip/
 
 <h3 id="en-error-codes">Error codes</h3>
 
-UI shows the **number only**. Full text is logged in the **main-process terminal** on a dev build (`[BLIP E104/SOCKET_CLOSED] …`). Source of truth: `shared/blip-errors.js`.
+UI shows the **number only**. Full text is logged in the **main-process terminal** on a dev build (`[BLIP E117/SOCKET_CLOSED_REMOTE_EOF] …`). Source of truth: `shared/blip-errors.js`.
 
 | Code | Id | Meaning |
 |------|-----|---------|
@@ -400,25 +400,41 @@ UI shows the **number only**. Full text is logged in the **main-process terminal
 | **101** | `PEER_OFFLINE` | Peer row exists but `online=false` |
 | **102** | `CONNECT_TIMEOUT` | Outbound TCP connect timed out |
 | **103** | `CONNECT_FAILED` | TCP connect error (refused / reset / unreachable) |
-| **104** | `SOCKET_CLOSED` | Socket closed while handshake waiter pending |
+| **104** | `SOCKET_CLOSED` | Umbrella (legacy); prefer **117–129** |
 | **105** | `HANDSHAKE_TIMEOUT` | No `mesh-handshake-ack` in time |
 | **106** | `HANDSHAKE_INVALID_ACK` | Ack failed signature / fields |
 | **107** | `HANDSHAKE_PUBKEY_MISMATCH` | TOFU key mismatch without verified announce rebind |
 | **108** | `HANDSHAKE_REJECTED` | Peer rejected / destroyed handshake |
-| **109** | `HANDSHAKE_PEER_CLOSED` | Peer closed TCP during handshake (common on ≤1.1.x); Morse retries plaintext compat |
+| **109** | `HANDSHAKE_PEER_CLOSED` | Peer closed during handshake → plaintext retry when allowed |
 | **110** | `COMPAT_PLAINTEXT` | Plaintext compat session (legacy / consent path) |
 | **111** | `UNENCRYPTED_DISABLED` | “Allow older BLIP versions” is off |
 | **112** | `PEER_BLOCKED` | Local block list |
 | **113** | `INVALID_PEER_ID` | Bad call peerId payload |
 | **114** | `COMPAT_RECONNECT_FAILED` | Second connect after peer-close failed |
-| **115** | `HANDSHAKE_SEND_FAILED` | Could not write handshake frame |
+| **115** | `HANDSHAKE_SEND_FAILED` | Could not write / build handshake frame |
 | **116** | `SESSION_MISSING` | No mesh session after failure |
+| **117** | `SOCKET_CLOSED_REMOTE_EOF` | Peer FIN/RST with no local destroy tag |
+| **118** | `SOCKET_CLOSED_AFTER_ERROR` | Close after socket error event |
+| **119** | `SOCKET_CLOSED_LINE_TOO_LARGE` | Framing overflow; local destroy |
+| **120** | `SOCKET_CLOSED_MESH_CRYPTO` | AES / envelope mismatch; local destroy |
+| **121** | `SOCKET_CLOSED_HANDSHAKE_BAD` | Inbound handshake failed verify |
+| **122** | `SOCKET_CLOSED_PEER_BLOCKED` | Handshake from blocked peer |
+| **123** | `SOCKET_CLOSED_AUTH_GATE` | App frame before auth on inbound TCP |
+| **124** | `SOCKET_CLOSED_LOCAL_TIMEOUT` | We destroyed after handshake timeout |
+| **125** | `SOCKET_ERROR` | `net.Socket` error event |
+| **126** | `ENSURE_HANDSHAKE_FAILED` | ensurePeerSocket handshake stage failed |
+| **127** | `ENSURE_COMPAT_RETRY` | Retrying fresh plaintext session |
+| **128** | `SOCKET_CLOSED_BEFORE_WRITE` | Dead before handshake write |
+| **129** | `SOCKET_CLOSED_DURING_WAIT` | Closed while waiting for ack |
+| **130** | `PEER_CLASSIFIED_MODERN` | Dial log: treated as Morse encrypted |
+| **131** | `PEER_CLASSIFIED_LEGACY` | Dial log: treated as legacy/compat |
 | **200** | `CALL_OPEN_FAILED` | Outgoing call open failed |
 | **201** | `CALL_SIGNAL_FAILED` | Call signalling TCP write failed |
 | **202** | `CALL_PEER_UNREACHABLE` | Peer not online when starting call |
+| **203** | `CALL_ENSURE_FAILED` | Call blocked at ensurePeerSocket |
 | **999** | `UNKNOWN` | Unclassified — see terminal log |
 
-Cross-version calls (Morse → 1.1.x): keep **Settings → Network → Allow older BLIP versions** on. Morse skips encrypted handshake for legacy peers and uses plaintext signalling.
+Cross-version calls (Morse → 1.1.x): keep **Settings → Network → Allow older BLIP versions** on. On any close-family failure Morse retries **plaintext** once. Watch the terminal for `E130/MODERN` vs `E131/LEGACY` and the nested cause under `E109` / `E117`–`E129`.
 
 ### File transfer fails
 1. Check **Settings → Network** size limit (1–100 GB).
@@ -738,25 +754,41 @@ blip/
 | **101** | `PEER_OFFLINE` | Пир есть, но `online=false` |
 | **102** | `CONNECT_TIMEOUT` | Таймаут исходящего TCP |
 | **103** | `CONNECT_FAILED` | Ошибка TCP (refuse / reset / unreachable) |
-| **104** | `SOCKET_CLOSED` | Сокет закрыт во время ожидания handshake |
+| **104** | `SOCKET_CLOSED` | Зонтик (legacy); смотри **117–129** |
 | **105** | `HANDSHAKE_TIMEOUT` | Нет `mesh-handshake-ack` вовремя |
 | **106** | `HANDSHAKE_INVALID_ACK` | Ack не прошёл проверку |
 | **107** | `HANDSHAKE_PUBKEY_MISMATCH` | TOFU: ключ не совпал и announce не дал rebind |
 | **108** | `HANDSHAKE_REJECTED` | Пир отклонил / разорвал handshake |
-| **109** | `HANDSHAKE_PEER_CLOSED` | Пир закрыл TCP на handshake (часто ≤1.1.x); Morse повторяет plaintext compat |
+| **109** | `HANDSHAKE_PEER_CLOSED` | Пир закрыл TCP на handshake → plaintext retry |
 | **110** | `COMPAT_PLAINTEXT` | Plaintext compat-сессия (legacy / согласие) |
 | **111** | `UNENCRYPTED_DISABLED` | Выкл. «Разрешить старые версии BLIP» |
 | **112** | `PEER_BLOCKED` | Локальный блок |
 | **113** | `INVALID_PEER_ID` | Некорректный peerId в вызове |
 | **114** | `COMPAT_RECONNECT_FAILED` | Второй connect после peer-close не удался |
-| **115** | `HANDSHAKE_SEND_FAILED` | Не удалось отправить handshake |
+| **115** | `HANDSHAKE_SEND_FAILED` | Не удалось собрать / отправить handshake |
 | **116** | `SESSION_MISSING` | Нет mesh-сессии после ошибки |
+| **117** | `SOCKET_CLOSED_REMOTE_EOF` | Пир закрыл TCP (FIN/RST) без локального тега |
+| **118** | `SOCKET_CLOSED_AFTER_ERROR` | Close после socket error |
+| **119** | `SOCKET_CLOSED_LINE_TOO_LARGE` | Слишком длинная TCP-строка |
+| **120** | `SOCKET_CLOSED_MESH_CRYPTO` | Ошибка AES / envelope |
+| **121** | `SOCKET_CLOSED_HANDSHAKE_BAD` | Входящий handshake не прошёл verify |
+| **122** | `SOCKET_CLOSED_PEER_BLOCKED` | Handshake от заблокированного |
+| **123** | `SOCKET_CLOSED_AUTH_GATE` | Кадр до auth на inbound TCP |
+| **124** | `SOCKET_CLOSED_LOCAL_TIMEOUT` | Мы закрыли по handshake timeout |
+| **125** | `SOCKET_ERROR` | Событие error у `net.Socket` |
+| **126** | `ENSURE_HANDSHAKE_FAILED` | Падение стадии handshake в ensurePeerSocket |
+| **127** | `ENSURE_COMPAT_RETRY` | Повтор plaintext-сессии |
+| **128** | `SOCKET_CLOSED_BEFORE_WRITE` | Сокет умер до записи handshake |
+| **129** | `SOCKET_CLOSED_DURING_WAIT` | Закрыт в ожидании ack |
+| **130** | `PEER_CLASSIFIED_MODERN` | Лог: пир как Morse (encrypt) |
+| **131** | `PEER_CLASSIFIED_LEGACY` | Лог: пир как legacy/compat |
 | **200** | `CALL_OPEN_FAILED` | Не открылся исходящий звонок |
 | **201** | `CALL_SIGNAL_FAILED` | Сбой TCP signalling звонка |
 | **202** | `CALL_PEER_UNREACHABLE` | Пир не online при старте звонка |
+| **203** | `CALL_ENSURE_FAILED` | Звонок упал на ensurePeerSocket |
 | **999** | `UNKNOWN` | Не классифицировано — смотри лог терминала |
 
-Звонки Morse → 1.1.x: держите **Настройки → Сеть → Разрешить старые версии BLIP** включённым. Для legacy Morse не шлёт encrypted handshake и сразу идёт в plaintext signalling.
+Звонки Morse → 1.1.x: держите **Настройки → Сеть → Разрешить старые версии BLIP** включённым. При любом close-family Morse один раз ретраит **plaintext**. В терминале смотри `E130/MODERN` vs `E131/LEGACY` и nested cause у `E109` / `E117`–`E129`.
 
 ### Файл не передаётся
 1. Проверьте лимит в **Настройки → Сеть** (1–100 ГБ).
