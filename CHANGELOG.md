@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [2.0.3] — Morse — 2026-07-27
+
+Patch (dev).
+
+### Fixed
+
+- **Overlay i18n** — HUD follows app language (RU/EN); pixel skin keeps square chips (no accidental pill radii).
+- **Call theater** — mic/sound/end stay reachable while watching a stream; exit stream shows a mini PiP (audio continues) and re-enter on click; NestUI fullscreen/exit buttons matched.
+- **Peers/chats flicker** — stop emitting `peers-updated` on silent IP route updates; drop overlay TCP ping churn.
+- **macOS** — Control+Shift+O overlay hotkey; ask for mic/camera access; publish zip last so `latest-mac.yml` is not DMG-only (“ZIP file not provided”).
+- **Missed calls** — red DM system line with phone icon when a call is missed or rejected while busy.
+
 ## [2.0.2] — Morse — 2026-07-26
 
 Patch.

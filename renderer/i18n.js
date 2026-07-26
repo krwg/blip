@@ -48,6 +48,11 @@ const locales = {
     'chat.send': 'SEND',
     'chat.typing': '{name} is typing',
     'chat.empty': 'No messages yet.',
+    'chat.missed_voice': 'Missed voice call',
+    'chat.missed_video': 'Missed video call',
+    'chat.missed_voice_busy': 'Missed voice call · busy',
+    'chat.missed_video_busy': 'Missed video call · busy',
+    'call.watch_stream': 'Watch stream',
     'chat.clear': 'CLEAR CHAT',
     'chat.clear_confirm': 'Delete all messages in this conversation? This cannot be undone.',
     'chat.search_placeholder': 'Search messages…',
@@ -363,8 +368,9 @@ const locales = {
     'settings.overlay_section': 'Overlay & activity',
     'settings.overlay_enable': 'Enable desktop overlay',
     'settings.overlay_enable_hint':
-      'Prepares the Discord-style HUD. It stays hidden until you press Shift+Alt+O.',
-    'settings.overlay_hotkey_hint': 'Toggle overlay: Shift+Alt+O (feature must be enabled above).',
+      'Prepares the Discord-style HUD. It stays hidden until you press the overlay hotkey.',
+    'settings.overlay_hotkey_hint':
+      'Toggle overlay: Shift+Alt+O (Windows/Linux) or Control+Shift+O (macOS). Feature must be enabled above.',
     'settings.presence_detect': 'Detect running apps / games',
     'settings.presence_detect_hint':
       'Reads the foreground window locally (Windows / macOS). Never uploaded.',
@@ -1131,6 +1137,11 @@ const locales = {
     'chat.send': 'ОТПР',
     'chat.typing': '{name} печатает',
     'chat.empty': 'Сообщений пока нет.',
+    'chat.missed_voice': 'Пропущенный голосовой',
+    'chat.missed_video': 'Пропущенный видеозвонок',
+    'chat.missed_voice_busy': 'Пропущенный голосовой · занято',
+    'chat.missed_video_busy': 'Пропущенный видеозвонок · занято',
+    'call.watch_stream': 'Смотреть трансляцию',
     'chat.clear': 'ОЧИСТИТЬ ЧАТ',
     'chat.clear_confirm': 'Удалить все сообщения в этом чате? Это нельзя отменить.',
     'chat.search_placeholder': 'Поиск в чате…',
@@ -1451,8 +1462,9 @@ const locales = {
     'settings.overlay_section': 'Оверлей и активность',
     'settings.overlay_enable': 'Включить оверлей',
     'settings.overlay_enable_hint':
-      'Готовит HUD в стиле Discord. По умолчанию скрыт — показ по Shift+Alt+O.',
-    'settings.overlay_hotkey_hint': 'Показать/скрыть оверлей: Shift+Alt+O (сначала включите опцию выше).',
+      'Готовит HUD в стиле Discord. По умолчанию скрыт — показ по горячей клавише.',
+    'settings.overlay_hotkey_hint':
+      'Показать/скрыть оверлей: Shift+Alt+O (Windows/Linux) или Control+Shift+O (macOS). Сначала включите опцию выше.',
     'settings.presence_detect': 'Определять приложения / игры',
     'settings.presence_detect_hint':
       'Читает переднее окно локально (Windows / macOS). Никуда не отправляется.',

@@ -46,8 +46,10 @@ export function registerGlobalShortcuts({
         }
       },
     ],
-    // Overlay toggle (Shift+Alt+O) — Discord-style HUD; feature must be enabled in Settings
+    // Overlay: Alt+Shift+O works on Win/Linux; on macOS Option+Shift+O is often eaten by input —
+    // register Control+Shift+O as the reliable Darwin binding (keep Alt+Shift+O too).
     ['Alt+Shift+O', () => onToggleOverlay?.()],
+    ['Control+Shift+O', () => onToggleOverlay?.()],
   ];
 
   for (const [accel, handler] of bindings) {

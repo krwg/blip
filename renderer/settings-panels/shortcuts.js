@@ -66,7 +66,10 @@ export function buildSettingsShortcutsPanel({ getState, saveConfig }) {
     ['settings.shortcuts_open_settings', 'Ctrl+,'],
     ['settings.shortcuts_toggle_dnd', 'Ctrl+Shift+D'],
     ['settings.shortcuts_hangup_global', 'Ctrl+Shift+End'],
-    ['settings.shortcuts_overlay', 'Shift+Alt+O'],
+    [
+      'settings.shortcuts_overlay',
+      process.platform === 'darwin' ? 'Control+Shift+O' : 'Shift+Alt+O',
+    ],
   ]);
 
   const globalRow = document.createElement('div');

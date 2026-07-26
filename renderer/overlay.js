@@ -1,5 +1,72 @@
 import { createAvatarElement } from './avatar.js';
 
+const STRINGS = {
+  en: {
+    status: 'Status',
+    mesh: 'Mesh',
+    unread: 'Unread',
+    ping: 'Ping',
+    online: 'Online',
+    away: 'Away',
+    busy: 'Busy',
+    dnd: 'DND',
+    solo: 'Solo',
+    peersOnline: (n) => (n === 1 ? '1 online' : `${n} online`),
+    peersCount: (n) => (n === 1 ? '1 peer' : `${n} peers`),
+    playing: 'Playing',
+    inApp: 'In app',
+    activity: 'Activity',
+    listening: 'Listening…',
+    listeningSub: 'No foreground game or app pinned',
+    game: 'Game',
+    app: 'App',
+    voice: 'Voice',
+    video: 'Video',
+    inCall: 'in call',
+    mute: 'mute',
+    unmute: 'unmute',
+    end: 'end',
+    legacy: 'Legacy',
+    transfer: 'Transfer',
+    dndFooter: 'Do not disturb',
+  },
+  ru: {
+    status: 'Статус',
+    mesh: 'Меш',
+    unread: 'Непрочит.',
+    ping: 'Пинг',
+    online: 'В сети',
+    away: 'Отошёл',
+    busy: 'Занят',
+    dnd: 'Не беспокоить',
+    solo: 'Один',
+    peersOnline: (n) => (n === 1 ? '1 онлайн' : `${n} онлайн`),
+    peersCount: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod10 === 1 && mod100 !== 11) return `${n} пир`;
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} пира`;
+      return `${n} пиров`;
+    },
+    playing: 'Играет',
+    inApp: 'В приложении',
+    activity: 'Активность',
+    listening: 'Слушаю…',
+    listeningSub: 'Нет закреплённой игры или приложения',
+    game: 'Игра',
+    app: 'Прилож.',
+    voice: 'Голос',
+    video: 'Видео',
+    inCall: 'в звонке',
+    mute: 'мьют',
+    unmute: 'вкл. мик',
+    end: 'сброс',
+    legacy: 'Legacy',
+    transfer: 'Передача',
+    dndFooter: 'Не беспокоить',
+  },
+};
+
 const panel = document.getElementById('panel');
 const kindEl = document.getElementById('kind');
 const titleEl = document.getElementById('title');
@@ -13,6 +80,7 @@ const callAvatar = document.getElementById('callAvatar');
 const callMesh = document.getElementById('callMesh');
 const callPing = document.getElementById('callPing');
 const legacyPill = document.getElementById('legacyPill');
+const callBadge = document.getElementById('callBadge');
 const muteBtn = document.getElementById('muteBtn');
 const endBtn = document.getElementById('endBtn');
 const micMeter = document.getElementById('micMeter');
@@ -24,6 +92,11 @@ const statPresence = document.getElementById('statPresence');
 const statPeers = document.getElementById('statPeers');
 const statUnreadWrap = document.getElementById('statUnreadWrap');
 const statUnread = document.getElementById('statUnread');
+const labelStatus = document.getElementById('labelStatus');
+const labelMesh = document.getElementById('labelMesh');
+const labelUnread = document.getElementById('labelUnread');
+const labelCallMesh = document.getElementById('labelCallMesh');
+const labelCallPing = document.getElementById('labelCallPing');
 const activityBlock = document.getElementById('activityBlock');
 const activityChips = document.getElementById('activityChips');
 const transferBox = document.getElementById('transferBox');
@@ -32,6 +105,11 @@ const transferPct = document.getElementById('transferPct');
 
 let lastCallPeerId = null;
 let mutedOptimistic = false;
+let lang = 'en';
+
+function S() {
+  return STRINGS[lang] || STRINGS.en;
+}
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -62,6 +140,7 @@ function applySkin(data) {
   html.dataset.uiSkin = skin;
   html.dataset.theme = theme;
   html.dataset.accent = accent;
+  html.lang = lang === 'ru' ? 'ru' : 'en';
   if (data?.accentHex) {
     html.style.setProperty('--accent', data.accentHex);
   } else {
@@ -69,10 +148,24 @@ function applySkin(data) {
   }
 }
 
+function applyStaticLabels() {
+  const s = S();
+  if (labelStatus) labelStatus.textContent = s.status;
+  if (labelMesh) labelMesh.textContent = s.mesh;
+  if (labelUnread) labelUnread.textContent = s.unread;
+  if (labelCallMesh) labelCallMesh.textContent = s.mesh;
+  if (labelCallPing) labelCallPing.textContent = s.ping;
+  if (callBadge) callBadge.textContent = s.inCall;
+  if (legacyPill) legacyPill.textContent = s.legacy;
+  if (endBtn) endBtn.textContent = s.end;
+  if (micMeter) micMeter.title = s.mute;
+  setMuteUi(mutedOptimistic);
+}
+
 function tickClock(now = Date.now()) {
   const d = new Date(now);
   clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  clockDate.textContent = d.toLocaleDateString(undefined, {
+  clockDate.textContent = d.toLocaleDateString(lang === 'ru' ? 'ru-RU' : undefined, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -103,13 +196,16 @@ function renderCallAvatar(peerId, peerName, nest) {
 function setMuteUi(muted) {
   mutedOptimistic = !!muted;
   muteBtn.classList.toggle('is-muted', mutedOptimistic);
-  muteBtn.textContent = mutedOptimistic ? 'unmute' : 'mute';
+  muteBtn.textContent = mutedOptimistic ? S().unmute : S().mute;
   micMeter.classList.toggle('is-muted', mutedOptimistic);
 }
 
 function applyPayload(data) {
+  lang = data?.language === 'ru' ? 'ru' : 'en';
   applySkin(data);
+  applyStaticLabels();
 
+  const s = S();
   const kind = String(data?.activityKind || '');
   const label = String(data?.activityLabel || '').trim();
   const status = String(data?.statusLine || '').trim();
@@ -132,14 +228,14 @@ function applyPayload(data) {
   }
 
   const presenceLabel = dnd
-    ? 'DND'
+    ? s.dnd
     : presence === 'away'
-      ? 'Away'
+      ? s.away
       : presence === 'busy'
-        ? 'Busy'
-        : 'Online';
+        ? s.busy
+        : s.online;
   statPresence.textContent = presenceLabel;
-  statPeers.textContent = peers > 0 ? `${peers} online` : 'Solo';
+  statPeers.textContent = peers > 0 ? s.peersOnline(peers) : s.solo;
 
   if (unread > 0) {
     statsEl.classList.add('has-unread');
@@ -161,7 +257,7 @@ function applyPayload(data) {
     panel.classList.remove('idle');
     activityBlock.classList.remove('hidden');
     kindEl.textContent =
-      kind === 'game' ? 'Playing' : kind === 'app' ? 'In app' : 'Activity';
+      kind === 'game' ? s.playing : kind === 'app' ? s.inApp : s.activity;
     kindEl.className = `kind${kind === 'game' ? ' kind--game' : ''}`;
     titleEl.textContent = label || status || '—';
     const bits = [];
@@ -172,15 +268,15 @@ function applyPayload(data) {
       bits.push(winTitle.length > 42 ? `${winTitle.slice(0, 40)}…` : winTitle);
     }
     subEl.textContent = bits.join(' · ');
-    if (kind === 'game') activityChips.appendChild(chip('Game', 'ok'));
-    else if (kind === 'app') activityChips.appendChild(chip('App'));
+    if (kind === 'game') activityChips.appendChild(chip(s.game, 'ok'));
+    else if (kind === 'app') activityChips.appendChild(chip(s.app));
   } else if (!data?.callActive) {
     panel.classList.add('idle');
     activityBlock.classList.remove('hidden');
     kindEl.textContent = '';
     kindEl.className = 'kind';
-    titleEl.textContent = 'Listening…';
-    subEl.textContent = 'No foreground game or app pinned';
+    titleEl.textContent = s.listening;
+    subEl.textContent = s.listeningSub;
   } else {
     panel.classList.remove('idle');
     activityBlock.classList.add('hidden');
@@ -192,7 +288,7 @@ function applyPayload(data) {
     const peerId = data.callPeerId != null ? Number(data.callPeerId) : null;
     const idBit = Number.isFinite(peerId) ? ` #${peerId}` : '';
     callPeer.textContent = `${peerName}${idBit}`;
-    const mode = data.callVideo ? 'Video' : 'Voice';
+    const mode = data.callVideo ? s.video : s.voice;
     callElapsed.textContent = data.callElapsed ? `${mode} · ${data.callElapsed}` : mode;
 
     if (peerId !== lastCallPeerId) {
@@ -200,7 +296,7 @@ function applyPayload(data) {
       renderCallAvatar(peerId, peerName, nest);
     }
 
-    callMesh.textContent = peers === 1 ? '1 peer' : `${peers} peers`;
+    callMesh.textContent = s.peersCount(peers);
     const pingMs = data.callPingMs;
     if (pingMs != null && Number.isFinite(Number(pingMs))) {
       const ms = Math.round(Number(pingMs));
@@ -230,7 +326,7 @@ function applyPayload(data) {
   const xferLabel = String(data?.transferLabel || '').trim();
   if (xferLabel && xferPct > 0 && xferPct < 100) {
     transferBox.classList.remove('hidden');
-    transferLabel.textContent = xferLabel;
+    transferLabel.textContent = xferLabel || s.transfer;
     transferPct.textContent = ` · ${xferPct}%`;
   } else {
     transferBox.classList.add('hidden');
@@ -244,7 +340,7 @@ function applyPayload(data) {
     footerApp.textContent = `${app}${elapsedBit}`;
   } else if (dnd) {
     footerApp.classList.remove('hidden');
-    footerApp.textContent = 'Do not disturb';
+    footerApp.textContent = s.dndFooter;
   } else {
     footerApp.classList.add('hidden');
     footerApp.textContent = '';
