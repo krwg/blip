@@ -69,10 +69,6 @@ nsis:
   include: build/installer.nsh
   license: LICENSE
   removeDefaultUninstallWelcomePage: true
-  uninstallUrlInfoAbout: https://krwg.github.io/blip/
-  uninstallUrlHelp: https://github.com/krwg/blip#readme
-  uninstallUrlReadme: https://github.com/krwg/blip#readme
-  uninstallUrlUpdateInfo: https://github.com/krwg/blip/releases
 portable:
   artifactName: ${productName}-${version}-Portable.${ext}
 
