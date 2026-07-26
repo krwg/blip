@@ -9,7 +9,7 @@ Discord-style **always-on-top overlay** and opt-in **foreground app/game** detec
 - Status text shared on the LAN only when **Share activity in status** is enabled.
 - Windows: foreground window title + process name via PowerShell.
 - macOS: frontmost app name via `osascript`.
-- Linux: not wired yet.
+- Linux: best-effort via `xdotool` (X11) or GNOME `gdbus`; Wayland without helpers stays empty.
 
 ## Overlay window
 

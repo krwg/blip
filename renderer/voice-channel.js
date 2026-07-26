@@ -19,6 +19,12 @@ import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream } from './audio-capture.js';
 import { rtcConfiguration } from '../shared/ice-servers.js';
+import {
+  peerNum,
+  normalizeSdp,
+  buildVoiceMediaStates,
+  clientPcNeedsRebuild as pcNeedsRebuildFromState,
+} from './voice-channel-signalling.js';
 
 let clientConnectInFlight = false;
 
@@ -67,31 +73,12 @@ const peerVideoStreams = new Map();
 
 let localScreenPreview = null;
 
-function peerNum(id) {
-  return Number(id);
-}
-
 function myId() {
   return peerNum(configRef?.blipId);
 }
 
 function isHost(group) {
   return amHost(group, myId());
-}
-
-function normalizeSdp(sdp) {
-  if (!sdp) return null;
-  if (typeof sdp === 'string') return { type: 'offer', sdp };
-  let type = sdp.type;
-  let body = sdp.sdp;
-  if (body && typeof body === 'object' && typeof body.sdp === 'string') {
-    type = body.type ?? type;
-    body = body.sdp;
-  }
-  if (typeof type === 'string' && typeof body === 'string' && body.length > 0) {
-    return { type, sdp: body };
-  }
-  return null;
 }
 
 function myMediaState() {
@@ -145,14 +132,11 @@ function stopSilentTrack() {
 }
 
 function buildStates(participants) {
-  const states = {};
-  const id = myId();
-  for (const pid of participants) {
-    states[String(pid)] =
-      pid === id ? myMediaState() : peerMediaState.get(pid) || { muted: false, deafened: false, screenSharing: false };
-  }
-  if (Number.isFinite(id)) states[String(id)] = myMediaState();
-  return states;
+  return buildVoiceMediaStates(participants, {
+    myId: myId(),
+    myState: myMediaState,
+    getPeerState: (pid) => peerMediaState.get(pid),
+  });
 }
 
 async function sendTcp(payload) {
@@ -388,9 +372,7 @@ function clearAllRemotePeerAudio() {
 }
 
 function clientPcNeedsRebuild() {
-  if (!clientPc) return true;
-  const st = clientPc.connectionState;
-  return st === 'failed' || st === 'closed' || st === 'disconnected';
+  return pcNeedsRebuildFromState(clientPc?.connectionState);
 }
 
 async function getMic() {

@@ -1,13 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, session } from 'electron';
 import { join, dirname } from 'path';
-import { pathToFileURL } from 'url';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
 import { Discovery } from './discovery.js';
 import { createTcpServer } from './tcp-server.js';
-import { connectToPeer, sendOnSocket, pingPeer } from './tcp-client.js';
+import { connectToPeer } from './tcp-client.js';
 import { createTcpLineReader } from './tcp-framing.js';
-import { loadConfig, saveConfig, initConfigPath, getLocalIp, getLocalIpv4Set } from './config.js';
+import { loadConfig, saveConfig, initConfigPath } from './config.js';
 import { toPublicConfig } from './config-public.js';
 import { resolveEntitlementState } from './mesh-plus-license.js';
 import {
@@ -21,7 +20,6 @@ import {
 import {
   canUseAppIconVariant,
   normalizeAppIconVariant,
-  APP_ICON_VARIANTS,
 } from './app-icons.js';
 import { resolveAppIconVariant, resolveVariantWindowIconPath } from './app-icons.js';
 import { applyAppIcons } from './apply-app-icons.js';
@@ -49,27 +47,25 @@ import { registerFileIpc } from './ipc/files.js';
 import { registerOverlayIpc } from './ipc/overlay.js';
 import { registerMeshPlusIpc } from './ipc/mesh-plus.js';
 import { registerProfileIpc } from './ipc/profile.js';
+import { registerNetworkIpc } from './ipc/network.js';
+import { registerShellIpc } from './ipc/shell.js';
+import { registerAppMetaIpc } from './ipc/app-meta.js';
+import { registerWindowIpc } from './ipc/windows.js';
 
 import {
   setupAutoUpdater,
-  checkForUpdatesNow,
-  quitAndInstallUpdater,
   configureAutoUpdater,
-  isPortableInstall,
 } from './updater.js';
 import { resolveBuildAsset } from './paths.js';
 import { resolvePorts } from './ports.js';
 import { serializeSdp, sendCallPayload } from './call-wire.js';
-import { fetchGithubReleases } from './github-releases.js';
 import {
   clearActiveProfileGif,
   getProfileGifPublicState,
 } from './profile-gif-store.js';
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts.js';
 import {
-  listDisplaySources,
   resolveDisplaySourceForCallback,
-  setPendingDisplaySource,
 } from './display-capture.js';
 import { performFactoryReset } from './factory-reset.js';
 import {
@@ -77,7 +73,6 @@ import {
   extractBlipSeedIdFromArgv,
   readBlipSeedFile,
 } from './blip-open.js';
-import os from 'os';
 
 if (process.env.BLIP_USER_DATA_DIR) {
   app.setPath('userData', process.env.BLIP_USER_DATA_DIR);
@@ -1100,26 +1095,17 @@ function setupIpc() {
     sendToRenderer,
   });
 
-  ipcMain.handle('get-github-releases', async (_, limit) => fetchGithubReleases(limit ?? 8));
-  ipcMain.handle('get-peers', () => ({
-    peers: discovery?.getPeers() || [],
-    occupiedIds: discovery?.getOccupiedIds() || [],
-  }));
+  registerAppMetaIpc({
+    getConfig: () => config,
+    loadAppMetadata,
+    refreshAppIcons,
+  });
 
-  ipcMain.handle('get-network-diagnostics', () => {
-    const { tcpPort, udpPort } = resolvePorts(config);
-    const peers = discovery?.getPeers() || [];
-    return {
-      blipId: config.blipId,
-      hostname: os.hostname(),
-      localIp: getLocalIp(),
-      localIpv4s: [...getLocalIpv4Set()],
-      tcpPort,
-      udpPort,
-      discoveryActive: !!discovery?.socket,
-      onlinePeers: peers.filter((p) => p.online).length,
-      totalPeers: peers.length,
-    };
+  registerNetworkIpc({
+    getConfig: () => config,
+    getDiscovery: () => discovery,
+    findPeer,
+    ensurePeerSocket,
   });
 
   registerBeaconIpc({
@@ -1134,44 +1120,6 @@ function setupIpc() {
     setTrayTransferProgress,
   });
 
-  ipcMain.handle('send-tcp-message', async (_, payload) => {
-    try {
-      const socket = await ensurePeerSocket(payload.to);
-      const type = payload.type || 'message';
-      const packet = {
-        type,
-        from: config.blipId,
-        to: payload.to,
-      };
-      const skip = new Set(['to', 'type']);
-      for (const [key, val] of Object.entries(payload)) {
-        if (skip.has(key) || val === undefined) continue;
-        packet[key] = val;
-      }
-      packet.from = config.blipId;
-      packet.to = payload.to;
-      packet.type = type;
-
-      if (type === 'message' && packet.text === undefined) {
-        packet.text = '';
-        packet.timestamp = payload.timestamp ?? Date.now();
-      }
-      if (type === 'typing' && packet.active === undefined) {
-        packet.active = !!payload.active;
-      }
-      if (type === 'profile-gif-share' && packet.dataUrl) {
-        const line = JSON.stringify(packet) + '\n';
-        if (Buffer.byteLength(line, 'utf8') > 3_900_000) {
-          return { ok: false, error: 'profile_gif_too_large' };
-        }
-      }
-      await sendOnSocket(socket, packet);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
   registerCallIpc({
     getConfig: () => config,
     sendCallToPeer,
@@ -1183,49 +1131,6 @@ function setupIpc() {
     getCallWindow: () => callWindow,
   });
 
-  ipcMain.handle('ping-peer', async (_, blipId) => {
-    const peer = findPeer(blipId);
-    if (!peer) return false;
-    return pingPeer(peer.ip, peer.tcpPort || resolvePorts(config).tcpPort);
-  });
-
-  ipcMain.handle('check-id-conflict', async (_, blipId) => {
-    const peers = discovery?.getPeers() || [];
-    const conflict = peers.find((p) => p.blipId === blipId && p.online);
-    if (!conflict) return { taken: false };
-    const responds = await pingPeer(
-      conflict.ip,
-      conflict.tcpPort || resolvePorts(config).tcpPort
-    );
-    return { taken: responds.ok };
-  });
-
-  ipcMain.handle('get-app-metadata', () => ({
-    ...loadAppMetadata(),
-    isPackaged: app.isPackaged,
-    isPortable: isPortableInstall(),
-  }));
-
-  ipcMain.handle('get-app-icon-url', () => {
-    const { iconUrl } = refreshAppIcons();
-    return iconUrl || '';
-  });
-
-  ipcMain.handle('get-app-icon-variants', () => {
-    return APP_ICON_VARIANTS.map((v) => {
-      const p = resolveVariantWindowIconPath(v.id);
-      return {
-        id: v.id,
-        tier: v.tier,
-        previewUrl: existsSync(p) ? pathToFileURL(p).href : '',
-      };
-    });
-  });
-
-  ipcMain.handle('is-voice-call-active', () => {
-    return !!(callWindow && !callWindow.isDestroyed());
-  });
-
   registerProfileIpc({
     getConfig: () => config,
     setConfig: (cfg) => {
@@ -1234,120 +1139,26 @@ function setupIpc() {
     getDiscovery: () => discovery,
   });
 
-  ipcMain.handle('check-for-updates', () => checkForUpdatesNow(() => config));
-  ipcMain.handle('quit-and-install', () => {
-    quitAndInstallUpdater();
-    return { ok: true };
+  registerShellIpc({
+    getConfig: () => config,
+    showDesktopNotification,
   });
 
-  ipcMain.handle('show-message-notification', (_, payload) => {
-    if (config?.doNotDisturb) return { ok: false, reason: 'dnd' };
-    return showDesktopNotification(payload);
-  });
-
-  ipcMain.handle('list-display-sources', () => listDisplaySources());
-
-  ipcMain.handle('prepare-display-capture', (_, sourceId) => {
-    if (typeof sourceId !== 'string' || !sourceId) return { ok: false };
-    setPendingDisplaySource(sourceId);
-    return { ok: true };
-  });
-
-  ipcMain.handle('open-external', async (_, url) => {
-    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false };
-    await shell.openExternal(url);
-    return { ok: true };
-  });
-
-  ipcMain.handle('show-item-in-folder', async (_, filePath) => {
-    if (typeof filePath !== 'string' || !filePath.trim()) return { ok: false };
-    try {
-      shell.showItemInFolder(filePath);
-      return { ok: true };
-    } catch {
-      return { ok: false };
-    }
-  });
-
-  ipcMain.handle('get-group-for-call', async (_, groupId) => readGroupFromMainWindow(groupId));
-
-  ipcMain.handle('open-group-call', async (_, payload) => {
-    try {
-      await sendToGroupCallWindow(
-        'group-call-join',
-        { groupId: payload?.groupId, skipInvite: !!payload?.skipInvite },
-        { focus: true }
-      );
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err?.message || String(err) };
-    }
-  });
-
-  ipcMain.handle('open-group-call-incoming', async (_, payload) => {
-    await sendToGroupCallWindow('group-call-incoming', payload || {}, { focus: true });
-    return { ok: true };
-  });
-
-  ipcMain.handle('leave-group-call', async () => {
-    await sendToGroupCallWindow('group-call-leave', {}, { focus: false });
-    return { ok: true };
-  });
-
-  ipcMain.handle('close-group-call-window', () => {
-    if (groupCallWindow && !groupCallWindow.isDestroyed()) {
-      groupCallWindow.hide();
-    }
-    return true;
-  });
-
-  ipcMain.on('group-call-active', (_, data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('group-call-active', data);
-    }
-  });
-
-  ipcMain.on('sync-group-call-roster', (_, data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('group-call-roster-sync', data);
-    }
-  });
-
-  ipcMain.on('call-window-ready', () => {
-    callWindowReady = true;
-    flushCallWindowQueue();
-  });
-
-  ipcMain.on('group-call-window-ready', () => {
-    groupCallWindowReady = true;
-    flushGroupCallWindowQueue();
-  });
-
-  ipcMain.on('window-minimize', () => mainWindow?.minimize());
-  ipcMain.on('window-maximize', () => {
-    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
-    else mainWindow?.maximize();
-  });
-  ipcMain.on('window-close', () => mainWindow?.close());
-  ipcMain.on('call-window-minimize', () => callWindow?.minimize());
-  ipcMain.on('call-window-maximize', () => {
-    if (!callWindow || callWindow.isDestroyed()) return;
-    if (callWindow.isMaximized()) callWindow.unmaximize();
-    else callWindow.maximize();
-  });
-  ipcMain.on('call-window-close', () => {
-    if (callWindow && !callWindow.isDestroyed()) callWindow.hide();
-  });
-
-  ipcMain.on('group-call-window-minimize', () => groupCallWindow?.minimize());
-  ipcMain.on('group-call-window-maximize', () => {
-    if (!groupCallWindow || groupCallWindow.isDestroyed()) return;
-    if (groupCallWindow.isMaximized()) groupCallWindow.unmaximize();
-    else groupCallWindow.maximize();
-  });
-  ipcMain.on('group-call-window-close', () => {
-    void sendToGroupCallWindow('group-call-leave', {}, { focus: false });
-    if (groupCallWindow && !groupCallWindow.isDestroyed()) groupCallWindow.hide();
+  registerWindowIpc({
+    getMainWindow: () => mainWindow,
+    getCallWindow: () => callWindow,
+    getGroupCallWindow: () => groupCallWindow,
+    readGroupFromMainWindow,
+    sendToGroupCallWindow,
+    flushCallWindowQueue,
+    flushGroupCallWindowQueue,
+    setCallWindowReady: (ready) => {
+      callWindowReady = ready;
+    },
+    setGroupCallWindowReady: (ready) => {
+      groupCallWindowReady = ready;
+    },
+    isVoiceCallActive: () => !!(callWindow && !callWindow.isDestroyed()),
   });
 }
 
