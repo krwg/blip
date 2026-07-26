@@ -99,6 +99,16 @@ await sharp(main.svg, { density: 576 })
   .toFile(iconPngPath);
 console.log('[build-icons] Wrote', iconPngPath);
 
+const png2icons = (await import('png2icons')).default;
+const icnsBuf = png2icons.createICNS(readFileSync(iconPngPath), png2icons.BILINEAR, 0);
+if (!icnsBuf) {
+  console.error('[build-icons] png2icons failed to create ICNS');
+  process.exit(1);
+}
+const icnsPath = join(buildDir, 'icon.icns');
+writeFileSync(icnsPath, icnsBuf);
+console.log('[build-icons] Wrote', icnsPath);
+
 for (const size of [512, 256, 128, 64, 48, 32, 16]) {
   await sharp(main.svg, { density: 576 })
     .resize(size, size, { kernel: sharp.kernel.nearest })

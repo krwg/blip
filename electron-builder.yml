@@ -74,7 +74,7 @@ portable:
 
 mac:
   category: public.app-category.social-networking
-  icon: icon.png
+  icon: icon.icns
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
@@ -99,7 +99,7 @@ mac:
 dmg:
   title: ${productName} ${version}
   background: dmg-background.png
-  icon: icon.png
+  icon: icon.icns
   iconSize: 96
   window:
     width: 540
