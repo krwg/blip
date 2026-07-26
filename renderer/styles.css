@@ -4058,6 +4058,19 @@ select.blip-select:focus {
   border: 2px solid var(--blip-border);
 }
 
+.beacon-swarm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.beacon-swarm-pct {
+  font-size: 10px;
+  line-height: 1.2;
+  opacity: 0.85;
+  min-width: 28px;
+}
+
 .beacon-status-badge--active {
   border-color: var(--blip-accent);
   color: var(--blip-accent);

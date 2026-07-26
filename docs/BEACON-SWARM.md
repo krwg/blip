@@ -11,6 +11,8 @@ Move LAN file distribution beyond one-uploader TCP seeding toward **BitTorrent-l
 | Module | Role today |
 |--------|------------|
 | `beacon-store.js` | Local seed meta, chunk files, have-bitmap helpers |
+| `shared/beacon-swarm.js` | Swarm scheduling + bitmap decode (renderer-safe) |
+| `shared/beacon-swarm-crypto.js` | Per-chunk / `infoHash` SHA-256 (main process) |
 | `beacon-mesh.js` / UDP announce | Seed discovery on LAN |
 | `beacon-tcp-serve.js` / `file-tcp-send.js` | One peer serves chunks over TCP |
 | `tcp-framing.js` | NDJSON framing |
@@ -72,4 +74,6 @@ Already partially present for single-source fetch. Swarm mode:
 
 - ~~Extend announce payload + peer UI “have %”~~ (have-bitmap already on wire)
 - ~~Parallel fetch scheduler using rarest-first (`shared/beacon-swarm.js`)~~ wired in `beacon-mesh.js`
-- Remaining: UI swarm badge + resume polish + integrity `infoHash` end-to-end
+- ~~UI swarm badge (peer count + mesh have %)~~ `beacon-ui.js` + `computeSwarmCoverage`
+- ~~Integrity `infoHash`~~ per-chunk hashes at publish, verify on assemble, chunk check on download
+- Remaining: resume polish (partial local bitmap UX), aggregate speed in row badge

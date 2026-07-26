@@ -3,6 +3,7 @@ import { stat, open, readFile } from 'fs/promises';
 import { rename, rm } from 'fs/promises';
 import { basename, extname, join } from 'path';
 import { getSeedDir, writeSeedMeta, seedDirExists } from './beacon-store.js';
+import { computeInfoHashFromChunkHashes, hashChunkBytes } from '../shared/beacon-swarm-crypto.js';
 import { mkdir, writeFile } from 'fs/promises';
 
 const WRITE_POOL = 8;
@@ -85,6 +86,7 @@ export async function ingestPublishFromPath(filePath, opts = {}) {
   const totalChunks = Math.ceil(st.size / chunkSize);
   const stagingId = `ing_${randomBytes(8).toString('hex')}`;
   const hash = createHash('sha256');
+  const chunkHashes = [];
 
   onProgress?.({ phase: 'hashing', percent: 4 });
 
@@ -102,6 +104,7 @@ export async function ingestPublishFromPath(filePath, opts = {}) {
         if (bytesRead <= 0) throw new Error('read');
         const slice = buf.subarray(0, bytesRead);
         hash.update(slice);
+        chunkHashes[i] = hashChunkBytes(slice);
         writes.push(writeRawChunk(stagingId, i, slice));
       }
       await Promise.all(writes);
@@ -121,6 +124,8 @@ export async function ingestPublishFromPath(filePath, opts = {}) {
     totalChunks,
     mime: guessMime(filename),
     publishedAt: Date.now(),
+    chunkHashes,
+    infoHash: computeInfoHashFromChunkHashes(chunkHashes),
   };
 
   await finalizeStagingSeed(stagingId, seedId, meta);
