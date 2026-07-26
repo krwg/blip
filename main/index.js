@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, session, systemPreferences } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
@@ -1381,6 +1381,7 @@ function setupIpc() {
     ensurePeerSocket,
     sendToCallWindow,
     getCallWindow: () => callWindow,
+    sendToRenderer,
   });
 
   registerProfileIpc({
@@ -1458,12 +1459,27 @@ function setupMediaPermissions() {
   });
 }
 
+async function ensureDarwinMediaAccess() {
+  if (process.platform !== 'darwin') return;
+  try {
+    for (const mediaType of ['microphone', 'camera']) {
+      const status = systemPreferences.getMediaAccessStatus(mediaType);
+      if (status === 'granted') continue;
+      const ok = await systemPreferences.askForMediaAccess(mediaType);
+      console.info(`[BLIP] macOS ${mediaType} access:`, status, '→', ok ? 'granted' : 'denied');
+    }
+  } catch (err) {
+    console.warn('[BLIP] macOS media access', err?.message || err);
+  }
+}
+
 app.whenReady().then(async () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.blip.messenger');
   }
 
   setupMediaPermissions();
+  await ensureDarwinMediaAccess();
 
   initConfigPath();
   config = loadConfig();

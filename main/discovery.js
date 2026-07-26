@@ -350,9 +350,14 @@ export class Discovery {
     const meshPubkey = String(data.meshPubkey || '');
     const meshTcpEncrypted = existing?.meshTcpEncrypted === true && !meshLegacy;
 
-    // Prefer packet source IP when present — multi-homed peers often advertise the wrong NIC.
+    // Prefer packet source when we have no stable dial IP yet; keep existing primary if still listed.
     const ips = uniqueIps(observed, announceIp, data.ips, existing?.ips);
-    const primaryIp = observed || announceIp || ips[0] || data.ip;
+    const primaryIp =
+      (existing?.ip && ips.includes(existing.ip) && existing.ip) ||
+      observed ||
+      announceIp ||
+      ips[0] ||
+      data.ip;
 
     const peer = {
       blipId: data.blipId,
@@ -378,15 +383,8 @@ export class Discovery {
       meshPlusTrust: peerMeshPlusTrustFromAnnounce(data),
     };
 
-    const ipsChanged =
+    const uiChanged =
       !existing ||
-      JSON.stringify(existing.ips || []) !== JSON.stringify(ips);
-
-    let changed = false;
-    if (
-      !existing ||
-      existing.ip !== peer.ip ||
-      ipsChanged ||
       existing.displayName !== peer.displayName ||
       existing.presence !== peer.presence ||
       existing.presenceText !== peer.presenceText ||
@@ -400,30 +398,24 @@ export class Discovery {
       existing.hasProfileGif !== peer.hasProfileGif ||
       existing.buildTrust !== peer.buildTrust ||
       existing.buildVerified !== peer.buildVerified ||
-      existing.meshPlusTrust !== peer.meshPlusTrust
-    ) {
+      existing.meshPlusTrust !== peer.meshPlusTrust;
+
+    let changed = false;
+    if (!existing) {
       this.peers.set(data.blipId, peer);
+      changed = true;
+    } else if (uiChanged) {
+      if (existing.ip && ips.includes(existing.ip)) peer.ip = existing.ip;
+      this.peers.set(data.blipId, { ...peer, meshCompat: existing.meshCompat });
       changed = true;
     } else {
       const wasOffline = !existing.online;
       existing.lastSeen = Date.now();
       existing.online = true;
-      existing.presence = presence;
-      existing.presenceText = presenceText;
       existing.tcpPort = peerTcp;
       existing.udpPort = peerUdp;
-      existing.meshVerified = meshVerified;
-      existing.meshLegacy = meshLegacy;
-      existing.meshProto = meshProto;
-      if (meshLegacy) existing.meshTcpEncrypted = false;
-      existing.meshPubkey = meshPubkey;
-      existing.meshPlus = peer.meshPlus;
-      existing.hasProfileGif = peer.hasProfileGif;
-      existing.buildTrust = peer.buildTrust;
-      existing.buildIssuer = peer.buildIssuer;
-      existing.buildVerified = peer.buildVerified;
-      existing.meshPlusTrust = peer.meshPlusTrust;
       existing.ips = ips;
+      if (!ips.includes(existing.ip)) existing.ip = primaryIp;
       if (wasOffline) changed = true;
     }
 
@@ -458,11 +450,9 @@ export class Discovery {
     const nip = normalizePeerIp(ip);
     if (!nip) return;
     const ips = uniqueIps(nip, peer.ip, peer.ips);
-    const changed = peer.ip !== nip || JSON.stringify(peer.ips || []) !== JSON.stringify(ips);
-    if (!changed) return;
-    peer.ip = nip;
     peer.ips = ips;
-    this.emitPeers();
+    // Update dial target quietly — do not rebuild contacts/chats UI.
+    if (peer.ip !== nip) peer.ip = nip;
   }
 
   notePeerChannelCrypto(blipId, encrypted) {

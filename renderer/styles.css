@@ -2152,6 +2152,29 @@ select.blip-select:focus {
   background: var(--blip-chat-incoming);
 }
 
+.chat-block--missed-call {
+  border-color: color-mix(in srgb, var(--blip-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--blip-danger) 12%, transparent);
+  color: var(--blip-danger);
+}
+
+.chat-missed-call {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-missed-call-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--blip-danger);
+}
+
+.chat-missed-call-text {
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
 .chat-text {
   user-select: text;
   display: block;
@@ -2304,7 +2327,7 @@ select.blip-select:focus {
   width: min(92vw, 1280px);
   aspect-ratio: 16 / 9;
   height: auto;
-  max-height: min(80vh, 720px);
+  max-height: min(62vh, 560px);
   background: #000;
   border: 2px solid var(--blip-accent);
 }
@@ -2316,7 +2339,73 @@ select.blip-select:focus {
 .call-inner--stage {
   width: min(96vw, 1320px);
   max-width: none;
+  max-height: 100%;
+  overflow: auto;
   padding: 16px 20px 20px;
+  gap: 12px;
+}
+
+.call-overlay--theater .call-controls,
+.call-inner--stage .call-controls {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  padding: 10px 0 4px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 55%, transparent);
+}
+
+.call-video-fs-btn,
+.call-video-stream-exit-btn {
+  min-width: 148px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.call-stream-pip {
+  position: relative;
+  display: block;
+  width: min(42vw, 220px);
+  margin: 10px auto 0;
+  padding: 0;
+  border: 2px solid var(--blip-accent);
+  background: #000;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.call-stream-pip-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+}
+
+.call-stream-pip-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blip-accent);
+  background: rgba(0, 0, 0, 0.72);
+}
+
+html[data-ui-skin='nest'] .call-stream-pip {
+  border-radius: var(--nest-radius-md);
+  border-width: 1px;
+}
+
+html[data-ui-skin='nest'] .call-video-fs-btn,
+html[data-ui-skin='nest'] .call-video-stream-exit-btn {
+  border-radius: var(--nest-radius-sm) !important;
+  border-color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 16%, var(--blip-glass));
+  color: var(--blip-accent);
+  min-width: 148px;
 }
 
 .call-video {

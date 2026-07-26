@@ -45,8 +45,14 @@ export function releaseTagCandidates(tag) {
 
 export async function releaseHasUpdateManifest(tag) {
   const repo = loadGithubRepo();
+  const channel =
+    process.platform === 'darwin'
+      ? 'latest-mac.yml'
+      : process.platform === 'linux'
+        ? 'latest-linux.yml'
+        : 'latest.yml';
   for (const t of releaseTagCandidates(tag)) {
-    const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(t)}/latest.yml`;
+    const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(t)}/${channel}`;
     try {
       const res = await fetch(url, {
         method: 'HEAD',

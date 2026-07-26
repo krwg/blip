@@ -5,8 +5,6 @@ import {
   detectForegroundApp,
   classifyActivity,
 } from './presence-detect.js';
-import { pingPeer } from './tcp-client.js';
-import { resolvePorts } from './ports.js';
 
 let overlayWindow = null;
 let presenceTimer = null;
@@ -207,14 +205,8 @@ export function startPresenceLoop({
     }
 
     const call = getCallInfo?.() || null;
-    if (call?.active && call.peerIp) {
-      const pingAge = Date.now() - (getCallPingAt?.() || 0);
-      if (pingAge > 3500) {
-        const port = call.peerTcpPort || resolvePorts(cfg).tcpPort;
-        const r = await pingPeer(call.peerIp, port);
-        setCallPing?.(r.ok ? r.ms : null);
-      }
-    } else {
+    // Prefer cached ping — avoid dialing TCP every tick (triggers peer IP churn / UI flicker).
+    if (!call?.active) {
       setCallPing?.(null);
     }
     const callFresh = getCallInfo?.() || call;
@@ -244,6 +236,7 @@ export function startPresenceLoop({
       theme: themeMode,
       accentId: cfg.accentId || 'mint',
       accentHex: resolveAccentHex(cfg),
+      language: cfg.language === 'ru' ? 'ru' : 'en',
       callActive: !!callFresh?.active,
       callPeerName: callFresh?.peerName || '',
       callPeerId: callFresh?.peerId || null,
