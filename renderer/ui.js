@@ -1,7 +1,7 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
 import { createIdGrid } from './grid.js';
 import { createChatView, getMessages, addMessage } from './chat.js';
-import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
+import { isFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
 import {
   getGroup,
   getGroupsFor,
@@ -9,7 +9,6 @@ import {
   getGroupMessages,
   isGroupMember,
   purgeGroupsFor,
-  saveGroup,
 } from './groups.js';
 import {
   createGroupAvatarElement,
@@ -19,7 +18,6 @@ import {
 } from './group-avatar.js';
 import { createProjectsView } from './projects-view.js';
 import { handleMeshProjectTcp } from './projects-mesh-wire.js';
-import { openGroupCreateDialog } from './group-create-dialog.js';
 import { createGroupCommunityView } from './group-community-view.js';
 import {
   createGroupFromUi,
@@ -27,14 +25,12 @@ import {
   migrateGroupsHostOnPeerOffline,
   sendGroupChatMessage,
   sendGroupPin,
-  leaveGroup,
   acceptGroupInvite,
   declineGroupInviteFlow,
 } from './groups-wire.js';
 import { getPendingGroupInvites } from './group-invites.js';
 import {
   leaveVoiceChannel,
-  joinVoiceChannel,
   getActiveVoiceChannel,
 } from './voice-channel.js';
 import { getVoiceChannels } from './groups.js';
@@ -115,15 +111,12 @@ import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
 import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
-import {
-  isVersionNewer,
-  filterReleasesForChannel,
-} from './app-version.js';
+import { createContextMenus } from './context-menus.js';
+import { createUpdateChecker } from './update-checker.js';
 import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
 import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
 import { setDefaultToastDurationMs } from './toast-config.js';
-import { openConfirmDialog } from './confirm-dialog.js';
 import {
   clearRendererLocalStorage,
   resetRendererMemoryStores,
@@ -235,7 +228,12 @@ let mainContent = null;
 let gridComponent = null;
 let api = null;
 let appearanceListenerDispose = null;
-let lastUpdateToastDismiss = null;
+let openPeerProfileFromUiForMenus = () => {};
+const runPeerPingForMenusRef = { fn: async () => {} };
+const closeGroupChatUiRef = { fn: (_groupId) => {} };
+let peerForContextMenu = () => ({ blipId: 0 });
+let showGroupContextMenu = () => {};
+let showPeerContextMenu = () => {};
 
 const peerLatencyMs = new Map();
 
@@ -982,6 +980,26 @@ function getPeerProfileHooks(peer) {
   };
 }
 
+({
+  peerForContextMenu,
+  showGroupContextMenu,
+  showPeerContextMenu,
+} = createContextMenus({
+  getState: () => state,
+  getApi: () => api,
+  findPeerByBlipId,
+  normalizeBlipId,
+  renderView,
+  openGroupChat,
+  closeGroupChatUi: (groupId) => closeGroupChatUiRef.fn(groupId),
+  openPeerProfileFromUi: (peer) => openPeerProfileFromUiForMenus(peer),
+  openChat,
+  openCallOutgoing,
+  promptMeshLabel,
+  runPeerPing: (peer) => runPeerPingForMenusRef.fn(peer),
+  createGroupFromUi,
+}));
+
 peerProfileView = createPeerProfileView({
   getState: () => state,
   findPeerByBlipId,
@@ -1007,6 +1025,8 @@ const {
   refreshOpenProfilePageIfNeeded,
 } = peerProfileView;
 
+openPeerProfileFromUiForMenus = openPeerProfileFromUi;
+
 function openSettingsToSection(sectionId, scrollSelector = null) {
   clearProfileNavigationState();
   state.activePeer = null;
@@ -1031,25 +1051,6 @@ function openChatFromProfile(peerId) {
   void openChat(peerId);
 }
 
-function peerForContextMenu(peerOrId) {
-  if (peerOrId && typeof peerOrId === 'object' && peerOrId.blipId != null) {
-    const live = findPeerByBlipId(peerOrId.blipId);
-    return live ? { ...live, ...peerOrId, blipId: normalizeBlipId(peerOrId.blipId) } : peerOrId;
-  }
-  const id = normalizeBlipId(peerOrId);
-  if (id == null) return { blipId: 0, displayName: '?', online: false, presence: 'offline', presenceText: '', hasProfileGif: false };
-  const found = findPeerByBlipId(id);
-  if (found) return found;
-  return {
-    blipId: id,
-    displayName: formatPeerDisplayName(null, id),
-    online: false,
-    presence: 'offline',
-    presenceText: '',
-    hasProfileGif: false,
-  };
-}
-
 function closeGroupChatUi(groupId) {
   const active = getActiveVoiceChannel();
   if (active?.groupId === groupId) void leaveVoiceChannel();
@@ -1061,210 +1062,7 @@ function closeGroupChatUi(groupId) {
   }
 }
 
-function showGroupContextMenu(e, group) {
-  const menu = document.createElement('div');
-  menu.className = 'context-menu glass';
-  menu.style.left = `${e.clientX}px`;
-  menu.style.top = `${e.clientY}px`;
-
-  function bindItem(btn, handler) {
-    btn.addEventListener('mousedown', (ev) => ev.stopPropagation());
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      menu.remove();
-      handler();
-    });
-  }
-
-  const openItem = document.createElement('button');
-  openItem.type = 'button';
-  openItem.textContent = t('group.menu_open');
-  bindItem(openItem, () => openGroupChat(group.id));
-
-  const renameItem = document.createElement('button');
-  renameItem.type = 'button';
-  renameItem.textContent = t('group.menu_rename');
-  bindItem(renameItem, () => {
-    const val = prompt(t('group.rename_prompt'), group.name || groupDisplayName(group));
-    if (val === null) return;
-    const trimmed = val.trim();
-    group.name = trimmed || undefined;
-    saveGroup(group);
-    state.groupChatViews.get(group.id)?.updateGroup?.(getGroup(group.id));
-    if (state.view === 'chat') renderView('chat');
-    showAppToast({ title: t('group.rename_done'), durationMs: 2800 });
-  });
-
-  const callItem = document.createElement('button');
-  callItem.type = 'button';
-  callItem.textContent = t('group.call');
-  bindItem(callItem, () => {
-    openGroupChat(group.id);
-    const vch = getVoiceChannels(group)[0];
-    if (vch) void joinVoiceChannel(group.id, vch.id, api, state.config);
-  });
-
-  const leaveItem = document.createElement('button');
-  leaveItem.type = 'button';
-  leaveItem.textContent = t('group.menu_leave');
-  bindItem(leaveItem, async () => {
-    const ok = await openConfirmDialog({
-      title: t('group.leave_confirm_title'),
-      body: t('group.leave_confirm_body').replace('{name}', groupDisplayName(group)),
-      confirmLabel: t('group.menu_leave'),
-    });
-    if (!ok) return;
-    try {
-      const res = await leaveGroup(api, state.config, group.id, state.peers);
-      if (!res?.ok) {
-        showAppToast({
-          title: t('group.leave_failed'),
-          body: t(`group.err_${res?.error || 'unknown'}`),
-          variant: 'danger',
-          durationMs: 5000,
-        });
-        return;
-      }
-      closeGroupChatUi(group.id);
-      if (state.view === 'chat') renderView('chat');
-    } catch (err) {
-      console.error('[group] leave:', err);
-      showAppToast({
-        title: t('group.leave_failed'),
-        body: err?.message || String(err),
-        variant: 'danger',
-        durationMs: 5000,
-      });
-    }
-  });
-
-  menu.appendChild(openItem);
-  menu.appendChild(renameItem);
-  menu.appendChild(callItem);
-  menu.appendChild(leaveItem);
-  document.body.appendChild(menu);
-  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
-}
-
-function showPeerContextMenu(e, peerOrId, options = {}) {
-  const peer = peerForContextMenu(peerOrId);
-  const menu = document.createElement('div');
-  menu.className = 'context-menu glass';
-  menu.style.left = `${e.clientX}px`;
-  menu.style.top = `${e.clientY}px`;
-
-  function bindItem(btn, handler) {
-    btn.addEventListener('mousedown', (ev) => ev.stopPropagation());
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      menu.remove();
-      handler();
-    });
-  }
-
-  const profileItem = document.createElement('button');
-  profileItem.type = 'button';
-  profileItem.dataset.i18n = 'peers.profile';
-  profileItem.textContent = t('peers.profile');
-  bindItem(profileItem, () => openPeerProfileFromUi(peer));
-
-  const msgItem = document.createElement('button');
-  msgItem.type = 'button';
-  msgItem.textContent = t('dial.message');
-  bindItem(msgItem, () => openChat(peer.blipId));
-
-  const callItem = document.createElement('button');
-  callItem.type = 'button';
-  callItem.textContent = t('dial.call');
-  bindItem(callItem, () => {
-    if (peer.online) openCallOutgoing(peer.blipId, false);
-  });
-
-  const labelItem = document.createElement('button');
-  labelItem.type = 'button';
-  labelItem.textContent = t('peers.mesh_label');
-  bindItem(labelItem, () => {
-    void promptMeshLabel(peer);
-  });
-
-  const pingItem = document.createElement('button');
-  pingItem.type = 'button';
-  pingItem.textContent = t('peers.ping');
-  bindItem(pingItem, () => {
-    void runPeerPing(peer);
-  });
-
-  const copyIdItem = document.createElement('button');
-  copyIdItem.type = 'button';
-  copyIdItem.textContent = t('peers.copy_id');
-  bindItem(copyIdItem, () => {
-    void navigator.clipboard.writeText(String(peer.blipId));
-    showAppToast({ title: t('peers.copy_id_done'), durationMs: 2500 });
-  });
-
-  const groupItem = document.createElement('button');
-  groupItem.type = 'button';
-  groupItem.textContent = t('group.create_menu');
-  bindItem(groupItem, () => {
-    void (async () => {
-      const result = await openGroupCreateDialog({
-        selfId: state.config.blipId,
-        peers: state.peers,
-        seedPeerId: peer.blipId,
-      });
-      if (!result) return;
-      const g = await createGroupFromUi(api, state.config, result.memberIds, result.name);
-      if (!g) return;
-      openGroupChat(g.id);
-    })();
-  });
-
-  const favItem = document.createElement('button');
-  favItem.type = 'button';
-  favItem.textContent = isFavorite(peer.blipId) ? t('peers.unfavorite') : t('peers.favorite');
-  bindItem(favItem, () => {
-    const nowFav = toggleFavorite(peer.blipId);
-    showAppToast({
-      title: nowFav ? t('peers.favorite_added') : t('peers.favorite_removed'),
-      durationMs: 2500,
-    });
-    if (state.view === 'peers') renderView('peers');
-    if (state.view === 'chat' && !state.activePeer) renderView('chat');
-  });
-
-  const blockItem = document.createElement('button');
-  blockItem.type = 'button';
-  blockItem.textContent = isBlocked(peer.blipId) ? t('peers.unblock') : t('peers.block');
-  bindItem(blockItem, () => {
-    if (isBlocked(peer.blipId)) {
-      unblockPeer(peer.blipId);
-      showAppToast({ title: t('peers.unblock_done'), durationMs: 3000 });
-    } else {
-      blockPeer(peer.blipId);
-      showAppToast({ title: t('peers.block_done'), durationMs: 3000 });
-    }
-    if (state.view === 'peers') renderView('peers');
-  });
-
-  menu.addEventListener('mousedown', (ev) => ev.stopPropagation());
-  menu.addEventListener('click', (ev) => ev.stopPropagation());
-
-  menu.appendChild(profileItem);
-  if (!options.hideMessage) menu.appendChild(msgItem);
-  menu.appendChild(callItem);
-  menu.appendChild(labelItem);
-  menu.appendChild(pingItem);
-  menu.appendChild(copyIdItem);
-  menu.appendChild(groupItem);
-  menu.appendChild(favItem);
-  menu.appendChild(blockItem);
-  document.body.appendChild(menu);
-
-  const close = () => menu.remove();
-  setTimeout(() => {
-    document.addEventListener('click', close, { once: true });
-  }, 0);
-}
+closeGroupChatUiRef.fn = closeGroupChatUi;
 
 function buildAvatarSettingsSection() {
   const block = document.createElement('div');
@@ -1390,103 +1188,16 @@ function applySoundPrefsFromConfig(cfg = state.config) {
   });
 }
 
-function showUpdateStatusToast(payload) {
-  if (!payload?.state) return;
-  lastUpdateToastDismiss?.();
-  lastUpdateToastDismiss = null;
-
-  const actions = [];
-  let title = '';
-  let body = '';
-  let variant = 'accent';
-  let durationMs = 10000;
-
-  switch (payload.state) {
-    case 'checking':
-      title = t('toast.update_checking');
-      durationMs = 5000;
-      break;
-    case 'available':
-      title = t('toast.update_available');
-      body = t('toast.update_available_body').replace('{v}', payload.version || '—');
-      actions.push({
-        label: t('settings.section_updates'),
-        primary: true,
-        onClick: () => {
-          state.settingsSection = 'updates';
-          renderView('settings');
-        },
-      });
-      break;
-    case 'none':
-      title = t('toast.update_latest');
-      durationMs = 5000;
-      break;
-    case 'progress':
-      title = t('toast.update_progress');
-      body = `${payload.percent ?? 0}%`;
-      durationMs = 0;
-      break;
-    case 'downloaded':
-      title = t('toast.update_ready');
-      body = t('toast.update_ready_body').replace('{v}', payload.version || '—');
-      actions.push({
-        label: t('settings.updates_install'),
-        primary: true,
-        onClick: () => window.blip.quitAndInstall?.(),
-      });
-      durationMs = 0;
-      break;
-    case 'error':
-      title = t('toast.update_error');
-      body = payload.message || '';
-      variant = 'danger';
-      break;
-    default:
-      return;
-  }
-
-  const toast = showAppToast({ title, body, variant, durationMs, actions });
-  lastUpdateToastDismiss = toast?.dismiss ?? null;
-}
-
-async function checkUpdatesViaGithub(currentVersion) {
-  const result = await window.blip.getGithubReleases?.(3);
-  if (!result?.ok || !result.releases?.length) {
-    showUpdateStatusToast({ state: 'error', message: t('settings.updates_releases_error') });
-    return;
-  }
-  const channel = filterReleasesForChannel(result.releases, !!state.config?.receiveBetaUpdates);
-  const latest = channel[0];
-  const tag = latest?.tag?.replace(/^v/i, '') || '';
-  if (isVersionNewer(tag, currentVersion)) {
-    showUpdateStatusToast({ state: 'available', version: tag });
-  } else {
-    showUpdateStatusToast({ state: 'none' });
-  }
-}
-
-async function runStartupUpdateCheck() {
-  if (!window.blip?.getAppMetadata) return;
-  const meta = await window.blip.getAppMetadata();
-  const current = meta?.version || '0.0.0';
-
-  showUpdateStatusToast({ state: 'checking' });
-
-  if (meta?.isPackaged && window.blip.checkForUpdates) {
-    if (meta?.isPortable) {
-      await checkUpdatesViaGithub(current);
-      return;
-    }
-    const r = await window.blip.checkForUpdates();
-    if (r?.skipped) {
-      await checkUpdatesViaGithub(current);
-    }
-    return;
-  }
-
-  await checkUpdatesViaGithub(current);
-}
+const {
+  showUpdateStatusToast,
+  checkUpdatesViaGithub,
+  runStartupUpdateCheck,
+} = createUpdateChecker({
+  getState: () => state,
+  renderView,
+  t,
+  showAppToast,
+});
 
 export function navigateToView(view) {
   viewRouter.navigateToView(view);
@@ -2111,6 +1822,8 @@ async function runPeerPing(peer) {
     refreshPeerPulseDom();
   }
 }
+
+runPeerPingForMenusRef.fn = runPeerPing;
 
 function mountMainContentView(el, { cleanupProfile = false } = {}) {
   if (!mainContent || !el) return;
