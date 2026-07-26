@@ -12,6 +12,12 @@ import {
   deriveDirectionalKeys,
 } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
+import {
+  tryLegacyCompatAuth,
+  markOutboundCompatSession,
+  assertMayUseUnencryptedPeer,
+  isUnencryptedMeshAllowed,
+} from './mesh-compat.js';
 
 const sessions = new Map();
 
@@ -32,6 +38,7 @@ export function initInboundSession(socket, remoteIp) {
     encrypted: false,
     cipher: null,
     ecdhPrivateKey: null,
+    compat: false,
   };
   sessions.set(socket, session);
   return session;
@@ -178,19 +185,24 @@ export function assertAuthenticated(socket, msg) {
   return { ok: true, session, from };
 }
 
-export function performOutboundHandshake(socket, config, expectedPeerId, discovery) {
+export function performOutboundHandshake(socket, config, expectedPeerId, discovery, opts = {}) {
+  const softFail = !!opts.softFail;
   const remoteIp = normalizePeerIp(socket.remoteAddress);
   const session = initInboundSession(socket, remoteIp);
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       outboundWait.delete(socket);
-      reject(new Error('Handshake timeout'));
-      try {
-        socket.destroy();
-      } catch {
-        /* ignore */
+      const err = new Error('Handshake timeout');
+      err.code = 'HANDSHAKE_TIMEOUT';
+      if (!softFail) {
+        try {
+          socket.destroy();
+        } catch {
+          /* ignore */
+        }
       }
+      reject(err);
     }, HANDSHAKE_TIMEOUT_MS);
 
     outboundWait.set(socket, {
@@ -222,3 +234,47 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
     });
   });
 }
+
+/**
+ * Handshake when possible; if peer never answers and unencrypted mesh is allowed,
+ * fall back to plaintext compat session (older BLIP builds).
+ */
+export async function performOutboundHandshakeOrCompat(
+  socket,
+  config,
+  expectedPeerId,
+  discovery,
+  { registerConnection } = {}
+) {
+  const peer = discovery?.getPeers()?.find((p) => p.blipId === expectedPeerId);
+  const gate = assertMayUseUnencryptedPeer(config, peer);
+  if (!gate.ok && (peer?.meshLegacy || peer?.meshCompat)) {
+    throw new Error(gate.error);
+  }
+
+  const softFail =
+    isUnencryptedMeshAllowed(config) &&
+    (!!peer?.meshLegacy ||
+      !!peer?.meshCompat ||
+      Number(peer?.meshProto || 0) < 2 ||
+      !peer?.meshPubkey);
+  try {
+    return await performOutboundHandshake(socket, config, expectedPeerId, discovery, {
+      softFail,
+    });
+  } catch (err) {
+    if (!softFail || socket.destroyed) throw err;
+    const session = getSocketSession(socket);
+    if (!session) throw err;
+    markOutboundCompatSession(session, expectedPeerId);
+    registerConnection?.(expectedPeerId, socket);
+    notePeerChannel(discovery, expectedPeerId, false);
+    discovery?.notePeerCompat?.(expectedPeerId, true);
+    console.warn(
+      `[Handshake] compat plaintext session with #${expectedPeerId}: ${err?.message || err}`
+    );
+    return expectedPeerId;
+  }
+}
+
+export { tryLegacyCompatAuth, assertMayUseUnencryptedPeer, isUnencryptedMeshAllowed };

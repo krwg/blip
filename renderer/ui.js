@@ -268,18 +268,20 @@ async function openCallOutgoing(peerId, video = false) {
   try {
     const result = await window.blip.openCallOutgoing({ peerId: id, video });
     if (!result?.ok) {
+      const blocked = /unencrypted_mesh_disabled/i.test(result?.error || '');
       showAppToast({
-        title: t('call.signal_lost'),
-        body: result?.error || t('call.signal_lost_hint'),
+        title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
+        body: blocked ? '' : result?.error || t('call.signal_lost_hint'),
         variant: 'danger',
         durationMs: 5000,
       });
     }
   } catch (e) {
     console.error('[BLIP] openCallOutgoing', e);
+    const blocked = /unencrypted_mesh_disabled/i.test(e?.message || '');
     showAppToast({
-      title: t('call.signal_lost'),
-      body: e?.message || t('call.signal_lost_hint'),
+      title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
+      body: blocked ? '' : e?.message || t('call.signal_lost_hint'),
       variant: 'danger',
       durationMs: 5000,
     });
@@ -1037,6 +1039,7 @@ async function promptMeshLabel(peer) {
 function getPeerProfileHooks(peer) {
   return {
     selfBlipId: state.config?.blipId ?? null,
+    allowUnencryptedMesh: state.config?.allowUnencryptedMesh !== false,
     isBlocked: (id) => isBlocked(id),
     presenceClass: peerPresenceClass,
     statusTooltip: peerStatusTooltip,
