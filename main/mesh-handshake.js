@@ -25,6 +25,9 @@ import {
   createBlipError,
   classifyBlipError,
   logBlipError,
+  destroySocketTagged,
+  formatPeerDialDebug,
+  isSocketCloseFamily,
 } from '../shared/blip-errors.js';
 
 const sessions = new Map();
@@ -62,9 +65,18 @@ export function clearSocketSession(socket) {
   const pending = outboundWait.get(socket);
   if (pending) {
     outboundWait.delete(socket);
-    pending.reject(
-      createBlipError(BlipErrorCode.SOCKET_CLOSED, 'Socket closed during handshake')
-    );
+    const tagged = Number(socket?._blipCloseCode);
+    const code = Number.isFinite(tagged)
+      ? tagged
+      : pending.handshakeSent
+        ? BlipErrorCode.SOCKET_CLOSED_DURING_WAIT
+        : BlipErrorCode.SOCKET_CLOSED_BEFORE_WRITE;
+    const detail =
+      socket?._blipCloseDetail ||
+      (pending.handshakeSent
+        ? 'Socket closed while waiting for handshake ack'
+        : 'Socket closed before handshake write completed');
+    pending.reject(createBlipError(code, detail));
   }
 }
 
@@ -111,11 +123,19 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
   if (msg.type === 'mesh-handshake') {
     const v = verifyHandshakePacket(msg);
     if (!v.ok) {
-      socket.destroy();
+      destroySocketTagged(
+        socket,
+        BlipErrorCode.SOCKET_CLOSED_HANDSHAKE_BAD,
+        'Inbound mesh-handshake failed verify'
+      );
       return true;
     }
     if (isPeerBlocked(config, v.from)) {
-      socket.destroy();
+      destroySocketTagged(
+        socket,
+        BlipErrorCode.SOCKET_CLOSED_PEER_BLOCKED,
+        `Blocked peer #${v.from} handshake`
+      );
       return true;
     }
     if (!peerIpMatchesDiscovery(discovery, v.from, session.remoteIp)) {
@@ -132,7 +152,11 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
         `TOFU pubkey mismatch for #${v.from}`
       );
       logBlipError(err, 'inbound handshake');
-      socket.destroy();
+      destroySocketTagged(
+        socket,
+        BlipErrorCode.HANDSHAKE_PUBKEY_MISMATCH,
+        err.message
+      );
       return true;
     }
     if (accept.rebind) {
@@ -170,7 +194,7 @@ export function handleMeshHandshakeMessage(msg, socket, ctx) {
         'Invalid handshake ack'
       );
       pending?.reject(err);
-      socket.destroy();
+      destroySocketTagged(socket, BlipErrorCode.HANDSHAKE_INVALID_ACK, err.message);
       return true;
     }
     if (!peerIpMatchesDiscovery(discovery, v.from, session.remoteIp)) {
@@ -248,17 +272,18 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
       );
       err.code = 'HANDSHAKE_TIMEOUT';
       if (!softFail) {
-        try {
-          socket.destroy();
-        } catch {
-          /* ignore */
-        }
+        destroySocketTagged(
+          socket,
+          BlipErrorCode.SOCKET_CLOSED_LOCAL_TIMEOUT,
+          err.message
+        );
       }
       reject(err);
     }, HANDSHAKE_TIMEOUT_MS);
 
     outboundWait.set(socket, {
       expectedPeerId,
+      handshakeSent: false,
       resolve: (id) => {
         clearTimeout(timer);
         resolve(id);
@@ -279,8 +304,36 @@ export function performOutboundHandshake(socket, config, expectedPeerId, discove
       return;
     }
 
-    const built = buildHandshakePacket(config, config.blipId);
+    if (socket.destroyed) {
+      clearTimeout(timer);
+      outboundWait.delete(socket);
+      reject(
+        createBlipError(
+          BlipErrorCode.SOCKET_CLOSED_BEFORE_WRITE,
+          `Socket already destroyed before handshake write to #${expectedPeerId}`
+        )
+      );
+      return;
+    }
+
+    let built;
+    try {
+      built = buildHandshakePacket(config, config.blipId);
+    } catch (err) {
+      clearTimeout(timer);
+      outboundWait.delete(socket);
+      reject(
+        createBlipError(
+          BlipErrorCode.HANDSHAKE_SEND_FAILED,
+          err?.message || 'buildHandshakePacket failed',
+          err
+        )
+      );
+      return;
+    }
     session.ecdhPrivateKey = built.ecdhPrivateKey;
+    const waiter = outboundWait.get(socket);
+    if (waiter) waiter.handshakeSent = true;
     sendOnSocket(socket, built.packet).catch((err) => {
       clearTimeout(timer);
       outboundWait.delete(socket);
@@ -333,8 +386,12 @@ export async function performOutboundHandshakeOrCompat(
   }
 
   const softFail = shouldSoftFailHandshake(config, peer);
+  const legacy = peerPrefersPlaintextCompat(peer);
+  console.error(
+    `[BLIP E${legacy ? BlipErrorCode.PEER_CLASSIFIED_LEGACY : BlipErrorCode.PEER_CLASSIFIED_MODERN}/${legacy ? 'LEGACY' : 'MODERN'}] dial ${formatPeerDialDebug(peer)} softFail=${softFail} forcePlaintext=${!!forcePlaintext}`
+  );
 
-  if (forcePlaintext || (softFail && peerPrefersPlaintextCompat(peer))) {
+  if (forcePlaintext || (softFail && legacy)) {
     if (socket.destroyed) {
       throw createBlipError(
         BlipErrorCode.HANDSHAKE_PEER_CLOSED,
@@ -350,9 +407,25 @@ export async function performOutboundHandshakeOrCompat(
     });
   } catch (err) {
     const classified = classifyBlipError(err);
+    // Any close-family failure can retry plaintext when consent is on (covers
+    // misclassified ≤1.1.x peers that announce like Morse but RST handshake).
+    if (isUnencryptedMeshAllowed(config) && (socket.destroyed || isSocketCloseFamily(classified.blipCode))) {
+      const closed = createBlipError(
+        BlipErrorCode.HANDSHAKE_PEER_CLOSED,
+        `Peer #${expectedPeerId} closed TCP during handshake (will retry plaintext if allowed)`,
+        classified
+      );
+      closed.needCompatReconnect = true;
+      logBlipError(closed, 'need compat reconnect');
+      throw closed;
+    }
     if (!softFail) {
       logBlipError(classified, `handshake #${expectedPeerId}`);
-      throw classified;
+      throw createBlipError(
+        BlipErrorCode.ENSURE_HANDSHAKE_FAILED,
+        `Handshake failed for #${expectedPeerId}`,
+        classified
+      );
     }
     if (socket.destroyed) {
       const closed = createBlipError(

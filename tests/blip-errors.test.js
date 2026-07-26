@@ -5,6 +5,8 @@ import {
   classifyBlipError,
   formatBlipErrorCode,
   BLIP_ERROR_CATALOG,
+  isSocketCloseFamily,
+  tagSocketClose,
 } from '../shared/blip-errors.js';
 import {
   peerPrefersPlaintextCompat,
@@ -20,21 +22,41 @@ describe('blip-errors', () => {
   });
 
   it('formats client-facing digits only', () => {
-    const err = createBlipError(BlipErrorCode.SOCKET_CLOSED, 'Socket closed');
-    expect(formatBlipErrorCode(err)).toBe('104');
+    const err = createBlipError(BlipErrorCode.SOCKET_CLOSED_DURING_WAIT, 'wait');
+    expect(formatBlipErrorCode(err)).toBe('129');
     expect(classifyBlipError(new Error('Socket closed')).blipCode).toBe(104);
   });
 
   it('classifies unencrypted_mesh_disabled', () => {
     expect(classifyBlipError(new Error('unencrypted_mesh_disabled')).blipCode).toBe(111);
   });
+
+  it('treats granular close codes as close-family', () => {
+    expect(isSocketCloseFamily(104)).toBe(true);
+    expect(isSocketCloseFamily(117)).toBe(true);
+    expect(isSocketCloseFamily(129)).toBe(true);
+    expect(isSocketCloseFamily(109)).toBe(true);
+    expect(isSocketCloseFamily(105)).toBe(false);
+  });
+
+  it('tagSocketClose stores code on socket object', () => {
+    const sock = {};
+    tagSocketClose(sock, BlipErrorCode.SOCKET_CLOSED_REMOTE_EOF, 'eof');
+    expect(sock._blipCloseCode).toBe(117);
+    expect(sock._blipCloseDetail).toBe('eof');
+  });
 });
 
 describe('legacy plaintext preference', () => {
-  it('treats meshLegacy / proto<2 / missing pubkey as plaintext peers', () => {
+  it('treats meshLegacy / proto<2 / missing pubkey / unverified as plaintext peers', () => {
     expect(peerPrefersPlaintextCompat({ meshLegacy: true })).toBe(true);
     expect(peerPrefersPlaintextCompat({ meshProto: 1, meshPubkey: 'x' })).toBe(true);
-    expect(peerPrefersPlaintextCompat({ meshProto: 2, meshPubkey: 'x' })).toBe(false);
+    expect(peerPrefersPlaintextCompat({ meshProto: 2, meshPubkey: 'x', meshVerified: true })).toBe(
+      false
+    );
+    expect(peerPrefersPlaintextCompat({ meshProto: 2, meshPubkey: 'x', meshVerified: false })).toBe(
+      true
+    );
     expect(peerPrefersPlaintextCompat({ meshProto: 2 })).toBe(true);
   });
 
@@ -43,15 +65,12 @@ describe('legacy plaintext preference', () => {
       shouldSoftFailHandshake({ allowUnencryptedMesh: true }, { meshLegacy: true })
     ).toBe(true);
     expect(
-      shouldSoftFailHandshake(
-        { allowUnencryptedMesh: false },
-        { meshLegacy: true }
-      )
+      shouldSoftFailHandshake({ allowUnencryptedMesh: false }, { meshLegacy: true })
     ).toBe(false);
     expect(
       shouldSoftFailHandshake(
         { allowUnencryptedMesh: true },
-        { meshProto: 2, meshPubkey: 'abc' }
+        { meshProto: 2, meshPubkey: 'abc', meshVerified: true }
       )
     ).toBe(false);
   });

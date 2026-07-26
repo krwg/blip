@@ -204,11 +204,11 @@ export function registerCallIpc(deps) {
       return { ok: true };
     } catch (err) {
       clearActiveCallPeer();
-      const payload = blipErrorIpcPayload(err);
-      return {
-        ...payload,
-        errorCode: payload.errorCode ?? BlipErrorCode.CALL_OPEN_FAILED,
-      };
+      const wrapped =
+        err?.blipCode != null
+          ? err
+          : createBlipError(BlipErrorCode.CALL_ENSURE_FAILED, err?.message || 'call ensure failed', err);
+      return blipErrorIpcPayload(wrapped);
     }
   });
 
