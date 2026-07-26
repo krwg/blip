@@ -2,6 +2,10 @@
 import { getMaxFileBytes } from './file-transfer-limits.js';
 import { parseBlipSeedFile } from './beacon-seed-file.js';
 import { recordBandwidthSample } from './bandwidth-monitor.js';
+import {
+  decodeHaveBitmap,
+  pickRarestFirstChunks,
+} from '../shared/beacon-swarm.js';
 
 export const BEACON_CHUNK_SIZE = 1048576;
 const PULSE_INTERVAL_MS = 30_000;
@@ -532,7 +536,40 @@ function pickDownloadPeers(seedId, missingSet) {
   return candidates;
 }
 
-function planChunkAssignments(peers, missingSet, batchSize) {
+function planChunkAssignments(seedId, peers, missingSet, batchSize) {
+  const entry = catalog.get(seedId);
+  const total = entry?.totalChunks || 0;
+  const peerHaves = peers.map((p) => {
+    const b64 = peerHaveBitmaps.get(peerHaveKey(seedId, p.id));
+    return b64 && total ? decodeHaveBitmap(b64, total) : null;
+  });
+  const hasAnyBitmap = peerHaves.some(Boolean);
+
+  if (hasAnyBitmap && total > 0) {
+    const localHave = Array.from({ length: total }, (_, i) => !missingSet.has(i));
+    const ordered = pickRarestFirstChunks({
+      localHave,
+      peerHaves: peerHaves.map((h) => h || Array(total).fill(false)),
+      limit: Math.max(batchSize * peers.length * PIPELINED_BATCHES_PER_PEER, batchSize),
+    });
+    const assignments = [];
+    const remaining = new Set(ordered);
+    for (const peer of peers) {
+      const peerIdx = peers.indexOf(peer);
+      for (let p = 0; p < PIPELINED_BATCHES_PER_PEER; p++) {
+        const chunks = [];
+        for (const idx of [...remaining]) {
+          if (peerHaves[peerIdx] && !peerHaves[peerIdx][idx]) continue;
+          chunks.push(idx);
+          remaining.delete(idx);
+          if (chunks.length >= batchSize) break;
+        }
+        if (chunks.length) assignments.push({ peerId: peer.id, chunks });
+      }
+    }
+    if (assignments.length) return assignments;
+  }
+
   const queue = [...missingSet];
   const assignments = [];
   for (const peer of peers) {
@@ -1193,7 +1230,7 @@ export async function downloadBeaconSeed(seedId) {
     if (!peers.length) throw new Error('no_seeders');
 
     const before = missing.size;
-    const assignments = planChunkAssignments(peers, missing, CHUNK_REQUEST_BATCH);
+    const assignments = planChunkAssignments(seedId, peers, missing, CHUNK_REQUEST_BATCH);
     const got = await Promise.all(
       assignments.map(({ peerId, chunks }) => requestChunksFromPeer(peerId, seedId, chunks))
     );

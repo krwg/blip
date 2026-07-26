@@ -68,6 +68,35 @@ export function buildSettingsNetworkPanel({
     buildSettingsFieldWithHint('clipboard.mode', 'clipboard.hint', clipSelect)
   );
 
+  const legacyRow = document.createElement('div');
+  legacyRow.className = 'settings-toggle-with-hint';
+  const legacyToggle = createPixelToggle({
+    checked: state.config.allowUnencryptedMesh !== false,
+    labelKey: 'settings.allow_unencrypted_mesh',
+    onChange: async (checked) => {
+      if (!checked) {
+        const ok = await openConfirmDialog({
+          title: t('settings.allow_unencrypted_mesh'),
+          body: t('settings.allow_unencrypted_mesh_disable_confirm'),
+        });
+        if (!ok) {
+          legacyToggle.input.checked = true;
+          return;
+        }
+      }
+      state.config = await saveConfig({ allowUnencryptedMesh: checked });
+      showAppToast({
+        title: checked
+          ? t('settings.allow_unencrypted_mesh_on')
+          : t('settings.allow_unencrypted_mesh_off'),
+        durationMs: 4200,
+      });
+    },
+  });
+  legacyRow.appendChild(legacyToggle.el);
+  legacyRow.appendChild(createPixelHintIcon('settings.allow_unencrypted_mesh_hint'));
+  frag.appendChild(legacyRow);
+
   const iceRow = document.createElement('div');
   iceRow.className = 'settings-toggle-with-hint';
   const iceLines = document.createElement('textarea');
