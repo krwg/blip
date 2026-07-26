@@ -26,6 +26,7 @@ npm run electron:publish:linux      # Linux → GitHub Release
 ```
 
 Release CI (tag push) builds **windows / linux / macos** runners in [`.github/workflows/release.yml`](../.github/workflows/release.yml).
+macOS publish uses [`scripts/publish-mac.mjs`](../scripts/publish-mac.mjs): zip both arches, then **sequential** DMGs with unique volume titles (`BLIP-<ver>-arm64` / `BLIP-<ver>-x64`) to avoid `hdiutil detach` races.
 
 ## macOS installer (DMG)
 

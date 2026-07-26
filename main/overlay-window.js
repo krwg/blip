@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, screen, app } from 'electron';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
@@ -34,8 +34,8 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
   }
   const display = screen.getPrimaryDisplay();
   const work = display.workArea;
-  const width = 340;
-  const height = 200;
+  const width = 420;
+  const height = 420;
   overlayWindow = new BrowserWindow({
     width,
     height,
@@ -142,6 +142,7 @@ export function startPresenceLoop({
   getPeersOnline,
   getUnreadTotal,
   getCallInfo,
+  getTransferInfo,
   onOverlayPayload,
 }) {
   stopPresenceLoop();
@@ -164,6 +165,12 @@ export function startPresenceLoop({
     }
 
     const call = getCallInfo?.() || null;
+    const transfer = getTransferInfo?.() || null;
+    const presence = cfg.doNotDisturb
+      ? 'busy'
+      : cfg.presence === 'away' || cfg.presence === 'busy'
+        ? cfg.presence
+        : 'online';
     const payload = {
       activityKind: activity?.kind || '',
       activityLabel: activity?.label || '',
@@ -173,10 +180,21 @@ export function startPresenceLoop({
       statusLine: activity?.statusLine || cfg.presenceText || '',
       unread: getUnreadTotal?.() || 0,
       peersOnline: getPeersOnline?.() || 0,
+      selfName: cfg.displayName || `BLIP-${cfg.blipId || '?'}`,
+      selfBlipId: cfg.blipId ?? null,
+      presence,
+      doNotDisturb: !!cfg.doNotDisturb,
+      appVersion: String(app.getVersion() || '').replace(/^v/, ''),
       callActive: !!call?.active,
       callPeerName: call?.peerName || '',
       callPeerId: call?.peerId || null,
       callElapsed: call?.active ? formatCallElapsed(call.startedAt) : '',
+      callVideo: !!call?.video,
+      callEncrypted: !!call?.encrypted,
+      callLegacy: !!call?.legacy,
+      callPeerPresence: call?.presence || '',
+      transferLabel: transfer?.label || '',
+      transferPercent: transfer?.percent || 0,
       now: Date.now(),
     };
     onOverlayPayload?.(payload);
