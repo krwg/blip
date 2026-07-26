@@ -97,10 +97,11 @@ mac:
     NSLocalNetworkUsageDescription: BLIP discovers peers and transfers files on your local network only.
 
 dmg:
-  title: ${productName} ${version}
+  # No spaces in the volume name — hdiutil detach flakes on "/Volumes/BLIP 2.0.0" in CI.
+  title: BLIP-${version}
   background: dmg-background.png
   icon: icon.icns
-  iconSize: 96
+  format: ULFO
   window:
     width: 540
     height: 380
@@ -112,7 +113,6 @@ dmg:
       y: 200
       type: link
       path: /Applications
-  format: ULFO
 
 linux:
   icon: icons
