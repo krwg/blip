@@ -262,7 +262,7 @@ export function createContextMenus(deps) {
       } else {
         blockPeer(peer.blipId);
         showAppToast({ title: t('peers.block_done'), durationMs: 3000 });
-      });
+      }
       if (state.view === 'peers') renderView('peers');
     });
 
