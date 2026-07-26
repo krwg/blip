@@ -144,6 +144,9 @@ import {
 } from './appearance.js';
 import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
 import { createViewRouter } from './view-router.js';
+import { createPeersView } from './peers-view.js';
+import { createMeshPulse } from './mesh-pulse.js';
+import { createChatHubView } from './chat-hub-view.js';
 
 async function broadcastCustomAvatar() {
   const dataUrl = getSelfAvatarCache();
@@ -235,13 +238,6 @@ let peerForContextMenu = () => ({ blipId: 0 });
 let showGroupContextMenu = () => {};
 let showPeerContextMenu = () => {};
 
-const peerLatencyMs = new Map();
-/** Consecutive silent-ping failures per peer before clearing last-known ms. */
-const peerLatencyFails = new Map();
-
-const MESH_PULSE_INTERVAL_MS = 2_500;
-let meshPulseTimer = null;
-
 const viewRouter = createViewRouter({
   getState: () => state,
   getApi: () => api,
@@ -272,6 +268,16 @@ const {
 let peerProfileView;
 
 const peersTyping = new Set();
+
+const meshPulse = createMeshPulse({
+  getState: () => state,
+  getMainContent: () => mainContent,
+  t,
+  isBlocked,
+  showAppToast,
+  sounds,
+});
+runPeerPingForMenusRef.fn = meshPulse.runPeerPing;
 
 async function openCallOutgoing(peerId, video = false) {
   if (!window.blip?.openCallOutgoing) return;
@@ -387,12 +393,6 @@ function peerStatusTooltip(peer) {
           : t('peers.offline');
   const custom = (peer?.presenceText || '').trim();
   return custom && peer.online ? `${base} · ${custom}` : base;
-}
-
-function formatPeerSubline(peer) {
-  const custom = (peer?.presenceText || '').trim();
-  if (peer?.online && custom) return custom;
-  return formatPeerPulseLine(peer);
 }
 
 function ensureGroupChatView(groupId) {
@@ -784,156 +784,6 @@ function renderDialView() {
   return wrap;
 }
 
-function renderPeersView() {
-  const wrap = document.createElement('div');
-  wrap.className = 'view peers-view';
-
-  const title = document.createElement('h2');
-  title.className = 'section-title';
-  title.dataset.i18n = 'peers.title';
-  title.textContent = t('peers.title');
-
-  const titleRow = document.createElement('div');
-  titleRow.className = 'section-title-row';
-  titleRow.appendChild(title);
-  titleRow.appendChild(createPixelHintIcon('peers.subtitle_hint'));
-
-  const list = document.createElement('div');
-  list.className = 'peers-list';
-
-  const online = state.peers.filter((p) => p.online);
-  if (online.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'hint';
-    empty.dataset.i18n = 'peers.none';
-    empty.textContent = t('peers.none');
-    list.appendChild(empty);
-  } else {
-    const visiblePeers = state.peers.filter((p) => !isBlocked(p.blipId));
-    if (visiblePeers.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'hint';
-      empty.dataset.i18n = 'peers.all_blocked';
-      empty.textContent = t('peers.all_blocked');
-      list.appendChild(empty);
-    }
-    visiblePeers.sort(comparePeersFavoriteFirst).forEach((peer) => {
-      const row = document.createElement('div');
-      row.className = `peer-row glass ${peer.online ? 'online' : 'offline'} ${
-        isFavorite(peer.blipId) ? 'peer-row--favorite' : ''
-      }`;
-
-      const avatar = createTrustedAvatarElement(peer.blipId, 2, {
-        selfBlipId: state.config.blipId,
-      });
-      avatar.classList.add('peer-row-avatar');
-      avatar.style.cursor = 'pointer';
-      avatar.title = t('peers.profile_open');
-      avatar.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openPeerProfileFromUi(peer);
-      });
-      const info = document.createElement('div');
-      info.className = 'peer-info';
-      const name = document.createElement('span');
-      name.className = 'peer-name';
-      if (isFavorite(peer.blipId)) {
-        const star = document.createElement('span');
-        star.className = 'peer-fav-star';
-        star.textContent = '★';
-        star.title = t('peers.favorite');
-        name.appendChild(star);
-      }
-      name.appendChild(document.createTextNode(formatPeerDisplayName(peer)));
-      appendMeshPlusBadgeToNameRow(name, peer);
-      if (peer.meshLegacy) {
-        const leg = document.createElement('span');
-        leg.className = 'peer-handshake-badge peer-handshake-badge--legacy';
-        leg.title = t('peers.handshake_legacy');
-        leg.textContent = '!';
-        name.appendChild(leg);
-      } else if (peer.meshTcpEncrypted) {
-        const lock = document.createElement('span');
-        lock.className = 'peer-handshake-badge peer-handshake-badge--encrypted';
-        lock.title = t('peers.channel_encrypted');
-        lock.textContent = '▣';
-        name.appendChild(lock);
-      }
-      const idSpan = document.createElement('span');
-      idSpan.className = 'peer-id';
-      idSpan.textContent = `#${peer.blipId}`;
-
-      const pulseLine = document.createElement('span');
-      pulseLine.className = 'peer-pulse';
-      pulseLine.dataset.peerPulse = String(peer.blipId);
-      pulseLine.textContent = formatPeerSubline(peer);
-      pulseLine.classList.toggle('peer-pulse--status', !!(peer.online && (peer.presenceText || '').trim()));
-      const lat = peerLatencyMs.get(peer.blipId);
-      pulseLine.classList.toggle('peer-pulse--live', peer.online && lat != null);
-      pulseLine.classList.toggle('peer-pulse--offline', !peer.online);
-
-      const typingLine = document.createElement('span');
-      typingLine.className = 'peer-typing hidden';
-      typingLine.dataset.peerTyping = String(peer.blipId);
-      if (peersTyping.has(peer.blipId)) {
-        typingLine.textContent = t('peers.typing');
-        typingLine.classList.remove('hidden');
-      }
-
-      info.appendChild(name);
-      info.appendChild(pulseLine);
-      info.appendChild(typingLine);
-      info.appendChild(idSpan);
-
-      const dot = document.createElement('span');
-      const pClass = peerPresenceClass(peer);
-      dot.className = `status-dot ${pClass}`;
-      dot.title = peerStatusTooltip(peer);
-
-      row.appendChild(avatar);
-      row.appendChild(info);
-      row.appendChild(dot);
-
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showPeerContextMenu(e, peer);
-      });
-
-      const openPeerChat = () => void openChat(peer.blipId);
-      row.addEventListener('click', openPeerChat);
-      row.addEventListener('auxclick', (e) => {
-        if (e.button === 1) openPeerChat();
-      });
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          void openChat(peer.blipId);
-        }
-      });
-      row.setAttribute('tabindex', '0');
-      row.setAttribute('role', 'button');
-
-      row.style.cursor = 'pointer';
-
-      list.appendChild(row);
-    });
-  }
-
-  wrap.appendChild(titleRow);
-  wrap.appendChild(list);
-  return wrap;
-}
-
-function refreshPeersTypingDom() {
-  if (state.view !== 'peers' || !mainContent?.isConnected) return;
-  mainContent.querySelectorAll('[data-peer-typing]').forEach((el) => {
-    const id = Number(el.dataset.peerTyping);
-    const show = peersTyping.has(id);
-    el.classList.toggle('hidden', !show);
-    if (show) el.textContent = t('peers.typing');
-  });
-}
-
 async function promptMeshLabel(peer) {
   const fallback = peer?.displayName || `BLIP-${peer.blipId}`;
   const saved = await openMeshLabelDialog(peer.blipId, fallback);
@@ -980,7 +830,7 @@ function getPeerProfileHooks(peer) {
         renderView('chat');
       }
     },
-    onPing: () => runPeerPing(peer),
+    onPing: () => meshPulse.runPeerPing(peer),
   };
 }
 
@@ -1016,7 +866,7 @@ peerProfileView = createPeerProfileView({
   renderView,
   render,
   requestPeerProfileGif,
-  runMeshPulseRound,
+  runMeshPulseRound: meshPulse.runMeshPulseRound,
 });
 
 const {
@@ -1030,6 +880,37 @@ const {
 } = peerProfileView;
 
 openPeerProfileFromUiForMenus = openPeerProfileFromUi;
+
+const peersView = createPeersView({
+  getState: () => state,
+  getMainContent: () => mainContent,
+  getPeersTyping: () => peersTyping,
+  t, isBlocked, isFavorite, comparePeersFavoriteFirst, createTrustedAvatarElement,
+  createPixelHintIcon, formatPeerDisplayName, appendMeshPlusBadgeToNameRow,
+  peerPresenceClass, peerStatusTooltip,
+  formatPeerSubline: (peer) => meshPulse.formatPeerSubline(peer),
+  getPeerLatency: (id) => meshPulse.peerLatencyMs.get(id),
+  openPeerProfile: (peer) => openPeerProfileFromUi(peer),
+  showPeerContextMenu: (event, peer) => showPeerContextMenu(event, peer),
+  openChat,
+});
+
+const chatHubView = createChatHubView({
+  getState: () => state, t, isBlocked, isFavorite, getPendingGroupInvites,
+  acceptGroupInvite: (invite) => acceptGroupInvite(api, state.config, invite),
+  declineGroupInvite: (invite) => declineGroupInviteFlow(api, state.config, invite),
+  clearInviteUnread, getGroupsFor, getGroupMessages, groupDisplayName, getVoiceChannels,
+  getVoiceChannelRoster, createGroupAvatarElement, createAvatarElement, getMessages,
+  formatPeerDisplayName, findPeerByBlipId, normalizeBlipId, peerPresenceClass,
+  peerHasCachedProfileGif,
+  getUnreadByGroup: (id) => unreadByGroup.get(id) || 0,
+  getUnreadByPeer: (id) => unreadByPeer.get(id) || 0,
+  openGroupChat, openChat,
+  openPeerProfile: (peer) => openPeerProfileFromUi(peer),
+  showGroupContextMenu: (event, group) => showGroupContextMenu(event, group),
+  showPeerContextMenu: (event, peer) => showPeerContextMenu(event, peer),
+  renderView,
+});
 
 function openSettingsToSection(sectionId, scrollSelector = null) {
   clearProfileNavigationState();
@@ -1746,103 +1627,6 @@ function showError(title, hint) {
   setTimeout(() => box.remove(), 4000);
 }
 
-function formatPeerPulseLine(peer) {
-  const lat = peerLatencyMs.get(peer.blipId);
-  if (lat != null) {
-    return t('peers.pulse_ms').replace('{ms}', String(lat));
-  }
-  if (peer.online) return t('peers.pulse_pending');
-  return t('peers.pulse_offline');
-}
-
-function refreshPeerPulseDom() {
-  if (state.view !== 'peers' || !mainContent?.isConnected) return;
-  mainContent.querySelectorAll('[data-peer-pulse]').forEach((el) => {
-    const id = Number(el.dataset.peerPulse);
-    const peer = state.peers.find((p) => p.blipId === id);
-    if (!peer) return;
-    const nextText = formatPeerSubline(peer);
-    if (el.textContent !== nextText) el.textContent = nextText;
-    const status = !!(peer.online && (peer.presenceText || '').trim());
-    const live = peer.online && peerLatencyMs.has(id);
-    const offline = !peer.online;
-    el.classList.toggle('peer-pulse--status', status);
-    el.classList.toggle('peer-pulse--live', live);
-    el.classList.toggle('peer-pulse--offline', offline);
-  });
-}
-
-async function pingPeerSilent(blipId) {
-  if (!window.blip?.pingPeer) return;
-  try {
-    const result = await window.blip.pingPeer(blipId);
-    if (result?.ok && result.ms != null) {
-      peerLatencyFails.set(blipId, 0);
-      const prev = peerLatencyMs.get(blipId);
-      const next =
-        prev == null ? result.ms : Math.round(prev * 0.65 + result.ms * 0.35);
-      if (peerLatencyMs.get(blipId) !== next) peerLatencyMs.set(blipId, next);
-    } else {
-      const fails = (peerLatencyFails.get(blipId) || 0) + 1;
-      peerLatencyFails.set(blipId, fails);
-      // Keep last-known ms through transient ping misses (Hamachi / short TCP).
-      if (fails >= 3) peerLatencyMs.delete(blipId);
-    }
-  } catch {
-    const fails = (peerLatencyFails.get(blipId) || 0) + 1;
-    peerLatencyFails.set(blipId, fails);
-    if (fails >= 3) peerLatencyMs.delete(blipId);
-  }
-}
-
-async function runMeshPulseRound() {
-  if (!state.config?.blipId) return;
-  const targets = state.peers.filter((p) => p.online && !isBlocked(p.blipId));
-  await Promise.all(targets.map((p) => pingPeerSilent(p.blipId)));
-  refreshPeerPulseDom();
-}
-
-function startMeshPulse() {
-  if (!state.config?.blipId) return;
-  if (meshPulseTimer) return;
-  void runMeshPulseRound();
-  meshPulseTimer = setInterval(() => {
-    void runMeshPulseRound();
-  }, MESH_PULSE_INTERVAL_MS);
-}
-
-function stopMeshPulse() {
-  if (meshPulseTimer) {
-    clearInterval(meshPulseTimer);
-    meshPulseTimer = null;
-  }
-}
-
-async function runPeerPing(peer) {
-  if (!peer?.online || !window.blip?.pingPeer) {
-    showAppToast({ title: t('peers.ping_fail'), variant: 'danger', durationMs: 4000 });
-    return;
-  }
-  const result = await window.blip.pingPeer(peer.blipId);
-  if (result?.ok && result.ms != null) {
-    peerLatencyFails.set(peer.blipId, 0);
-    peerLatencyMs.set(peer.blipId, result.ms);
-    if (!state.config?.doNotDisturb) sounds.meshPing();
-    showAppToast({
-      title: t('peers.ping_ok'),
-      body: t('peers.ping_ok_body').replace('{ms}', String(result.ms)),
-      durationMs: 4000,
-    });
-    refreshPeerPulseDom();
-  } else {
-    peerLatencyFails.set(peer.blipId, (peerLatencyFails.get(peer.blipId) || 0) + 1);
-    showAppToast({ title: t('peers.ping_fail'), variant: 'danger', durationMs: 4000 });
-    refreshPeerPulseDom();
-  }
-}
-
-runPeerPingForMenusRef.fn = runPeerPing;
-
 function mountMainContentView(el, { cleanupProfile = false } = {}) {
   if (!mainContent || !el) return;
   const current = mainContent.firstElementChild;
@@ -1911,259 +1695,6 @@ function renderProjectsView() {
   return view;
 }
 
-function renderChatHubView() {
-  clearInviteUnread();
-  const wrap = document.createElement('div');
-  wrap.className = 'view chat-hub-view';
-
-  const title = document.createElement('h2');
-  title.className = 'section-title';
-  title.dataset.i18n = 'chat.title';
-  title.textContent = t('chat.title');
-
-  const list = document.createElement('div');
-  list.className = 'chat-hub-list';
-
-  const pendingInvites = getPendingGroupInvites();
-  if (pendingInvites.length) {
-    const invSection = document.createElement('div');
-    invSection.className = 'chat-hub-invites-section';
-    const invTitle = document.createElement('h3');
-    invTitle.className = 'chat-hub-invites-title';
-    invTitle.dataset.i18n = 'group.invite_section';
-    invTitle.textContent = t('group.invite_section');
-    invSection.appendChild(invTitle);
-
-    pendingInvites.forEach((inv) => {
-      const card = document.createElement('div');
-      card.className = 'chat-hub-invite glass';
-      const body = document.createElement('div');
-      body.className = 'chat-hub-invite-body';
-      const line1 = document.createElement('span');
-      line1.className = 'chat-hub-invite-name';
-      line1.textContent = t('group.invite_card_title')
-        .replace('{name}', inv.name || t('group.unnamed'))
-        .replace('{host}', String(inv.hostId ?? inv.from));
-      const line2 = document.createElement('span');
-      line2.className = 'chat-hub-invite-meta';
-      line2.textContent = t('group.invite_card_meta').replace(
-        '{n}',
-        String(inv.members?.length || 0)
-      );
-      body.appendChild(line1);
-      body.appendChild(line2);
-      const actions = document.createElement('div');
-      actions.className = 'chat-hub-invite-actions';
-      const joinBtn = document.createElement('button');
-      joinBtn.type = 'button';
-      joinBtn.className = 'btn btn-accent';
-      joinBtn.textContent = t('group.invite_card_join');
-      const declineBtn = document.createElement('button');
-      declineBtn.type = 'button';
-      declineBtn.className = 'btn btn-lang';
-      declineBtn.textContent = t('group.invite_card_decline');
-      joinBtn.addEventListener('click', async () => {
-        try {
-          const g = await acceptGroupInvite(api, state.config, inv);
-          clearInviteUnread();
-          openGroupChat(g.id);
-        } catch (err) {
-          console.error('[group invite] accept', err);
-        }
-      });
-      declineBtn.addEventListener('click', async () => {
-        await declineGroupInviteFlow(api, state.config, inv);
-        if (state.view === 'chat' && !state.activePeer && !state.activeGroup) renderView('chat');
-      });
-      actions.appendChild(joinBtn);
-      actions.appendChild(declineBtn);
-      card.appendChild(body);
-      card.appendChild(actions);
-      invSection.appendChild(card);
-    });
-    list.appendChild(invSection);
-  }
-
-  getGroupsFor(state.config.blipId).forEach((group) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'chat-hub-row glass chat-hub-row--group online';
-    const avatar = createGroupAvatarElement(group.id, 2);
-    avatar.classList.add('chat-hub-avatar');
-    const info = document.createElement('div');
-    info.className = 'chat-hub-info';
-    const nameRow = document.createElement('div');
-    nameRow.className = 'chat-hub-name-row';
-    const name = document.createElement('span');
-    name.className = 'peer-name';
-    name.textContent = groupDisplayName(group);
-    const grpTag = document.createElement('span');
-    grpTag.className = 'chat-hub-group-tag';
-    grpTag.dataset.i18n = 'group.badge_grp';
-    grpTag.textContent = t('group.badge_grp');
-    nameRow.appendChild(name);
-    nameRow.appendChild(grpTag);
-    const sub = document.createElement('span');
-    sub.className = 'peer-id';
-    sub.textContent = t('group.hub_sub').replace('{n}', String(group.members.length));
-    info.appendChild(nameRow);
-    info.appendChild(sub);
-    const msgs = getGroupMessages(group.id);
-    const last = msgs[msgs.length - 1];
-    if (last) {
-      const preview = document.createElement('span');
-      preview.className = 'chat-hub-preview';
-      preview.textContent = (last.text || '').slice(0, 48);
-      info.appendChild(preview);
-    }
-    let voiceCount = 0;
-    for (const ch of getVoiceChannels(group)) {
-      const snap = getVoiceChannelRoster(group.id, ch.id);
-      if (snap.count > voiceCount) voiceCount = snap.count;
-    }
-    const dot = document.createElement('span');
-    dot.className = voiceCount > 0 ? 'status-dot online' : 'status-dot offline';
-    dot.title = voiceCount > 0 ? t('group.call_ongoing_hub') : '';
-    if (voiceCount > 0) {
-      const liveTag = document.createElement('span');
-      liveTag.className = 'chat-hub-voice-live';
-      liveTag.dataset.i18n = 'group.badge_voice';
-      liveTag.textContent = t('group.badge_voice');
-      info.appendChild(liveTag);
-    }
-    item.appendChild(avatar);
-    item.appendChild(info);
-    item.appendChild(dot);
-    const unread = unreadByGroup.get(group.id) || 0;
-    if (unread > 0) {
-      const ub = document.createElement('span');
-      ub.className = 'chat-hub-unread';
-      ub.textContent = unread > 99 ? '99+' : String(unread);
-      item.appendChild(ub);
-    }
-    item.addEventListener('click', () => openGroupChat(group.id));
-    item.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      showGroupContextMenu(e, group);
-    });
-    list.appendChild(item);
-  });
-
-  const peerIds = new Set();
-  state.peers.forEach((p) => peerIds.add(p.blipId));
-  for (const id of state.chatViews.keys()) peerIds.add(id);
-
-  const rows = [...peerIds]
-    .filter((id) => !isBlocked(id))
-    .map((id) => {
-      const peer = state.peers.find((p) => p.blipId === id);
-      const msgs = getMessages(id);
-      return {
-        blipId: id,
-        displayName: formatPeerDisplayName(peer, id),
-        online: peer?.online ?? false,
-        lastMsg: msgs[msgs.length - 1],
-      };
-    })
-    .sort((a, b) => {
-      const af = isFavorite(a.blipId) ? 0 : 1;
-      const bf = isFavorite(b.blipId) ? 0 : 1;
-      if (af !== bf) return af - bf;
-      const ta = a.lastMsg?.timestamp ?? 0;
-      const tb = b.lastMsg?.timestamp ?? 0;
-      if (tb !== ta) return tb - ta;
-      if (a.online !== b.online) return a.online ? -1 : 1;
-      return a.blipId - b.blipId;
-    });
-
-  if (rows.length === 0 && getGroupsFor(state.config.blipId).length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'hint';
-    empty.dataset.i18n = 'chat.no_chats';
-    empty.textContent = t('chat.no_chats');
-    list.appendChild(empty);
-  } else if (rows.length > 0) {
-    rows.forEach((row) => {
-      const peer = findPeerByBlipId(row.blipId);
-      const rowId = normalizeBlipId(row.blipId);
-      const peerForProfile = peer || {
-        blipId: rowId,
-        displayName: row.displayName,
-        online: row.online,
-        presence: 'offline',
-        presenceText: '',
-        hasProfileGif: rowId != null && peerHasCachedProfileGif(rowId),
-      };
-
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = `chat-hub-row glass ${row.online ? 'online' : 'offline'}`;
-
-      const avatar = createAvatarElement(row.blipId, 2, { selfBlipId: state.config.blipId });
-      avatar.classList.add('chat-hub-avatar');
-      avatar.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        openPeerProfileFromUi(peerForProfile);
-      });
-      const info = document.createElement('div');
-      info.className = 'chat-hub-info';
-      const name = document.createElement('span');
-      name.className = 'peer-name';
-      name.textContent = row.displayName;
-      const idSpan = document.createElement('span');
-      idSpan.className = 'peer-id';
-      idSpan.textContent = `#${row.blipId}`;
-      info.appendChild(name);
-      info.appendChild(idSpan);
-
-      if (row.lastMsg) {
-        const preview = document.createElement('span');
-        preview.className = 'chat-hub-preview';
-        const prevText =
-          row.lastMsg.attachment?.kind === 'image'
-            ? t('chat.image_preview')
-            : row.lastMsg.attachment?.kind === 'file'
-              ? t('chat.file_preview').replace('{name}', row.lastMsg.attachment.name || 'file')
-              : (row.lastMsg.text || '').slice(0, 48);
-        preview.textContent = prevText;
-        info.appendChild(preview);
-      }
-
-      const dot = document.createElement('span');
-      dot.className = `status-dot ${peerPresenceClass(peerForProfile)}`;
-
-      const unread = unreadByPeer.get(row.blipId) || 0;
-      if (unread > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'chat-hub-unread';
-        badge.textContent = unread > 99 ? '99+' : String(unread);
-        item.appendChild(badge);
-      }
-
-      item.appendChild(avatar);
-      item.appendChild(info);
-      item.appendChild(dot);
-      const openHubChat = () => void openChat(row.blipId);
-      item.addEventListener('click', openHubChat);
-      item.addEventListener('auxclick', (e) => {
-        if (e.button === 1) openHubChat();
-      });
-      item.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showPeerContextMenu(e, peer || { blipId: row.blipId, displayName: row.displayName, online: row.online });
-      });
-      list.appendChild(item);
-    });
-  }
-
-  wrap.appendChild(title);
-  wrap.appendChild(list);
-  return wrap;
-}
-
 function renderView(viewName, options = {}) {
   if (!resolveMainContent()) return;
   const force = !!options.force;
@@ -2179,7 +1710,7 @@ function renderView(viewName, options = {}) {
       view = renderDialView();
       break;
     case 'peers':
-      view = renderPeersView();
+      view = peersView.renderPeersView();
       break;
     case 'settings':
       view = renderSettingsView();
@@ -2198,18 +1729,18 @@ function renderView(viewName, options = {}) {
       if (state.activeGroup) {
         const gchat = ensureGroupChatView(state.activeGroup);
         gchat?.renderMessages?.();
-        view = gchat?.el ?? renderChatHubView();
+        view = gchat?.el ?? chatHubView.renderChatHubView();
       } else if (state.activePeer) {
         const chat = ensureChatView(state.activePeer);
         if (!chat?.el) {
-          view = renderChatHubView();
+          view = chatHubView.renderChatHubView();
           break;
         }
         chat.markRead?.();
         chat.renderMessages?.();
         view = chat.el;
       } else {
-        view = renderChatHubView();
+        view = chatHubView.renderChatHubView();
       }
       break;
     }
@@ -2233,7 +1764,7 @@ function renderView(viewName, options = {}) {
     applyI18n(mainContent);
     updateNavActive();
     if (viewName === 'peers' || viewName === 'profile') {
-      void runMeshPulseRound();
+      void meshPulse.runMeshPulseRound();
     }
     return;
   }
@@ -2248,19 +1779,19 @@ function renderView(viewName, options = {}) {
     applyI18n(mainContent);
     updateNavActive();
     if (viewName === 'peers' || viewName === 'profile') {
-      void runMeshPulseRound();
+      void meshPulse.runMeshPulseRound();
     }
   });
 }
 
 function render() {
   if (!state.config.blipId) {
-    stopMeshPulse();
+    meshPulse.stopMeshPulse();
     showGridView();
     return;
   }
 
-  startMeshPulse();
+  meshPulse.startMeshPulse();
 
   const layout = document.createElement('div');
   layout.className = 'app-layout';
@@ -2357,7 +1888,7 @@ export function initUI(config, blipApi) {
     },
     getConfig: () => state.config,
     getPeers: () => state.peers,
-    getPeerLatency: (id) => peerLatencyMs.get(id) ?? 9999,
+    getPeerLatency: (id) => meshPulse.peerLatencyMs.get(id) ?? 9999,
   });
 
   initIdleAway({
@@ -2628,7 +2159,7 @@ function handleTypingTcp(msg) {
   const peer = state.peers.find((p) => p.blipId === peerId);
   const label = formatPeerDisplayName(peer, peerId);
   state.chatViews.get(peerId)?.setTyping?.(!!msg.active, label);
-  refreshPeersTypingDom();
+  peersView.refreshPeersTypingDom();
 }
 
 export function handleTcpMessage(msg) {
