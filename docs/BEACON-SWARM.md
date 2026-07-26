@@ -70,6 +70,6 @@ Already partially present for single-source fetch. Swarm mode:
 
 ## Next implementation PR
 
-- Extend announce payload + peer UI “have %”
-- Parallel fetch scheduler in `beacon-mesh.js` using existing batch IPC
-- Tests for bitmap merge / rarest-first selection (pure helpers)
+- ~~Extend announce payload + peer UI “have %”~~ (have-bitmap already on wire)
+- ~~Parallel fetch scheduler using rarest-first (`shared/beacon-swarm.js`)~~ wired in `beacon-mesh.js`
+- Remaining: UI swarm badge + resume polish + integrity `infoHash` end-to-end

@@ -35,6 +35,7 @@ export function buildProfileCard(peerInput, hooks = {}) {
     onBlock,
     onPing,
     isSelfPreview = false,
+    allowUnencryptedMesh = true,
   } = hooks;
 
   if (isSelfPreview && hooks.meshPlusOnSelf) {
@@ -239,7 +240,12 @@ export function buildProfileCard(peerInput, hooks = {}) {
       customStatusEl.textContent = '';
       customStatusEl.classList.add('hidden');
     }
-    if (callBtn) callBtn.disabled = !peer.online;
+    if (callBtn) {
+      const blocked =
+        peer.online && peer.meshLegacy && !allowUnencryptedMesh && !peer.meshTcpEncrypted;
+      callBtn.disabled = !peer.online || blocked;
+      callBtn.title = blocked ? t('peers.unencrypted_blocked') : '';
+    }
     syncBlockBtn();
 
     const wantsGif = !!peer.hasProfileGif;

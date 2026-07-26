@@ -752,6 +752,15 @@ const locales = {
     'clipboard.enable_confirm':
       'Enable LAN clipboard sync? Text you copy can be sent to peers in the active chat (passwords, tokens, secrets). Only continue on networks and peers you trust.',
     'clipboard.received': 'Clipboard from #{id}',
+    'settings.allow_unencrypted_mesh': 'Allow older BLIP versions (no TCP encryption)',
+    'settings.allow_unencrypted_mesh_hint':
+      'Keeps chat and calls working with older builds over plaintext TCP. Morse↔Morse still encrypts automatically when both support it. Turn off for an encrypted-only LAN.',
+    'settings.allow_unencrypted_mesh_disable_confirm':
+      'Disable cross-version plaintext mesh? Calls and messages with older BLIP builds will fail until they upgrade.',
+    'settings.allow_unencrypted_mesh_on': 'Older BLIP versions allowed (plaintext when needed)',
+    'settings.allow_unencrypted_mesh_off': 'Encrypted mesh only — legacy peers blocked',
+    'peers.unencrypted_blocked':
+      'Enable “Allow older BLIP versions” in Network settings to talk to this peer',
     'settings.ice_enabled': 'STUN / TURN (WebRTC)',
     'settings.ice_hint':
       'Off by default: calls use LAN host candidates only. Enable for Tailscale / multi-subnet VPN when pure LAN ICE fails. You need reachable STUN or TURN URLs.',
@@ -1823,6 +1832,15 @@ const locales = {
     'clipboard.enable_confirm':
       'Включить синхронизацию буфера по ЛАН? Скопированный текст (пароли, токены, секреты) может уйти абоненту в активном чате. Продолжайте только в доверенной сети и с доверенными пирами.',
     'clipboard.received': 'Буфер от #{id}',
+    'settings.allow_unencrypted_mesh': 'Разрешить старые версии БЛИПа (без TCP-шифрования)',
+    'settings.allow_unencrypted_mesh_hint':
+      'Чат и звонки со старыми сборками по открытому TCP. Morse↔Morse по-прежнему шифруется, если оба поддерживают. Выключите для ЛАН только с шифрованием.',
+    'settings.allow_unencrypted_mesh_disable_confirm':
+      'Отключить plaintext-совместимость? Звонки и сообщения со старыми версиями БЛИПа перестанут работать, пока они не обновятся.',
+    'settings.allow_unencrypted_mesh_on': 'Старые версии БЛИПа разрешены (plaintext при необходимости)',
+    'settings.allow_unencrypted_mesh_off': 'Только зашифрованный mesh — старые пиры заблокированы',
+    'peers.unencrypted_blocked':
+      'Включите «Разрешить старые версии БЛИПа» в настройках Сети, чтобы связаться с этим пиром',
     'settings.ice_enabled': 'STUN / TURN (WebRTC)',
     'settings.ice_hint':
       'По умолчанию выкл: звонки только на LAN host-кандидатах. Включите для Tailscale / VPN на разных подсетях, если чистый LAN ICE не сходится. Нужны доступные URL STUN или TURN.',
