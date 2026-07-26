@@ -31,8 +31,23 @@ import {
   noteGroupCallStarted,
   clearGroupCallRoster,
 } from './group-call-roster.js';
-import { rtcConfiguration } from '../shared/ice-servers.js';
 import { bindCallWaveform } from './call-waveform.js';
+import {
+  peerNum,
+  wireFrom,
+  normalizeSdp,
+  formatCallDuration,
+  shouldInitiate,
+  buildGroupCallMediaStates,
+  countConnectedPeerConnections,
+  meshPeerConnectionUsable,
+  peerIdsNotInParticipantSet,
+  getVideoSender,
+  hasLiveVideoStream,
+  flushPendingIceCandidates,
+  createGroupCallPeerConnection,
+  resolveGroupCallRemoteId,
+} from './group-call-signalling.js';
 
 export { getOngoingGroupCall };
 
@@ -67,10 +82,6 @@ let timerInterval = null;
 let heartbeatTimer = null;
 let pendingInvite = null;
 
-function peerNum(id) {
-  return Number(id);
-}
-
 function callConfig(api) {
   return api?.config ?? configRef;
 }
@@ -96,31 +107,8 @@ function myBlipId(api) {
   return peerNum(callConfig(api)?.blipId);
 }
 
-function wireFrom(msg) {
-  return Number(msg.from);
-}
-
-function signalOrigin(msg) {
-  const o = msg.originFrom ?? msg.from;
-  return peerNum(o);
-}
-
-function normalizeSdp(sdp) {
-  if (!sdp) return null;
-  if (typeof sdp === 'string') return { type: 'offer', sdp };
-  if (typeof sdp.type === 'string' && typeof sdp.sdp === 'string') return sdp;
-  return null;
-}
-
 async function getMic() {
   return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-}
-
-function formatDuration(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(m)}:${pad(s % 60)}`;
 }
 
 function reportActiveToMain() {
@@ -158,12 +146,11 @@ function getParticipantMediaState(peerId) {
 }
 
 function buildStatesPayload(participants, myId) {
-  const states = {};
-  for (const pid of participants) {
-    states[String(pid)] = getParticipantMediaState(pid);
-  }
-  if (Number.isFinite(myId)) states[String(myId)] = myMediaState();
-  return states;
+  return buildGroupCallMediaStates(participants, {
+    myId,
+    myState: myMediaState,
+    getPeerState: (id) => peerMediaState.get(id),
+  });
 }
 
 async function broadcastCallState(groupId, { end = false } = {}) {
@@ -257,11 +244,6 @@ function openGroupVideoFs(peerId, config) {
   groupFsOverlay.classList.remove('hidden');
 }
 
-function hasLiveVideoStream(stream) {
-  const track = stream?.getVideoTracks?.()?.[0];
-  return !!(track && track.readyState === 'live' && track.enabled);
-}
-
 function disconnectGroupPeer(rid) {
   const n = peerNum(rid);
   const pc = peers.get(n);
@@ -292,11 +274,7 @@ function stopHeartbeat() {
 }
 
 function countConnectedPeers() {
-  let n = 0;
-  for (const pc of peers.values()) {
-    if (pc.connectionState === 'connected') n += 1;
-  }
-  return n;
+  return countConnectedPeerConnections(peers.values());
 }
 
 function maybeCallEstablished(groupId) {
@@ -315,10 +293,7 @@ async function ensureMeshPeer(remoteId, groupId) {
   if (mid === myId) return null;
   const existing = peers.get(mid);
   if (existing) {
-    const ok =
-      existing.connectionState === 'connected' ||
-      existing.connectionState === 'connecting';
-    if (ok) return existing;
+    if (meshPeerConnectionUsable(existing.connectionState)) return existing;
     disconnectGroupPeer(mid);
   }
   if (!shouldInitiate(myId, mid)) return null;
@@ -342,11 +317,9 @@ async function meshNewParticipants(groupId, participantIds) {
 }
 
 function pruneStaleGroupPeers(groupId, participantIds) {
-  const activeSet = new Set(participantIds.map(peerNum).filter(Number.isFinite));
   const myId = peerNum(configRef?.blipId);
-  for (const rid of [...peers.keys()]) {
-    if (rid === myId) continue;
-    if (!activeSet.has(rid)) disconnectGroupPeer(rid);
+  for (const rid of peerIdsNotInParticipantSet(peers.keys(), participantIds, myId)) {
+    disconnectGroupPeer(rid);
   }
 }
 
@@ -497,7 +470,7 @@ function createGroupCallShell(config) {
     callStart = Date.now();
     clearInterval(timerInterval);
     timerInterval = setInterval(() => {
-      if (callStart) timerEl.textContent = formatDuration(Date.now() - callStart);
+      if (callStart) timerEl.textContent = formatCallDuration(Date.now() - callStart);
     }, 500);
   }
 
@@ -718,10 +691,6 @@ async function sendSignal(groupId, targetId, payload) {
   }
 }
 
-function getVideoSender(pc) {
-  return pc?.getSenders().find((s) => s.track?.kind === 'video') ?? null;
-}
-
 async function applyVideoToPeer(rid, groupId, track, screenShare) {
   const pc = peers.get(rid);
   if (!pc) return;
@@ -822,29 +791,18 @@ async function processPendingOffers(groupId) {
 
 async function flushCandidates(remoteId, pc) {
   const pending = pendingCandidates.get(remoteId);
-  if (!pending?.length || !pc?.remoteDescription) return;
-  for (const c of pending) {
-    try {
-      await pc.addIceCandidate(c);
-    } catch {
-
-    }
-  }
+  if (!pending?.length) return;
+  await flushPendingIceCandidates(pending, pc);
   pendingCandidates.delete(remoteId);
 }
 
 async function createPc(remoteId, groupId, initiator) {
   const rid = peerNum(remoteId);
   if (peers.has(rid)) return peers.get(rid);
-  const pc = new RTCPeerConnection(rtcConfiguration(configRef));
-  peers.set(rid, pc);
-  pendingCandidates.set(rid, []);
-
-  if (localStream) {
-    localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
-  }
-
-  pc.ontrack = (ev) => {
+  const pc = createGroupCallPeerConnection({
+    cfg: configRef,
+    localStream,
+    onTrack: (ev) => {
     const track = ev.track;
     if (track.kind === 'video') {
       let video = remoteVideos.get(rid);
@@ -891,30 +849,26 @@ async function createPc(remoteId, groupId, initiator) {
     audio.muted = deafened;
     shell?.refreshAvatars(getGroup(groupId));
     void broadcastCallState(groupId);
-  };
-
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') {
-      maybeCallEstablished(groupId);
-      void broadcastCallState(groupId);
-    } else if (
-      pc.connectionState === 'failed' ||
-      pc.connectionState === 'disconnected' ||
-      pc.connectionState === 'closed'
-    ) {
-      disconnectGroupPeer(rid);
-      shell?.refreshAvatars(getGroup(groupId));
-      void broadcastCallState(groupId);
-    }
-  };
-
-  pc.onicecandidate = (ev) => {
-    if (!ev.candidate) return;
-    void sendSignal(groupId, rid, {
-      signalKind: 'candidate',
-      candidate: ev.candidate.toJSON(),
-    });
-  };
+    },
+    onConnectionStateChange: (state) => {
+      if (state === 'connected') {
+        maybeCallEstablished(groupId);
+        void broadcastCallState(groupId);
+      } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+        disconnectGroupPeer(rid);
+        shell?.refreshAvatars(getGroup(groupId));
+        void broadcastCallState(groupId);
+      }
+    },
+    onIceCandidate: (candidate) => {
+      void sendSignal(groupId, rid, {
+        signalKind: 'candidate',
+        candidate,
+      });
+    },
+  });
+  peers.set(rid, pc);
+  pendingCandidates.set(rid, []);
 
   if (initiator) {
     const offer = await pc.createOffer();
@@ -926,10 +880,6 @@ async function createPc(remoteId, groupId, initiator) {
   }
 
   return pc;
-}
-
-function shouldInitiate(myId, remoteId) {
-  return peerNum(myId) < peerNum(remoteId);
 }
 
 export function isInGroupCall() {
@@ -1117,13 +1067,9 @@ export async function handleGroupCallSignal(msg, api) {
   const config = callConfig(api);
   ensureShell(config);
 
-  const target = peerNum(msg.target);
-  const origin = signalOrigin(msg);
   const myId = myBlipId(api);
-
-  if (target !== myId && origin !== myId) return;
-
-  const remoteId = origin === myId ? target : origin;
+  const remoteId = resolveGroupCallRemoteId(msg, myId);
+  if (remoteId == null) return;
   if (!isGroupMember(group, remoteId) || !isGroupMember(group, myId)) return;
 
   if (msg.signalKind === 'offer') {
