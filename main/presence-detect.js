@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { readFileSync } from 'node:fs';
 
 const execFileAsync = promisify(execFile);
 
@@ -43,6 +44,7 @@ let session = null;
 export async function detectForegroundApp() {
   if (process.platform === 'win32') return detectWindowsForeground();
   if (process.platform === 'darwin') return detectMacForeground();
+  if (process.platform === 'linux') return detectLinuxForeground();
   return null;
 }
 
@@ -228,6 +230,96 @@ return n
       { timeout: 2500, maxBuffer: 16 * 1024 }
     );
     const app = String(stdout || '').trim().slice(0, 64);
+    if (!app) return null;
+    const snap = { title: '', app, pid: 0, at: Date.now() };
+    lastSnapshot = snap;
+    return snap;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort Linux foreground: prefer xdotool (X11), then gdbus (GNOME),
+ * then /proc + wmctrl fallbacks. Wayland without helpers returns null.
+ */
+async function detectLinuxForeground() {
+  const viaXdotool = await tryLinuxXdotool();
+  if (viaXdotool) return viaXdotool;
+  const viaGdbus = await tryLinuxGdbus();
+  if (viaGdbus) return viaGdbus;
+  return null;
+}
+
+async function tryLinuxXdotool() {
+  try {
+    const { stdout: widOut } = await execFileAsync(
+      'xdotool',
+      ['getactivewindow'],
+      { timeout: 1500, maxBuffer: 8 * 1024 }
+    );
+    const wid = String(widOut || '').trim();
+    if (!wid) return null;
+    let title = '';
+    let pid = 0;
+    try {
+      const { stdout: tOut } = await execFileAsync(
+        'xdotool',
+        ['getwindowname', wid],
+        { timeout: 1500, maxBuffer: 16 * 1024 }
+      );
+      title = String(tOut || '').trim().slice(0, 120);
+    } catch {
+
+    }
+    try {
+      const { stdout: pOut } = await execFileAsync(
+        'xdotool',
+        ['getwindowpid', wid],
+        { timeout: 1500, maxBuffer: 8 * 1024 }
+      );
+      pid = Number(String(pOut || '').trim()) || 0;
+    } catch {
+
+    }
+    let app = '';
+    if (pid > 0) {
+      try {
+        const raw = readFileSync(`/proc/${pid}/comm`, 'utf8');
+        app = String(raw || '').trim().slice(0, 64);
+      } catch {
+
+      }
+    }
+    if (!app && !title) return null;
+    const snap = { title, app: app || title.slice(0, 64), pid, at: Date.now() };
+    lastSnapshot = snap;
+    return snap;
+  } catch {
+    return null;
+  }
+}
+
+async function tryLinuxGdbus() {
+  try {
+    const { stdout } = await execFileAsync(
+      'gdbus',
+      [
+        'call',
+        '--session',
+        '--dest',
+        'org.gnome.Shell',
+        '--object-path',
+        '/org/gnome/Shell',
+        '--method',
+        'org.gnome.Shell.Eval',
+        'global.display.focus_window ? global.display.focus_window.get_wm_class() : ""',
+      ],
+      { timeout: 2000, maxBuffer: 16 * 1024 }
+    );
+    const raw = String(stdout || '');
+    const m = raw.match(/\(true,\s*'([^']*)'\)/) || raw.match(/\(true,\s*"([^"]*)"\)/);
+    const app = (m?.[1] || '').trim().slice(0, 64);
     if (!app) return null;
     const snap = { title: '', app, pid: 0, at: Date.now() };
     lastSnapshot = snap;
