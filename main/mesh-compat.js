@@ -14,9 +14,11 @@ export function isUnencryptedMeshAllowed(config) {
  * Older builds often **destroy** the TCP socket on unknown `mesh-handshake` frames.
  */
 export function peerPrefersPlaintextCompat(peer) {
-  if (!peer) return false;
+  if (!peer) return true;
   if (peer.meshLegacy || peer.meshCompat) return true;
   if (!peer.meshPubkey) return true;
+  // Unverified announce: do not assume encrypted handshake will work.
+  if (peer.meshVerified === false) return true;
   return Number(peer.meshProto || 0) < 2;
 }
 
