@@ -1,6 +1,4 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
-import { releaseMarkdownToHtml, bindReleaseMarkdownLinks } from './release-markdown.js';
-import { openReleaseNotesOverlay } from './release-overlay.js';
 import { createIdGrid } from './grid.js';
 import { createChatView, getMessages, addMessage } from './chat.js';
 import { isFavorite, toggleFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
@@ -41,7 +39,7 @@ import {
 } from './voice-channel.js';
 import { getVoiceChannels } from './groups.js';
 import { getVoiceChannelRoster } from './voice-channel-roster.js';
-import { logPeerEvent, getNetworkLogEntries, clearNetworkLog } from './network-log.js';
+import { logPeerEvent } from './network-log.js';
 import { createMessageId } from './message-id.js';
 import { showSignalLost } from './call.js';
 import {
@@ -90,13 +88,11 @@ import {
   createPixelHintIcon,
   copyTextToClipboard,
   createSettingsListPanel,
-  wrapInSettingsListPanel,
 } from './settings-ui.js';
 import { appendMeshPlusBadgeToNameRow } from './mesh-plus.js';
 import { buildSettingsMeshPlusPanel } from './mesh-plus-settings.js';
 import { recordCallStarted, recordFileSent, recordPeersOnline, setAchievementConfigProvider } from './session-stats.js';
 import { buildSettingsAchievementsPanel } from './achievements-settings-panel.js';
-import { appendSessionStatsSection } from './session-stats-panel.js';
 import { syncAchievements } from './achievements-tracker.js';
 import { buildAppearanceSection } from './settings-panels/appearance.js';
 import { buildSettingsLanguagePanel as buildLanguagePanelView } from './settings-panels/language.js';
@@ -106,12 +102,13 @@ import { buildSettingsPrivacyPanel as buildPrivacyPanelView } from './settings-p
 import { buildSettingsSoundPanel as buildSoundPanelView } from './settings-panels/sound.js';
 import { buildSettingsCallPanel as buildCallPanelView } from './settings-panels/call.js';
 import { buildSettingsSystemPanel as buildSystemPanelView } from './settings-panels/system.js';
+import { buildSettingsNetworkPanel as buildNetworkPanelView } from './settings-panels/network.js';
+import { buildSettingsShortcutsPanel as buildShortcutsPanelView } from './settings-panels/shortcuts.js';
+import { buildSettingsUpdatesPanel as buildUpdatesPanelView } from './settings-panels/updates.js';
 import {
   startClipboardSync,
   stopClipboardSync,
   handleClipboardPush,
-  normalizeClipboardSyncMode,
-  CLIPBOARD_SYNC_MODES,
   formatClipboardToast,
 } from './clipboard-sync.js';
 import { formatPeerDisplayName } from './peer-labels.js';
@@ -121,13 +118,11 @@ import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.j
 import {
   isVersionNewer,
   filterReleasesForChannel,
-  githubRepoBase,
 } from './app-version.js';
 import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
 import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
 import { setDefaultToastDurationMs } from './toast-config.js';
-import { appendBandwidthGraphSection } from './beacon-bandwidth-graph.js';
 import { openConfirmDialog } from './confirm-dialog.js';
 import {
   clearRendererLocalStorage,
@@ -155,7 +150,6 @@ import {
   listenReducedMotion,
 } from './appearance.js';
 import { initReactiveWallpaper, applyReactiveWallpaperConfig } from './reactive-wallpaper.js';
-import { formatAppVersionBracket } from './app-version.js';
 
 async function broadcastCustomAvatar() {
   const dataUrl = getSelfAvatarCache();
@@ -1922,356 +1916,21 @@ function buildSettingsCallPanel() {
 }
 
 function buildSettingsNetworkPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel';
-
-  appendSettingsPanelHeader(frag, 'settings.section_network');
-
-  const clipOpts = CLIPBOARD_SYNC_MODES.map((id) => ({
-    value: id,
-    label: t(`clipboard.mode_${id}`),
-  }));
-  const clipSelect = buildThemedSelect();
-  fillSettingsDropdown(
-    clipSelect,
-    clipOpts,
-    normalizeClipboardSyncMode(state.config.clipboardSyncMode),
-    async (mode) => {
-      const prev = normalizeClipboardSyncMode(state.config.clipboardSyncMode);
-      if (prev === 'off' && mode !== 'off') {
-        const ok = await openConfirmDialog({
-          title: t('clipboard.mode'),
-          body: t('clipboard.enable_confirm'),
-          danger: true,
-        });
-        if (!ok) {
-          clipSelect.value = 'off';
-          return;
-        }
-      }
-      state.config = await api.saveConfig({ clipboardSyncMode: mode });
-      restartClipboardSync();
-    }
-  );
-  frag.appendChild(
-    buildSettingsFieldWithHint('clipboard.mode', 'clipboard.hint', clipSelect)
-  );
-
-  const iceRow = document.createElement('div');
-  iceRow.className = 'settings-toggle-with-hint';
-  const iceLines = document.createElement('textarea');
-  iceLines.className = 'input settings-textarea';
-  iceLines.rows = 4;
-  iceLines.placeholder = t('settings.ice_lines_placeholder');
-  iceLines.dataset.i18nPlaceholder = 'settings.ice_lines_placeholder';
-  iceLines.value = state.config?.iceServerLines || '';
-  iceLines.disabled = !state.config?.iceEnabled;
-  iceLines.addEventListener('change', async () => {
-    state.config = await api.saveConfig({ iceServerLines: iceLines.value });
-  });
-  const iceToggle = createPixelToggle({
-    checked: !!state.config?.iceEnabled,
-    labelKey: 'settings.ice_enabled',
-    onChange: async (checked) => {
-      iceLines.disabled = !checked;
-      state.config = await api.saveConfig({ iceEnabled: checked });
-    },
-  });
-  iceRow.appendChild(iceToggle.el);
-  iceRow.appendChild(createPixelHintIcon('settings.ice_hint'));
-  frag.appendChild(iceRow);
-  frag.appendChild(
-    buildSettingsFieldWithHint('settings.ice_lines', 'settings.ice_lines_hint', iceLines)
-  );
-
-  const projClipRow = document.createElement('div');
-  projClipRow.className = 'settings-toggle-with-hint';
-  const projClipToggle = createPixelToggle({
-    checked: !!state.config?.projectsClipboardEnabled,
-    labelKey: 'settings.projects_clipboard',
-    onChange: async (checked) => {
-      if (checked) {
-        const ok = await openConfirmDialog({
-          title: t('settings.projects_clipboard'),
-          body: t('settings.projects_clipboard_enable_confirm'),
-        });
-        if (!ok) {
-          projClipToggle.input.checked = false;
-          return;
-        }
-      }
-      state.config = await api.saveConfig({ projectsClipboardEnabled: checked });
-      showAppToast({
-        title: checked
-          ? t('settings.projects_clipboard_on')
-          : t('settings.projects_clipboard_off'),
-        durationMs: 4000,
-      });
+  return buildNetworkPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    restartClipboardSync,
+    renderProjectsIfOpen: () => {
       if (state.view === 'projects') renderView('projects');
     },
   });
-  projClipRow.appendChild(projClipToggle.el);
-  projClipRow.appendChild(createPixelHintIcon('settings.projects_clipboard_hint'));
-  frag.appendChild(projClipRow);
-
-  const statsUi = appendSessionStatsSection(frag);
-  appendBandwidthGraphSection(frag);
-
-  const actions = document.createElement('div');
-  actions.className = 'settings-network-actions';
-
-  const refreshBtn = document.createElement('button');
-  refreshBtn.type = 'button';
-  refreshBtn.className = 'btn btn-lang';
-  refreshBtn.dataset.i18n = 'settings.network_refresh';
-  refreshBtn.textContent = t('settings.network_refresh');
-
-  const copyBtn = document.createElement('button');
-  copyBtn.type = 'button';
-  copyBtn.className = 'btn btn-lang';
-  copyBtn.dataset.i18n = 'settings.network_copy';
-  copyBtn.textContent = t('settings.network_copy');
-
-  actions.appendChild(refreshBtn);
-  actions.appendChild(copyBtn);
-  frag.appendChild(actions);
-
-  const bodyHost = document.createElement('div');
-  bodyHost.className = 'settings-network-body settings-list-panel settings-list-panel--auto';
-  frag.appendChild(bodyHost);
-
-  let lastDiagnostics = null;
-
-  function formatDiagnosticsText(info) {
-    const online = state.peers.filter((p) => p.online).length;
-    const discovery = info.discoveryActive
-      ? t('settings.network_discovery_on')
-      : t('settings.network_discovery_off');
-    return [
-      `BLIP #${info.blipId ?? '—'}`,
-      `${t('settings.network_hostname')}: ${info.hostname || '—'}`,
-      `${t('settings.network_local_ip')}: ${info.localIp || '—'}`,
-      `${t('settings.network_ipv4_all')}: ${(info.localIpv4s || []).join(', ') || '—'}`,
-      `${t('settings.network_tcp')}: ${info.tcpPort ?? '—'}`,
-      `${t('settings.network_udp')}: ${info.udpPort ?? '—'}`,
-      `${t('settings.network_discovery')}: ${discovery}`,
-      `${t('settings.network_peers')}: ${t('settings.network_peers_value')
-        .replace('{online}', String(online))
-        .replace('{total}', String(info.totalPeers ?? state.peers.length))}`,
-    ].join('\n');
-  }
-
-  function renderDiagnostics(info) {
-    bodyHost.innerHTML = '';
-    lastDiagnostics = info;
-    if (!info) {
-      const err = document.createElement('p');
-      err.className = 'hint';
-      err.textContent = t('settings.network_unavailable');
-      bodyHost.appendChild(err);
-      return;
-    }
-
-    const list = document.createElement('dl');
-    list.className = 'settings-network-list';
-
-    function addRow(labelKey, value) {
-      const dt = document.createElement('dt');
-      dt.dataset.i18n = labelKey;
-      dt.textContent = t(labelKey);
-      const dd = document.createElement('dd');
-      dd.textContent = value;
-      list.appendChild(dt);
-      list.appendChild(dd);
-    }
-
-    const online = state.peers.filter((p) => p.online).length;
-    const discovery = info.discoveryActive
-      ? t('settings.network_discovery_on')
-      : t('settings.network_discovery_off');
-
-    addRow('settings.network_blip_id', String(info.blipId ?? '—'));
-    addRow('settings.network_hostname', info.hostname || '—');
-    addRow('settings.network_local_ip', info.localIp || '—');
-    addRow('settings.network_ipv4_all', (info.localIpv4s || []).join(', ') || '—');
-    addRow('settings.network_tcp', String(info.tcpPort ?? '—'));
-    addRow('settings.network_udp', String(info.udpPort ?? '—'));
-    addRow('settings.network_discovery', discovery);
-    addRow(
-      'settings.network_peers',
-      t('settings.network_peers_value')
-        .replace('{online}', String(online))
-        .replace('{total}', String(info.totalPeers ?? state.peers.length))
-    );
-
-    bodyHost.appendChild(list);
-
-    const logTitle = document.createElement('h3');
-    logTitle.className = 'section-subtitle';
-    logTitle.dataset.i18n = 'settings.network_log';
-    logTitle.textContent = t('settings.network_log');
-    bodyHost.appendChild(logTitle);
-
-    const logList = document.createElement('div');
-    logList.className = 'network-log-list';
-
-    function renderLog() {
-      logList.innerHTML = '';
-      const entries = getNetworkLogEntries();
-      if (!entries.length) {
-        const empty = document.createElement('p');
-        empty.className = 'hint';
-        empty.textContent = t('settings.network_log_empty');
-        logList.appendChild(empty);
-        return;
-      }
-      entries.slice(0, 24).forEach((e) => {
-        const row = document.createElement('div');
-        row.className = 'network-log-row';
-        const time = new Date(e.ts).toLocaleTimeString();
-        row.textContent = `${time} · #${e.peerId} · ${e.event}`;
-        logList.appendChild(row);
-      });
-    }
-
-    const clearLogBtn = document.createElement('button');
-    clearLogBtn.type = 'button';
-    clearLogBtn.className = 'btn btn-lang';
-    clearLogBtn.textContent = t('settings.network_log_clear');
-    clearLogBtn.addEventListener('click', () => {
-      clearNetworkLog();
-      renderLog();
-    });
-
-    bodyHost.appendChild(clearLogBtn);
-    bodyHost.appendChild(logList);
-    renderLog();
-  }
-
-  async function loadDiagnostics() {
-    bodyHost.innerHTML = '';
-    const loading = document.createElement('p');
-    loading.className = 'hint';
-    loading.textContent = '…';
-    bodyHost.appendChild(loading);
-    try {
-      const info = await window.blip.getNetworkDiagnostics?.();
-      renderDiagnostics(info);
-    } catch {
-      renderDiagnostics(null);
-    }
-  }
-
-  refreshBtn.addEventListener('click', () => {
-    void loadDiagnostics();
-  });
-
-  copyBtn.addEventListener('click', async () => {
-    if (!lastDiagnostics) return;
-    const text = formatDiagnosticsText(lastDiagnostics);
-    const ok = await copyTextToClipboard(text);
-    if (ok) {
-      showAppToast({
-        title: t('settings.network_copy_done'),
-        durationMs: 2800,
-      });
-    } else {
-      showAppToast({
-        title: t('settings.network_copy_fail'),
-        durationMs: 4000,
-        variant: 'danger',
-      });
-    }
-  });
-
-  void loadDiagnostics();
-
-  const statsRefreshTimer = setInterval(() => {
-    statsUi?.refresh?.();
-    if (state.config?.achievementsEnabled) syncAchievements(state.config);
-  }, 60_000);
-
-  frag._networkCleanup = () => clearInterval(statsRefreshTimer);
-
-  return frag;
 }
 
 function buildSettingsShortcutsPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel settings-panel--shortcuts';
-
-  appendSettingsPanelHeader(frag, 'settings.section_shortcuts');
-
-  function addShortcutBlock(scopeKey, rows) {
-    const sub = document.createElement('p');
-    sub.className = 'settings-shortcuts-sub';
-    sub.dataset.i18n = scopeKey;
-    sub.textContent = t(scopeKey);
-    frag.appendChild(sub);
-
-    const list = document.createElement('dl');
-    list.className = 'settings-shortcuts-list';
-    for (const [key, keys] of rows) {
-      const dt = document.createElement('dt');
-      dt.dataset.i18n = key;
-      dt.textContent = t(key);
-      const dd = document.createElement('dd');
-      dd.textContent = keys;
-      list.appendChild(dt);
-      list.appendChild(dd);
-    }
-    frag.appendChild(wrapInSettingsListPanel(list, 'settings-shortcuts-panel'));
-  }
-
-  addShortcutBlock('settings.shortcuts_main_scope', [
-    ['settings.shortcuts_nav_dial', 'Alt+1'],
-    ['settings.shortcuts_nav_peers', 'Alt+2'],
-    ['settings.shortcuts_nav_chat', 'Alt+3'],
-    ['settings.shortcuts_nav_settings', 'Alt+4'],
-    ['settings.shortcuts_open_settings', 'Ctrl+,'],
-    ['settings.shortcuts_chat_search', 'Ctrl+F'],
-  ]);
-
-  addShortcutBlock('settings.shortcuts_call_scope', [
-    ['settings.shortcuts_mute', 'M'],
-    ['settings.shortcuts_deafen', 'D'],
-    ['settings.shortcuts_share', 'S'],
-    ['settings.shortcuts_fullscreen', 'F'],
-    ['settings.shortcuts_accept', 'Enter'],
-    ['settings.shortcuts_end', 'Esc'],
-  ]);
-
-  addShortcutBlock('settings.shortcuts_global_scope', [
-    ['settings.shortcuts_nav_dial', 'Alt+1'],
-    ['settings.shortcuts_nav_peers', 'Alt+2'],
-    ['settings.shortcuts_nav_chat', 'Alt+3'],
-    ['settings.shortcuts_nav_settings', 'Alt+4'],
-    ['settings.shortcuts_open_settings', 'Ctrl+,'],
-    ['settings.shortcuts_toggle_dnd', 'Ctrl+Shift+D'],
-    ['settings.shortcuts_hangup_global', 'Ctrl+Shift+End'],
-    ['settings.shortcuts_overlay', 'Shift+Alt+O'],
-  ]);
-
-  const globalRow = document.createElement('div');
-  globalRow.className = 'settings-toggle-with-hint';
-  const globalToggle = createPixelToggle({
-    checked: state.config.globalShortcutsEnabled !== false,
-    labelKey: 'settings.shortcuts_global_enable',
-    onChange: async (checked) => {
-      state.config = await api.saveConfig({ globalShortcutsEnabled: checked });
-      showAppToast({
-        title: checked
-          ? t('settings.shortcuts_global_on')
-          : t('settings.shortcuts_global_off'),
-        durationMs: 3200,
-      });
-    },
+  return buildShortcutsPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
   });
-  globalRow.appendChild(globalToggle.el);
-  globalRow.appendChild(createPixelHintIcon('settings.shortcuts_global_hint'));
-  frag.appendChild(globalRow);
-
-  return frag;
 }
 
 function buildSettingsDeveloperPanel() {
@@ -2398,234 +2057,16 @@ function formatUpdateStatusText() {
 }
 
 function buildSettingsUpdatesPanel() {
-  const frag = document.createElement('div');
-  frag.className = 'settings-panel settings-panel--updates';
-
-  appendSettingsPanelHeader(frag, 'settings.section_updates');
-
-  const autoTitle = document.createElement('h3');
-  autoTitle.className = 'section-subtitle';
-  autoTitle.dataset.i18n = 'settings.updates_auto_title';
-  autoTitle.textContent = t('settings.updates_auto_title');
-
-  const autoHintRow = document.createElement('div');
-  autoHintRow.className = 'settings-label-row';
-  autoHintRow.appendChild(autoTitle);
-  autoHintRow.appendChild(createPixelHintIcon('settings.updates_auto_hint'));
-  frag.appendChild(autoHintRow);
-
-  frag.appendChild(
-    createPixelToggle({
-      checked: state.config.autoDownloadUpdates !== false,
-      labelKey: 'settings.updates_auto_download',
-      onChange: async (checked) => {
-        state.config = await api.saveConfig({ autoDownloadUpdates: checked });
-      },
-    }).el
-  );
-
-  const verLine = document.createElement('p');
-  verLine.className = 'settings-about-version';
-  frag.appendChild(verLine);
-
-  const statusLine = document.createElement('p');
-  statusLine.className = 'settings-update-status';
-  frag.appendChild(statusLine);
-
-  const actions = document.createElement('div');
-  actions.className = 'settings-updates-actions';
-
-  const checkBtn = document.createElement('button');
-  checkBtn.type = 'button';
-  checkBtn.className = 'btn btn-accent';
-  checkBtn.disabled = true;
-  checkBtn.dataset.i18n = 'settings.updates_check';
-  checkBtn.textContent = t('settings.updates_check');
-  checkBtn.addEventListener('click', async () => {
-    if (!window.blip.checkForUpdates) return;
-    lastUpdateStatus = { state: 'checking' };
-    delete statusLine.dataset.i18n;
-    statusLine.textContent = formatUpdateStatusText();
-    const r = await window.blip.checkForUpdates();
-    if (r?.skipped) {
-      lastUpdateStatus = null;
-      if (r.reason === 'portable') {
-        statusLine.dataset.i18n = 'settings.updates_portable_only';
-        statusLine.textContent = t('settings.updates_portable_only');
-        const meta = await window.blip.getAppMetadata?.().catch(() => null);
-        if (meta?.version) void checkUpdatesViaGithub(meta.version);
-      } else {
-        statusLine.dataset.i18n = 'settings.updates_dev_only';
-        statusLine.textContent = t('settings.updates_dev_only');
-      }
-    } else {
-      statusLine.textContent = formatUpdateStatusText();
-    }
+  return buildUpdatesPanelView({
+    getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
+    getLastUpdateStatus: () => lastUpdateStatus,
+    setLastUpdateStatus: (v) => {
+      lastUpdateStatus = v;
+    },
+    formatUpdateStatusText,
+    checkUpdatesViaGithub,
   });
-
-  const releasesBtn = document.createElement('button');
-  releasesBtn.type = 'button';
-  releasesBtn.className = 'btn btn-lang';
-  releasesBtn.dataset.i18n = 'settings.updates_releases';
-  releasesBtn.textContent = t('settings.updates_releases');
-  releasesBtn.addEventListener('click', async () => {
-    const meta = await window.blip.getAppMetadata?.().catch(() => null);
-    window.blip.openExternal?.(`${githubRepoBase(meta)}/releases`);
-  });
-
-  const installBtn = document.createElement('button');
-  installBtn.type = 'button';
-  installBtn.className = 'btn btn-lang';
-  installBtn.dataset.i18n = 'settings.updates_install';
-  installBtn.textContent = t('settings.updates_install');
-  installBtn.disabled = lastUpdateStatus?.state !== 'downloaded';
-  installBtn.addEventListener('click', () => {
-    window.blip.quitAndInstall?.();
-  });
-
-  actions.appendChild(checkBtn);
-  actions.appendChild(releasesBtn);
-  actions.appendChild(installBtn);
-  frag.appendChild(actions);
-
-  const releasesTitle = document.createElement('h3');
-  releasesTitle.className = 'section-subtitle';
-  releasesTitle.dataset.i18n = 'settings.updates_recent';
-  releasesTitle.textContent = t('settings.updates_recent');
-  frag.appendChild(releasesTitle);
-
-  const releasesFeed = document.createElement('div');
-  releasesFeed.className = 'settings-releases-feed settings-list-panel settings-list-panel--tall';
-  releasesFeed.textContent = '…';
-  frag.appendChild(releasesFeed);
-
-  function formatReleaseDate(iso) {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleDateString();
-    } catch {
-      return '';
-    }
-  }
-
-  void window.blip.getGithubReleases?.(8).then((result) => {
-    releasesFeed.innerHTML = '';
-    if (!result?.ok || !result.releases?.length) {
-      const err = document.createElement('p');
-      err.className = 'hint';
-      err.dataset.i18n = 'settings.updates_releases_error';
-      err.textContent = t('settings.updates_releases_error');
-      releasesFeed.appendChild(err);
-      return;
-    }
-    const feed = filterReleasesForChannel(result.releases, !!state.config?.receiveBetaUpdates);
-    for (const r of feed) {
-      const card = document.createElement('article');
-      card.className = 'settings-release-card';
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.setAttribute(
-        'aria-label',
-        t('settings.updates_open_notes').replace('{v}', r.tag || r.name || ''),
-      );
-
-      const openNotes = () => {
-        openReleaseNotesOverlay({
-          tag: r.tag,
-          name: r.name,
-          body: r.body,
-          url: r.url,
-        });
-      };
-
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('button, a')) return;
-        openNotes();
-      });
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openNotes();
-        }
-      });
-
-      const head = document.createElement('div');
-      head.className = 'settings-release-head';
-      const tag = document.createElement('strong');
-      tag.textContent = r.tag || r.name || '—';
-      const date = document.createElement('span');
-      date.className = 'settings-release-date';
-      date.textContent = formatReleaseDate(r.publishedAt);
-      head.appendChild(tag);
-      if (r.prerelease) {
-        const pre = document.createElement('span');
-        pre.className = 'settings-release-pre';
-        pre.dataset.i18n = 'settings.release_pre';
-        pre.textContent = t('settings.release_pre');
-        head.appendChild(pre);
-      }
-      head.appendChild(date);
-      card.appendChild(head);
-
-      if (r.name && r.name !== r.tag) {
-        const title = document.createElement('p');
-        title.className = 'settings-release-name';
-        title.textContent = r.name;
-        card.appendChild(title);
-      }
-
-      if (r.body) {
-        const body = document.createElement('div');
-        body.className = 'settings-release-body release-md release-md--preview';
-        body.innerHTML = releaseMarkdownToHtml(r.body);
-        bindReleaseMarkdownLinks(body, (href) => window.blip.openExternal?.(href));
-        card.appendChild(body);
-      }
-
-      if (r.url) {
-        const link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'btn btn-lang settings-release-link';
-        link.dataset.i18n = 'settings.updates_open_release';
-        link.textContent = t('settings.updates_open_release');
-        link.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.blip.openExternal?.(r.url);
-        });
-        card.appendChild(link);
-      }
-
-      releasesFeed.appendChild(card);
-    }
-  }).catch(() => {
-    releasesFeed.innerHTML = '';
-    const err = document.createElement('p');
-    err.className = 'hint';
-    err.textContent = t('settings.updates_releases_error');
-    releasesFeed.appendChild(err);
-  });
-
-  window.blip.getAppMetadata?.().then((meta) => {
-    verLine.textContent = formatAppVersionBracket(meta);
-    if (!meta?.isPackaged) {
-      statusLine.dataset.i18n = 'settings.updates_dev_only';
-      statusLine.textContent = t('settings.updates_dev_only');
-      checkBtn.disabled = true;
-      installBtn.disabled = true;
-    } else if (meta?.isPortable) {
-      statusLine.dataset.i18n = 'settings.updates_portable_only';
-      statusLine.textContent = t('settings.updates_portable_only');
-      checkBtn.disabled = false;
-      installBtn.disabled = true;
-    } else {
-      checkBtn.disabled = false;
-      delete statusLine.dataset.i18n;
-      statusLine.textContent = formatUpdateStatusText();
-      installBtn.disabled = lastUpdateStatus?.state !== 'downloaded';
-    }
-  }).catch(() => {});
-
-  return frag;
 }
 
 function buildSettingsPlaceholderPanel() {
