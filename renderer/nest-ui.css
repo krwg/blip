@@ -3,6 +3,7 @@
 html[data-ui-skin='nest'] {
   --blip-font: var(--floke-font-main);
   --blip-mono: var(--floke-font-mono);
+  --floke-accent: var(--blip-accent);
   --nest-radius-sm: 10px;
   --nest-radius-md: 14px;
   --nest-radius-lg: 18px;
@@ -100,18 +101,39 @@ html[data-ui-skin='nest'] .btn,
 html[data-ui-skin='nest'] .nav-btn,
 html[data-ui-skin='nest'] .pixel-toggle,
 html[data-ui-skin='nest'] .pixel-hint-btn {
-  border-width: 0.5px;
-  border-color: color-mix(in srgb, var(--blip-accent) 28%, transparent);
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--blip-accent) 48%, var(--floke-border-medium));
   font-weight: 510;
   letter-spacing: -0.01em;
   text-transform: none;
   box-shadow: var(--nest-shadow-sm);
 }
 
+html[data-ui-skin='nest'] .btn-accent,
+html[data-ui-skin='nest'] .btn.btn-accent {
+  border-color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 16%, var(--blip-glass));
+  color: var(--blip-accent);
+}
+
+html[data-ui-skin='nest'] .btn-accent:hover,
+html[data-ui-skin='nest'] .btn.btn-accent:hover {
+  background: color-mix(in srgb, var(--blip-accent) 26%, var(--blip-glass));
+  border-color: var(--blip-accent);
+}
+
+html[data-ui-skin='nest'] .btn.active,
+html[data-ui-skin='nest'] .btn-accent.active {
+  background: color-mix(in srgb, var(--blip-accent) 32%, var(--blip-glass));
+  border-color: var(--blip-accent);
+  color: var(--blip-accent);
+}
+
 html[data-ui-skin='nest'] .btn:hover,
 html[data-ui-skin='nest'] .nav-btn:hover {
   box-shadow: var(--nest-shadow-md);
   transform: translateY(-0.5px);
+  border-color: color-mix(in srgb, var(--blip-accent) 62%, var(--floke-border-medium));
 }
 
 html[data-ui-skin='nest'] .btn:active,
@@ -124,6 +146,30 @@ html[data-ui-skin='nest'] .nav-btn.active {
   border-radius: 999px !important;
   box-shadow: none;
   font-weight: 600;
+  color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--blip-accent) 55%, transparent);
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:checked + .pixel-toggle {
+  border-color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 22%, var(--blip-glass));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blip-accent) 28%, transparent);
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:checked + .pixel-toggle::after {
+  background: var(--blip-accent);
+  border-radius: 5px;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle,
+html[data-ui-skin='nest'] .pixel-hint-btn {
+  border-radius: var(--nest-radius-sm) !important;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:focus-visible + .pixel-toggle {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 28%, transparent);
 }
 
 html[data-ui-skin='nest'] .glass {
@@ -328,4 +374,49 @@ html[data-ui-skin='nest'] .achievement-toast__icon .ach-icon-slot {
 html[data-ui-skin='nest'] .settings-panel--achievements .ach-card__mark,
 html[data-ui-skin='nest'] .settings-panel--achievements .btn {
   border-radius: var(--nest-radius-sm) !important;
+}
+
+/* NestUI 1.1 — accent consistency on soft controls */
+html[data-ui-skin='nest'] .chip,
+html[data-ui-skin='nest'] .badge,
+html[data-ui-skin='nest'] .tag {
+  border-color: color-mix(in srgb, var(--blip-accent) 36%, var(--floke-border-light));
+}
+
+html[data-ui-skin='nest'] .status-dot,
+html[data-ui-skin='nest'] .presence-dot,
+html[data-ui-skin='nest'] .peer-presence-dot {
+  border-radius: 999px !important;
+}
+
+html[data-ui-skin='nest'] .peer-row.is-selected,
+html[data-ui-skin='nest'] .peer-row.selected,
+html[data-ui-skin='nest'] .peer-row[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--blip-accent) 52%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blip-accent) 22%, transparent);
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn:focus-visible,
+html[data-ui-skin='nest'] .btn:focus-visible,
+html[data-ui-skin='nest'] .pixel-hint-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 26%, transparent);
+}
+
+html[data-ui-skin='nest'] .toast {
+  border-color: color-mix(in srgb, var(--blip-accent) 28%, var(--floke-border-light));
+}
+
+html[data-ui-skin='nest'] .id-cell {
+  border-color: color-mix(in srgb, var(--blip-accent) 34%, var(--floke-border-medium));
+}
+
+html[data-ui-skin='nest'] .settings-dropdown:focus,
+html[data-ui-skin='nest'] .blip-select:focus {
+  border-color: color-mix(in srgb, var(--blip-accent) 72%, transparent);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .btn-accent,
+html[data-ui-skin='nest'][data-theme='dark'] .btn.btn-accent {
+  background: color-mix(in srgb, var(--blip-accent) 18%, rgba(44, 44, 46, 0.85));
 }

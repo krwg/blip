@@ -2,6 +2,9 @@ import { app } from 'electron';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import os from 'os';
+import { ipv4Broadcast, normalizePeerIp as normalizePeerIpPure, peerDialIps } from './lan-ipv4.js';
+
+export { ipv4Broadcast, peerDialIps };
 
 const DEFAULT_CONFIG = {
   blipId: null,
@@ -189,8 +192,7 @@ export function resetConfigToDefaults() {
 }
 
 export function normalizePeerIp(ip) {
-  if (!ip || typeof ip !== 'string') return '';
-  return ip.replace(/^::ffff:/i, '');
+  return normalizePeerIpPure(ip);
 }
 
 export function getLocalIpv4Set() {
@@ -205,14 +207,42 @@ export function getLocalIpv4Set() {
   return set;
 }
 
-export function getLocalIp() {
+function ifacePreference(name) {
+  const s = String(name || '').toLowerCase();
+  if (/vethernet|virtual|vmware|vbox|hyper-v|docker|wsl|tun|tap|loop|bluetooth/.test(s)) {
+    return 3;
+  }
+  if (/wi-?fi|wlan|airport|wl/.test(s)) return 1;
+  if (/ethernet|eth|en\d|lan|local area/.test(s)) return 0;
+  return 2;
+}
+
+/** Non-internal IPv4 NICs with directed broadcast targets. */
+export function listLanIpv4Interfaces() {
   const nets = os.networkInterfaces();
+  const out = [];
   for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
+    for (const net of nets[name] || []) {
+      const v4 = net.family === 'IPv4' || net.family === 4;
+      if (!v4 || net.internal) continue;
+      const address = normalizePeerIp(net.address);
+      if (!address || address.startsWith('169.254.')) continue;
+      const netmask = net.netmask || '255.255.255.0';
+      const broadcast =
+        (net.broadcast && normalizePeerIp(net.broadcast)) || ipv4Broadcast(address, netmask);
+      if (!broadcast) continue;
+      out.push({ name, address, netmask, broadcast });
     }
   }
-  return '127.0.0.1';
+  out.sort((a, b) => ifacePreference(a.name) - ifacePreference(b.name));
+  return out;
+}
+
+export function getLocalIpv4List() {
+  return listLanIpv4Interfaces().map((i) => i.address);
+}
+
+export function getLocalIp() {
+  const list = listLanIpv4Interfaces();
+  return list[0]?.address || '127.0.0.1';
 }

@@ -13,6 +13,9 @@ import { detectForegroundApp } from '../presence-detect.js';
  * @param {() => number} deps.getLastOverlayUnread
  * @param {(n: number) => void} deps.setLastOverlayUnread
  * @param {() => number} deps.getPeersOnline
+ * @param {() => import('electron').BrowserWindow|null} [deps.getCallWindow]
+ * @param {() => Promise<void>|void} [deps.hangupActiveCall]
+ * @param {(muted: boolean) => void} [deps.setActiveCallMuted]
  */
 export function registerOverlayIpc(deps) {
   const {
@@ -20,6 +23,9 @@ export function registerOverlayIpc(deps) {
     getLastOverlayUnread,
     setLastOverlayUnread,
     getPeersOnline,
+    getCallWindow,
+    hangupActiveCall,
+    setActiveCallMuted,
   } = deps;
 
   ipcMain.handle('get-foreground-presence', async () => detectForegroundApp());
@@ -46,5 +52,38 @@ export function registerOverlayIpc(deps) {
         idleLabel: 'BLIP',
       });
     }
+  });
+
+  ipcMain.handle('overlay-call-mute', async () => {
+    const win = getCallWindow?.();
+    if (win && !win.isDestroyed()) {
+      try {
+        win.webContents.send('overlay-toggle-mute');
+      } catch {
+        /* ignore */
+      }
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle('overlay-call-hangup', async () => {
+    const win = getCallWindow?.();
+    if (win && !win.isDestroyed()) {
+      try {
+        win.webContents.send('global-hangup');
+      } catch {
+        /* ignore */
+      }
+    } else if (hangupActiveCall) {
+      await hangupActiveCall();
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle('call-report-local-state', (_, payload) => {
+    if (typeof setActiveCallMuted === 'function') {
+      setActiveCallMuted(!!payload?.muted);
+    }
+    return { ok: true };
   });
 }

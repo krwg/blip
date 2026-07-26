@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ui-skin="pixel" data-theme="dark" data-accent="mint">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,15 +7,27 @@
   <title>BLIP Overlay</title>
   <style>
     :root {
-      --bg: rgba(10, 12, 18, 0.82);
-      --border: rgba(148, 163, 184, 0.32);
+      --bg: rgba(12, 14, 20, 0.88);
+      --border: rgba(148, 163, 184, 0.28);
       --text: rgba(241, 245, 249, 0.96);
-      --muted: rgba(148, 163, 184, 0.82);
+      --muted: rgba(148, 163, 184, 0.78);
       --accent: #94a3b8;
-      --game: #5eead4;
       --call: #86efac;
+      --danger: #f87171;
       --warn: #fcd34d;
+      --radius: 0px;
       --ease: cubic-bezier(0.33, 1, 0.68, 1);
+      --font: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    }
+    html[data-ui-skin='nest'] {
+      --radius: 14px;
+      --bg: rgba(28, 28, 30, 0.82);
+      --border: rgba(72, 72, 74, 0.7);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    }
+    html[data-ui-skin='pixel'] {
+      --radius: 0px;
+      --font: ui-monospace, "Cascadia Mono", Consolas, monospace;
     }
     html, body {
       margin: 0;
@@ -23,27 +35,31 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
-      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      font-family: var(--font);
       color: var(--text);
       -webkit-user-select: none;
       user-select: none;
     }
     .panel {
       box-sizing: border-box;
-      margin: 12px;
-      padding: 16px 18px;
-      width: calc(100% - 24px);
-      min-height: calc(100% - 24px);
-      border-radius: 16px;
+      margin: 10px;
+      padding: 14px 14px 12px;
+      width: calc(100% - 20px);
+      min-height: calc(100% - 20px);
+      border-radius: var(--radius);
       background: var(--bg);
       border: 1px solid var(--border);
       backdrop-filter: blur(22px);
       -webkit-backdrop-filter: blur(22px);
-      box-shadow: 0 10px 36px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 10px 36px rgba(0, 0, 0, 0.42);
       display: flex;
       flex-direction: column;
       gap: 12px;
       animation: in 200ms var(--ease) both;
+    }
+    html[data-ui-skin='nest'] .panel {
+      border-radius: 18px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
     }
     @keyframes in {
       from { opacity: 0; transform: translateY(4px); }
@@ -53,59 +69,43 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 12px;
+      gap: 10px;
     }
     .brand-block { min-width: 0; }
     .brand {
       font-size: 10px;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--muted);
     }
     .self-line {
-      margin-top: 4px;
+      margin-top: 3px;
       font-size: 12px;
-      font-weight: 600;
-      color: var(--text);
+      font-weight: 650;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 200px;
+      max-width: 190px;
     }
-    .self-id {
-      font-size: 11px;
-      color: var(--muted);
-      font-weight: 500;
-    }
-    .clock {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-    }
-    .clock-time {
-      display: block;
-      font-size: 18px;
-      font-weight: 650;
-      letter-spacing: 0.02em;
-    }
-    .clock-date {
-      display: block;
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
+    .self-id { color: var(--muted); font-weight: 500; }
+    .clock { text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .clock-time { display: block; font-size: 17px; font-weight: 650; }
+    .clock-date { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
     .stats {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+    .stats.has-unread { grid-template-columns: 1fr 1fr 1fr; }
     .stat {
       padding: 8px 10px;
-      border-radius: 10px;
+      border-radius: calc(var(--radius) + 2px);
       border: 1px solid var(--border);
       background: rgba(15, 23, 42, 0.35);
       min-width: 0;
     }
+    html[data-ui-skin='nest'] .stat { border-radius: 12px; background: rgba(44, 44, 46, 0.55); }
+    .stat.hidden { display: none; }
     .stat-label {
       font-size: 9px;
       letter-spacing: 0.1em;
@@ -127,61 +127,212 @@
       text-transform: uppercase;
       color: var(--muted);
     }
-    .kind--game { color: var(--game); }
-    .kind--call { color: var(--call); }
+    .kind--game { color: #5eead4; }
     .title {
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 700;
       line-height: 1.3;
       word-break: break-word;
     }
-    .sub {
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
+    .sub { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .chip {
       font-size: 11px;
       padding: 3px 8px;
-      border-radius: 999px;
+      border-radius: calc(var(--radius) + 999px);
       border: 1px solid var(--border);
       color: var(--accent);
       background: rgba(15, 23, 42, 0.4);
     }
+    html[data-ui-skin='nest'] .chip { border-radius: 999px; }
     .chip--warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
     .chip--ok { color: var(--call); border-color: color-mix(in srgb, var(--call) 40%, transparent); }
-    .chip.hidden { display: none; }
+    .idle .activity-block .title { color: var(--muted); font-weight: 550; }
+    .activity-block.hidden { display: none; }
+
     .call-box {
-      padding: 12px 12px 14px;
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--call) 40%, transparent);
-      background: color-mix(in srgb, var(--call) 12%, transparent);
+      padding: 12px;
+      border-radius: calc(var(--radius) + 4px);
+      border: 1px solid color-mix(in srgb, var(--call) 38%, transparent);
+      background: color-mix(in srgb, var(--call) 10%, transparent);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 10px;
     }
+    html[data-ui-skin='nest'] .call-box { border-radius: 16px; }
     .call-box.hidden { display: none; }
-    .call-meta {
+    .call-head {
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 2px;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
     }
+    .call-peer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .call-avatar {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      border-radius: calc(var(--radius) + 2px);
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--call) 35%, transparent);
+      background: #0b3d32;
+      display: grid;
+      place-items: center;
+    }
+    html[data-ui-skin='nest'] .call-avatar { border-radius: 999px; }
+    .call-avatar canvas,
+    .call-avatar img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+    }
+    .call-avatar-initials {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--call);
+      letter-spacing: 0.02em;
+    }
+    .call-peer-meta { min-width: 0; }
+    .call-peer-name {
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .call-peer-sub {
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--call);
+      font-variant-numeric: tabular-nums;
+    }
+    .call-badge {
+      flex-shrink: 0;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: calc(var(--radius) + 999px);
+      border: 1px solid color-mix(in srgb, var(--call) 45%, transparent);
+      color: var(--call);
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+    }
+    html[data-ui-skin='nest'] .call-badge { border-radius: 999px; }
+    .call-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .call-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(30, 34, 48, 0.85);
+      color: rgba(226, 232, 240, 0.88);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-radius: calc(var(--radius) + 2px);
+      cursor: pointer;
+      transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
+    }
+    html[data-ui-skin='nest'] .call-btn { border-radius: 12px; }
+    .call-btn:hover { background: rgba(45, 50, 68, 0.95); }
+    .call-btn:active { transform: scale(0.98); }
+    .call-btn--mute.is-muted {
+      color: var(--warn);
+      border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+      background: color-mix(in srgb, var(--warn) 12%, transparent);
+    }
+    .call-btn--end {
+      color: var(--danger);
+      border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+      background: color-mix(in srgb, var(--danger) 12%, transparent);
+    }
+    .call-btn--end:hover {
+      background: color-mix(in srgb, var(--danger) 20%, transparent);
+    }
+    .call-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 2px;
+      border-top: 1px solid rgba(148, 163, 184, 0.16);
+    }
+    .call-metrics {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .metric-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .metric-value {
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .metric-value--ok { color: var(--call); }
+    .metric-value--bad { color: var(--danger); }
+    .mic-meter {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 14px;
+      margin-left: 4px;
+    }
+    .mic-meter span {
+      width: 3px;
+      border-radius: 1px;
+      background: color-mix(in srgb, var(--call) 70%, transparent);
+      animation: micPulse 900ms ease-in-out infinite;
+    }
+    .mic-meter span:nth-child(1) { height: 40%; animation-delay: 0ms; }
+    .mic-meter span:nth-child(2) { height: 75%; animation-delay: 120ms; }
+    .mic-meter span:nth-child(3) { height: 55%; animation-delay: 240ms; }
+    .mic-meter span:nth-child(4) { height: 90%; animation-delay: 80ms; }
+    .mic-meter.is-muted span {
+      animation: none;
+      height: 22% !important;
+      background: color-mix(in srgb, var(--muted) 70%, transparent);
+    }
+    @keyframes micPulse {
+      0%, 100% { transform: scaleY(0.55); }
+      50% { transform: scaleY(1); }
+    }
+    .legacy-pill {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: calc(var(--radius) + 999px);
+      border: 1px solid color-mix(in srgb, #60a5fa 45%, transparent);
+      color: #93c5fd;
+      background: color-mix(in srgb, #3b82f6 14%, transparent);
+    }
+    html[data-ui-skin='nest'] .legacy-pill { border-radius: 999px; }
+    .legacy-pill.hidden { display: none; }
+
     .transfer-box {
       padding: 8px 10px;
-      border-radius: 10px;
+      border-radius: calc(var(--radius) + 2px);
       border: 1px solid var(--border);
       background: rgba(15, 23, 42, 0.4);
       font-size: 12px;
       color: var(--muted);
     }
+    html[data-ui-skin='nest'] .transfer-box { border-radius: 12px; }
     .transfer-box.hidden { display: none; }
     .transfer-box strong { color: var(--text); font-weight: 650; }
+
     .footer {
       display: flex;
       justify-content: space-between;
@@ -192,15 +343,25 @@
       padding-top: 2px;
       border-top: 1px solid rgba(148, 163, 184, 0.16);
     }
+    .footer-app {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .footer-app.hidden { visibility: hidden; }
     .badge {
       font-size: 11px;
       padding: 2px 7px;
-      border-radius: 999px;
+      border-radius: calc(var(--radius) + 999px);
       border: 1px solid var(--border);
       color: var(--accent);
     }
+    html[data-ui-skin='nest'] .badge { border-radius: 999px; }
     .badge.hidden { display: none; }
-    .idle .title { color: var(--muted); font-weight: 550; }
   </style>
 </head>
 <body>
@@ -225,23 +386,51 @@
         <div class="stat-label">Mesh</div>
         <div class="stat-value" id="statPeers">0 online</div>
       </div>
-      <div class="stat">
+      <div class="stat hidden" id="statUnreadWrap">
         <div class="stat-label">Unread</div>
         <div class="stat-value" id="statUnread">0</div>
       </div>
     </div>
 
     <div class="body">
-      <div class="kind" id="kind"></div>
-      <div class="title" id="title">—</div>
-      <div class="sub" id="sub"></div>
-      <div class="chips" id="activityChips"></div>
+      <div class="activity-block" id="activityBlock">
+        <div class="kind" id="kind"></div>
+        <div class="title" id="title">—</div>
+        <div class="sub" id="sub"></div>
+        <div class="chips" id="activityChips"></div>
+      </div>
 
       <div class="call-box hidden" id="callBox">
-        <div class="kind kind--call">In call</div>
-        <div class="title" id="callPeer" style="font-size:15px"></div>
-        <div class="sub" id="callElapsed"></div>
-        <div class="call-meta" id="callMeta"></div>
+        <div class="call-head">
+          <div class="call-peer-row">
+            <div class="call-avatar" id="callAvatar"></div>
+            <div class="call-peer-meta">
+              <div class="call-peer-name" id="callPeer"></div>
+              <div class="call-peer-sub" id="callElapsed"></div>
+            </div>
+          </div>
+          <div class="call-badge">in call</div>
+        </div>
+        <div class="call-actions">
+          <button type="button" class="call-btn call-btn--mute" id="muteBtn">mute</button>
+          <button type="button" class="call-btn call-btn--end" id="endBtn">end</button>
+        </div>
+        <div class="call-foot">
+          <div class="call-metrics">
+            <div>
+              <div class="metric-label">Mesh</div>
+              <div class="metric-value" id="callMesh">—</div>
+            </div>
+            <div>
+              <div class="metric-label">Ping</div>
+              <div class="metric-value metric-value--ok" id="callPing">—</div>
+            </div>
+            <div class="mic-meter" id="micMeter" title="Microphone">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <span class="legacy-pill hidden" id="legacyPill">Legacy</span>
+        </div>
       </div>
 
       <div class="transfer-box hidden" id="transferBox">
@@ -251,7 +440,7 @@
     </div>
 
     <div class="footer">
-      <span id="meta"></span>
+      <span class="footer-app" id="footerApp"></span>
       <span class="badge hidden" id="unread"></span>
     </div>
   </div>
