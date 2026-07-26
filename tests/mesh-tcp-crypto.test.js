@@ -64,6 +64,27 @@ describe('mesh-identity handshake v2', () => {
     expect(va.encryptedCapable).toBe(true);
   });
 
+  it('builds BLIP 1.1.x-compatible handshake v1 (no ECDH)', () => {
+    const cfg = ensureMeshIdentity({});
+    const built = buildHandshakePacket(cfg, 3, { legacy: true });
+    expect(built.packet.meshProto).toBe(1);
+    expect(built.packet.ecdhPubkey).toBeUndefined();
+    expect(built.ecdhPrivateKey).toBeNull();
+    const v = verifyHandshakePacket(built.packet);
+    expect(v.ok).toBe(true);
+    expect(v.encryptedCapable).toBe(false);
+    expect(v.meshProto).toBe(1);
+
+    const ack = buildHandshakeAckPacket(cfg, 7, built.packet.meshPubkey, null, null, {
+      legacy: true,
+    });
+    expect(ack.packet.meshProto).toBe(1);
+    expect(ack.packet.ecdhPubkey).toBeUndefined();
+    const va = verifyHandshakePacket(ack.packet, 7);
+    expect(va.ok).toBe(true);
+    expect(va.encryptedCapable).toBe(false);
+  });
+
   it('rebinds TOFU when verified announce carries a new mesh pubkey', () => {
     const cfg = {
       knownPeerKeys: { '9': 'old-key' },

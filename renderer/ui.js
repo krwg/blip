@@ -237,7 +237,7 @@ let showPeerContextMenu = () => {};
 
 const peerLatencyMs = new Map();
 
-const MESH_PULSE_INTERVAL_MS = 60_000;
+const MESH_PULSE_INTERVAL_MS = 2_500;
 let meshPulseTimer = null;
 
 const viewRouter = createViewRouter({
@@ -289,20 +289,22 @@ async function openCallOutgoing(peerId, video = false) {
     if (!result?.ok) {
       const code = result?.errorCode ?? result?.error ?? '999';
       const blocked = Number(code) === 111 || /unencrypted_mesh_disabled/i.test(String(result?.error || ''));
+      const codeStr = String(code).replace(/\D/g, '') || '999';
       showAppToast({
         title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-        body: blocked ? '' : t('call.error_code').replace('{code}', String(code)),
+        body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
         variant: 'danger',
         durationMs: 5000,
       });
     }
   } catch (e) {
     console.error('[BLIP] openCallOutgoing', e);
-    const code = e?.blipCode ?? e?.errorCode ?? '999';
-    const blocked = Number(code) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
+    const raw = e?.blipCode ?? e?.errorCode ?? e?.message ?? '999';
+    const codeStr = String(raw).replace(/\D/g, '') || '999';
+    const blocked = Number(codeStr) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
     showAppToast({
       title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-      body: blocked ? '' : t('call.error_code').replace('{code}', String(code)),
+      body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
       variant: 'danger',
       durationMs: 5000,
     });
