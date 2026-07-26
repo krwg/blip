@@ -257,6 +257,7 @@ export class Discovery {
       meshPlusTrust: peerMeshPlusTrustFromAnnounce(data),
     };
 
+    let changed = false;
     if (
       !existing ||
       existing.ip !== peer.ip ||
@@ -276,7 +277,9 @@ export class Discovery {
       existing.meshPlusTrust !== peer.meshPlusTrust
     ) {
       this.peers.set(data.blipId, peer);
+      changed = true;
     } else {
+      const wasOffline = !existing.online;
       existing.lastSeen = Date.now();
       existing.online = true;
       existing.presence = presence;
@@ -294,10 +297,12 @@ export class Discovery {
       existing.buildIssuer = peer.buildIssuer;
       existing.buildVerified = peer.buildVerified;
       existing.meshPlusTrust = peer.meshPlusTrust;
+      if (wasOffline) changed = true;
     }
 
     this.occupiedIds.add(data.blipId);
-    this.emitPeers();
+    // Keep lastSeen warm without rebuilding the contacts UI every announce (~5s).
+    if (changed) this.emitPeers();
   }
 
   cleanupStale() {

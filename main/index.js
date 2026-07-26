@@ -797,8 +797,16 @@ function wirePeerSocket(socket, socketKey, peerIp) {
     }
     clearSocketSession(socket);
     peerSockets.delete(socketKey);
+    const peerId = blipIdFromSocketKey(socketKey);
+    if (peerId != null) tcpServer?.unregisterConnection?.(peerId, socket);
     socket._blipPeerWired = false;
   });
+}
+
+function blipIdFromSocketKey(socketKey) {
+  const parts = String(socketKey || '').split(':');
+  const id = Number(parts[1]);
+  return Number.isFinite(id) ? id : null;
 }
 
 async function ensurePeerSocket(blipId) {
@@ -809,8 +817,6 @@ async function ensurePeerSocket(blipId) {
   if (!peer.online) {
     throw createBlipError(BlipErrorCode.PEER_OFFLINE, `Peer #${blipId} offline`);
   }
-
-  console.error(`[BLIP dial] ensurePeerSocket ${formatPeerDialDebug(peer)}`);
 
   const gate = assertMayUseUnencryptedPeer(config, peer);
   if (!gate.ok) {
@@ -835,6 +841,8 @@ async function ensurePeerSocket(blipId) {
 
     const inflight = peerSocketConnectInflight.get(socketKey);
     if (inflight) return inflight;
+
+    console.error(`[BLIP dial] ensurePeerSocket ${formatPeerDialDebug(peer)}`);
 
     const registerConnection = (id, sock) => tcpServer?.registerConnection?.(id, sock);
 

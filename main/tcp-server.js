@@ -102,10 +102,23 @@ export function createTcpServer(handlers, tcpPort = DEFAULT_TCP_PORT) {
   const api = {
     server,
     registerConnection(blipId, socket) {
+      if (!socket) {
+        connections.delete(blipId);
+        return;
+      }
       connections.set(blipId, socket);
     },
+    /** Drop registration only if it still points at this socket. */
+    unregisterConnection(blipId, socket) {
+      if (connections.get(blipId) === socket) connections.delete(blipId);
+    },
     getConnection(blipId) {
-      return connections.get(blipId);
+      const socket = connections.get(blipId);
+      if (socket && socket.destroyed) {
+        connections.delete(blipId);
+        return undefined;
+      }
+      return socket;
     },
     sendTo(blipId, payload) {
       const socket = connections.get(blipId);

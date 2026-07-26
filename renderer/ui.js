@@ -236,6 +236,8 @@ let showGroupContextMenu = () => {};
 let showPeerContextMenu = () => {};
 
 const peerLatencyMs = new Map();
+/** Consecutive silent-ping failures per peer before clearing last-known ms. */
+const peerLatencyFails = new Map();
 
 const MESH_PULSE_INTERVAL_MS = 2_500;
 let meshPulseTimer = null;
@@ -1759,10 +1761,14 @@ function refreshPeerPulseDom() {
     const id = Number(el.dataset.peerPulse);
     const peer = state.peers.find((p) => p.blipId === id);
     if (!peer) return;
-    el.textContent = formatPeerSubline(peer);
-    el.classList.toggle('peer-pulse--status', !!(peer.online && (peer.presenceText || '').trim()));
-    el.classList.toggle('peer-pulse--live', peer.online && peerLatencyMs.has(id));
-    el.classList.toggle('peer-pulse--offline', !peer.online);
+    const nextText = formatPeerSubline(peer);
+    if (el.textContent !== nextText) el.textContent = nextText;
+    const status = !!(peer.online && (peer.presenceText || '').trim());
+    const live = peer.online && peerLatencyMs.has(id);
+    const offline = !peer.online;
+    el.classList.toggle('peer-pulse--status', status);
+    el.classList.toggle('peer-pulse--live', live);
+    el.classList.toggle('peer-pulse--offline', offline);
   });
 }
 
@@ -1771,12 +1777,21 @@ async function pingPeerSilent(blipId) {
   try {
     const result = await window.blip.pingPeer(blipId);
     if (result?.ok && result.ms != null) {
-      peerLatencyMs.set(blipId, result.ms);
+      peerLatencyFails.set(blipId, 0);
+      const prev = peerLatencyMs.get(blipId);
+      const next =
+        prev == null ? result.ms : Math.round(prev * 0.65 + result.ms * 0.35);
+      if (peerLatencyMs.get(blipId) !== next) peerLatencyMs.set(blipId, next);
     } else {
-      peerLatencyMs.delete(blipId);
+      const fails = (peerLatencyFails.get(blipId) || 0) + 1;
+      peerLatencyFails.set(blipId, fails);
+      // Keep last-known ms through transient ping misses (Hamachi / short TCP).
+      if (fails >= 3) peerLatencyMs.delete(blipId);
     }
   } catch {
-    peerLatencyMs.delete(blipId);
+    const fails = (peerLatencyFails.get(blipId) || 0) + 1;
+    peerLatencyFails.set(blipId, fails);
+    if (fails >= 3) peerLatencyMs.delete(blipId);
   }
 }
 
@@ -1810,6 +1825,7 @@ async function runPeerPing(peer) {
   }
   const result = await window.blip.pingPeer(peer.blipId);
   if (result?.ok && result.ms != null) {
+    peerLatencyFails.set(peer.blipId, 0);
     peerLatencyMs.set(peer.blipId, result.ms);
     if (!state.config?.doNotDisturb) sounds.meshPing();
     showAppToast({
@@ -1819,7 +1835,7 @@ async function runPeerPing(peer) {
     });
     refreshPeerPulseDom();
   } else {
-    peerLatencyMs.delete(peer.blipId);
+    peerLatencyFails.set(peer.blipId, (peerLatencyFails.get(peer.blipId) || 0) + 1);
     showAppToast({ title: t('peers.ping_fail'), variant: 'danger', durationMs: 4000 });
     refreshPeerPulseDom();
   }
