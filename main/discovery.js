@@ -230,6 +230,7 @@ export class Discovery {
     const check = verifyAnnouncePayload(data);
     const meshVerified = check.ok;
     const meshLegacy = !!check.meshLegacy;
+    const meshProto = Number(check.meshProto) || Number(data.meshProto) || 0;
     const meshPubkey = String(data.meshPubkey || '');
     const meshTcpEncrypted = existing?.meshTcpEncrypted === true && !meshLegacy;
 
@@ -245,6 +246,7 @@ export class Discovery {
       online: true,
       meshVerified,
       meshLegacy,
+      meshProto,
       meshTcpEncrypted,
       meshPubkey,
       meshPlus: !!data.meshPlus,
@@ -264,7 +266,9 @@ export class Discovery {
       existing.tcpPort !== peer.tcpPort ||
       existing.meshVerified !== peer.meshVerified ||
       existing.meshLegacy !== peer.meshLegacy ||
+      existing.meshProto !== peer.meshProto ||
       existing.meshTcpEncrypted !== peer.meshTcpEncrypted ||
+      existing.meshPubkey !== peer.meshPubkey ||
       existing.meshPlus !== peer.meshPlus ||
       existing.hasProfileGif !== peer.hasProfileGif ||
       existing.buildTrust !== peer.buildTrust ||
@@ -281,6 +285,7 @@ export class Discovery {
       existing.udpPort = peerUdp;
       existing.meshVerified = meshVerified;
       existing.meshLegacy = meshLegacy;
+      existing.meshProto = meshProto;
       if (meshLegacy) existing.meshTcpEncrypted = false;
       existing.meshPubkey = meshPubkey;
       existing.meshPlus = peer.meshPlus;
