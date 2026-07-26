@@ -33,6 +33,7 @@ Development line **Morse**. No GitHub Release until explicitly cut — see [`doc
 ### Fixed
 
 - **Call “Socket closed”** — reuse authenticated inbound mesh sockets for dial; TOFU rebind when a peer rotates mesh keys but LAN announce verifies the new pubkey (common on dev rebuilds).
+- **Call Morse → ≤1.1.x** — skip encrypted handshake for legacy peers (they often RST on `mesh-handshake`); reconnect plaintext compat if the first socket dies; numbered error codes (`shared/blip-errors.js`, README).
 - **Call waveform** — bars follow local mic level (AnalyserNode) instead of a CSS-only pulse; muted flattens bars.
 
 ### Added

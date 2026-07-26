@@ -21,3 +21,7 @@ WebRTC media for calls is separate from mesh TCP crypto; this setting only cover
 ## TOFU key rotation
 
 `knownPeerKeys` remembers the last successful mesh pubkey per blipId. If a peer **rotates** keys (dev rebuild, factory reset) but keeps the same number, Morse accepts the new key when the current LAN **announce** is signature-verified for that exact pubkey (rebind). A hard mismatch with no matching verified announce still rejects the handshake.
+
+## Calling BLIP ≤1.1.x
+
+Legacy peers often **close TCP** on unknown `mesh-handshake` frames. Morse therefore **skips** encrypted handshake when discovery marks the peer legacy (`meshProto < 2` / `meshLegacy` / no pubkey) and opens a plaintext compat session instead. If a handshake still races and the socket dies, Morse reconnects once in plaintext mode. Failures surface as numbered codes (`104`, `109`, …) — see README Error codes.
