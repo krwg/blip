@@ -8,6 +8,7 @@ import {
   listDisplaySources,
   setPendingDisplaySource,
 } from '../display-capture.js';
+import { blipErrorIpcPayload } from '../../shared/blip-errors.js';
 
 /**
  * @param {object} deps
@@ -22,7 +23,14 @@ export function registerShellIpc(deps) {
     return showDesktopNotification(payload);
   });
 
-  ipcMain.handle('list-display-sources', () => listDisplaySources());
+  ipcMain.handle('list-display-sources', async () => {
+    try {
+      const sources = await listDisplaySources();
+      return { ok: true, sources };
+    } catch (err) {
+      return blipErrorIpcPayload(err);
+    }
+  });
 
   ipcMain.handle('prepare-display-capture', (_, sourceId) => {
     if (typeof sourceId !== 'string' || !sourceId) return { ok: false };

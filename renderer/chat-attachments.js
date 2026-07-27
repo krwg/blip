@@ -2,10 +2,11 @@ import { getMaxFileBytes } from './file-transfer-limits.js';
 
 export const MAX_CHAT_FILE_BYTES = 100 * 1024 * 1024 * 1024;
 export const INLINE_FILE_BYTES = 768 * 1024;
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const MAX_EDGE = 960;
-const MAX_DATA_URL_CHARS = 520_000;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_EDGE = 2048;
+const MAX_DATA_URL_CHARS = 1_800_000;
 const MAX_INLINE_DATA_URL_CHARS = 1_100_000;
+const PREFER_ORIGINAL_EDGE = 2048;
 
 function inferImageMime(file) {
   if (file.type && file.type.startsWith('image/')) return file.type;
@@ -91,6 +92,23 @@ export async function encodeChatImageAttachment(file) {
     const ih = img.naturalHeight || img.height;
     if (!iw || !ih) throw new Error('decode');
 
+    const keepOriginal =
+      Math.max(iw, ih) <= PREFER_ORIGINAL_EDGE &&
+      file.size <= MAX_IMAGE_BYTES &&
+      /^(image\/(jpeg|png|webp|gif))$/i.test(mime);
+    if (keepOriginal) {
+      const original = await readFileAsDataUrl(file);
+      if (typeof original === 'string' && original.length <= MAX_DATA_URL_CHARS) {
+        return {
+          kind: 'image',
+          name: file.name || 'image.jpg',
+          mime,
+          size: file.size,
+          dataUrl: original,
+        };
+      }
+    }
+
     const scale = Math.min(1, MAX_EDGE / Math.max(iw, ih));
     const w = Math.max(1, Math.round(iw * scale));
     const h = Math.max(1, Math.round(ih * scale));
@@ -100,13 +118,15 @@ export async function encodeChatImageAttachment(file) {
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'medium';
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, w, h);
 
-    let q = 0.86;
-    let dataUrl = canvas.toDataURL('image/jpeg', q);
-    while (dataUrl.length > MAX_DATA_URL_CHARS && q > 0.45) {
-      q -= 0.06;
+    const outMime = mime === 'image/png' ? 'image/png' : 'image/jpeg';
+    let q = 0.92;
+    let dataUrl =
+      outMime === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', q);
+    while (outMime !== 'image/png' && dataUrl.length > MAX_DATA_URL_CHARS && q > 0.62) {
+      q -= 0.05;
       dataUrl = canvas.toDataURL('image/jpeg', q);
     }
     if (dataUrl.length > MAX_DATA_URL_CHARS) throw new Error('too_large');
@@ -114,7 +134,7 @@ export async function encodeChatImageAttachment(file) {
     return {
       kind: 'image',
       name: file.name || 'image.jpg',
-      mime: 'image/jpeg',
+      mime: outMime,
       size: file.size,
       dataUrl,
     };

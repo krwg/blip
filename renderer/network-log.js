@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'blip_netlog_v1';
-const MAX = 80;
+const MAX = 120;
 
 let entries = [];
 
@@ -18,16 +18,29 @@ function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(-MAX)));
   } catch {
-
+    /* ignore */
   }
 }
 
 load();
 
-export function logPeerEvent(peerId, event) {
-  entries.push({ ts: Date.now(), peerId: Number(peerId), event });
+export function logPeerEvent(peerId, event, detail = '') {
+  entries.push({
+    ts: Date.now(),
+    peerId: peerId != null ? Number(peerId) : null,
+    event: String(event || ''),
+    detail: detail ? String(detail).slice(0, 80) : '',
+  });
   if (entries.length > MAX) entries = entries.slice(-MAX);
   persist();
+}
+
+export function logDiscoveryEmit(meta = {}) {
+  const reason = meta?.reason || 'unspecified';
+  const peerId = meta?.peerId != null ? Number(meta.peerId) : null;
+  const flags = [];
+  if (meta?.sublineOnly) flags.push('subline');
+  logPeerEvent(Number.isFinite(peerId) ? peerId : null, `emit:${reason}`, flags.join(','));
 }
 
 export function getNetworkLogEntries() {

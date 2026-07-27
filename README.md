@@ -389,6 +389,12 @@ blip/
 4. Retry after both peers show online in **Peers** with a fresh Mesh Pulse latency.
 5. Toast shows **Error NNN** only — look up the number below (dev builds also print `[BLIP ENNN/…]` in the terminal).
 
+### Screen share limitations (Windows / Electron)
+1. **Elevated apps** — capturing a window that runs as Administrator usually fails when BLIP itself is not elevated. Run BLIP as admin only if you must share those windows, or share the full screen instead.
+2. **DRM / protected content** — Netflix, some games, and other protected video surfaces may show a black frame. This is an OS/DRM restriction, not a BLIP bug.
+3. **WSL / remote desktops** — sources under WSL GUI or nested RDP sessions may be missing or blank in the picker. Prefer a normal desktop session.
+4. If the picker is empty or capture fails, the toast shows codes **300–304** (see table below). Retry the picker after closing other capture apps.
+
 <h3 id="en-error-codes">Error codes</h3>
 
 UI shows the **number only**. Full text is logged in the **main-process terminal** on a dev build (`[BLIP E117/SOCKET_CLOSED_REMOTE_EOF] …`). Source of truth: `shared/blip-errors.js`.
@@ -432,6 +438,16 @@ UI shows the **number only**. Full text is logged in the **main-process terminal
 | **201** | `CALL_SIGNAL_FAILED` | Call signalling TCP write failed |
 | **202** | `CALL_PEER_UNREACHABLE` | Peer not online when starting call |
 | **203** | `CALL_ENSURE_FAILED` | Call blocked at ensurePeerSocket |
+| **300** | `CAPTURE_NO_SOURCE` | No screen/window id for capture |
+| **301** | `CAPTURE_GETUSERMEDIA_FAILED` | Desktop `getUserMedia` rejected |
+| **302** | `CAPTURE_SOURCE_NOT_FOUND` | Selected source disappeared |
+| **303** | `CAPTURE_LIST_SOURCES_FAILED` | `desktopCapturer.getSources` failed |
+| **304** | `CAPTURE_PICKER_EMPTY` | No shareable screens/windows |
+| **310** | `OVERLAY_PUSH_FAILED` | Overlay HUD update failed |
+| **311** | `PRESENCE_DETECT_FAILED` | Foreground presence probe failed |
+| **312** | `OVERLAY_WINDOW_FAILED` | Overlay window create/show failed |
+| **320** | `BOOT_PRELOAD_MISSING` | Renderer missing preload bridge |
+| **321** | `BOOT_INIT_FAILED` | Renderer boot threw |
 | **999** | `UNKNOWN` | Unclassified — see terminal log |
 
 Cross-version calls (Morse → 1.1.x): keep **Settings → Network → Allow older BLIP versions** on. On any close-family failure Morse retries **plaintext** once. Watch the terminal for `E130/MODERN` vs `E131/LEGACY` and the nested cause under `E109` / `E117`–`E129`.
@@ -743,6 +759,12 @@ blip/
 4. Убедитесь, что оба пира online в **Абоненты** и есть свежий Mesh Pulse.
 5. В тосте только **Ошибка NNN** — расшифровка ниже (в дев-сборке детали в терминале: `[BLIP ENNN/…]`).
 
+### Ограничения демонстрации экрана (Windows / Electron)
+1. **Права администратора** — окно, запущенное от имени администратора, часто не захватывается, если сам BLIP не elevated. Либо запусти BLIP от админа, либо шарь весь экран.
+2. **DRM / защищённый контент** — Netflix, часть игр и защищённое видео могут давать чёрный кадр. Это ограничение ОС/DRM.
+3. **WSL / удалённый рабочий стол** — источники WSL GUI или вложенного RDP могут отсутствовать или быть пустыми в пикере. Лучше обычный десктоп.
+4. Пустой пикер или сбой захвата — коды **300–304** в таблице ниже. Закрой другие приложения захвата и выбери источник снова.
+
 <h3 id="ru-error-codes">Коды ошибок</h3>
 
 В клиенте показывается **только номер**. Полный текст — в терминале main-процесса на дев-сборке. Каталог: `shared/blip-errors.js`.
@@ -786,6 +808,16 @@ blip/
 | **201** | `CALL_SIGNAL_FAILED` | Сбой TCP signalling звонка |
 | **202** | `CALL_PEER_UNREACHABLE` | Пир не online при старте звонка |
 | **203** | `CALL_ENSURE_FAILED` | Звонок упал на ensurePeerSocket |
+| **300** | `CAPTURE_NO_SOURCE` | Нет id экрана/окна для захвата |
+| **301** | `CAPTURE_GETUSERMEDIA_FAILED` | Desktop getUserMedia отклонён |
+| **302** | `CAPTURE_SOURCE_NOT_FOUND` | Выбранный источник исчез |
+| **303** | `CAPTURE_LIST_SOURCES_FAILED` | Сбой desktopCapturer.getSources |
+| **304** | `CAPTURE_PICKER_EMPTY` | Нет экранов/окон для шаринга |
+| **310** | `OVERLAY_PUSH_FAILED` | Не удалось обновить overlay HUD |
+| **311** | `PRESENCE_DETECT_FAILED` | Сбой детекта foreground |
+| **312** | `OVERLAY_WINDOW_FAILED` | Не удалось создать/показать overlay |
+| **320** | `BOOT_PRELOAD_MISSING` | Нет preload-моста в renderer |
+| **321** | `BOOT_INIT_FAILED` | Сбой boot UI |
 | **999** | `UNKNOWN` | Не классифицировано — смотри лог терминала |
 
 Звонки Morse → 1.1.x: держите **Настройки → Сеть → Разрешить старые версии BLIP** включённым. При любом close-family Morse один раз ретраит **plaintext**. В терминале смотри `E130/MODERN` vs `E131/LEGACY` и nested cause у `E109` / `E117`–`E129`.

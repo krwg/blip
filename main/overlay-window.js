@@ -9,6 +9,9 @@ import {
 let overlayWindow = null;
 let presenceTimer = null;
 let lastSharedText = '';
+let lastSharedActivityKey = '';
+let lastSharedPatchAt = 0;
+const PRESENCE_SHARE_MIN_MS = 45_000;
 /** Runtime visibility — hotkey toggles; settings only enable the feature. */
 let overlayShown = false;
 let lastPayload = null;
@@ -236,9 +239,20 @@ export function startPresenceLoop({
         pinnedApp: cfg.presencePinnedApp || '',
       });
       const line = activity?.statusLine || '';
-      if (cfg.presenceShareEnabled && line && line !== lastSharedText) {
-        lastSharedText = line;
-        patchConfig?.({ presenceText: line.slice(0, 48) });
+      const shareLine = (activity?.shareLine || line).slice(0, 48);
+      const activityKey = activity?.key || shareLine;
+      const now = Date.now();
+      if (
+        cfg.presenceShareEnabled &&
+        shareLine &&
+        shareLine !== lastSharedText &&
+        (activityKey !== lastSharedActivityKey ||
+          now - lastSharedPatchAt >= PRESENCE_SHARE_MIN_MS)
+      ) {
+        lastSharedText = shareLine;
+        lastSharedActivityKey = activityKey;
+        lastSharedPatchAt = now;
+        patchConfig?.({ presenceText: shareLine });
       }
     }
 
@@ -284,7 +298,10 @@ export function startPresenceLoop({
       callElapsed: callFresh?.active ? formatCallElapsed(callFresh.startedAt) : '',
       callVideo: !!callFresh?.video,
       callMuted: !!callFresh?.muted,
-      callPingMs: callFresh?.pingMs ?? null,
+      callPingMs: callFresh?.rttMs ?? callFresh?.pingMs ?? null,
+      callJitterMs: callFresh?.jitterMs ?? null,
+      callQualityTier: callFresh?.qualityTier || '',
+      callPacketLoss: callFresh?.packetLoss ?? null,
       callPeerSpeaking: !!callFresh?.peerSpeaking,
       callLocalMicLevel: callFresh?.localMicLevel ?? 0,
       callPttHeld: !!callFresh?.pttHeld,

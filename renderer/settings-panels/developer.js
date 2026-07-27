@@ -10,6 +10,7 @@ import { premiumTierEnabled } from '../mesh-plus.js';
 import { getNetworkLogEntries } from '../network-log.js';
 import { openConfirmDialog } from '../confirm-dialog.js';
 import { hideDeveloperMode } from '../dev-mode.js';
+import { BlipErrorCode, BLIP_ERROR_CATALOG } from '../../shared/blip-errors.js';
 
 /**
  * @param {{
@@ -98,6 +99,34 @@ export function buildSettingsDeveloperPanel({
   traceRow.appendChild(traceToggle.el);
   traceRow.appendChild(createPixelHintIcon('settings.dev_mesh_trace_hint'));
   frag.appendChild(traceRow);
+
+  const errCatalogTitle = document.createElement('h3');
+  errCatalogTitle.className = 'settings-subheading';
+  errCatalogTitle.dataset.i18n = 'settings.dev_error_catalog';
+  errCatalogTitle.textContent = t('settings.dev_error_catalog');
+  frag.appendChild(errCatalogTitle);
+
+  const errCatalogHint = document.createElement('p');
+  errCatalogHint.className = 'hint';
+  errCatalogHint.dataset.i18n = 'settings.dev_error_catalog_hint';
+  errCatalogHint.textContent = t('settings.dev_error_catalog_hint');
+  frag.appendChild(errCatalogHint);
+
+  const errCatalogList = document.createElement('div');
+  errCatalogList.className = 'settings-error-catalog';
+  Object.values(BlipErrorCode)
+    .filter((n) => typeof n === 'number' && n > 0)
+    .sort((a, b) => a - b)
+    .forEach((code) => {
+      const meta = BLIP_ERROR_CATALOG[code];
+      if (!meta) return;
+      const row = document.createElement('div');
+      row.className = 'settings-error-catalog-row';
+      row.textContent = `${code} · ${meta.id} — ${meta.summary}`;
+      row.title = meta.detail || '';
+      errCatalogList.appendChild(row);
+    });
+  frag.appendChild(errCatalogList);
 
   const beaconRow = document.createElement('div');
   beaconRow.className = 'settings-toggle-with-hint';

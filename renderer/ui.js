@@ -35,7 +35,7 @@ import {
 } from './voice-channel.js';
 import { getVoiceChannels } from './groups.js';
 import { getVoiceChannelRoster } from './voice-channel-roster.js';
-import { logPeerEvent } from './network-log.js';
+import { logPeerEvent, logDiscoveryEmit } from './network-log.js';
 import { createMessageId } from './message-id.js';
 import { showSignalLost } from './call.js';
 import {
@@ -110,6 +110,7 @@ import {
 import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
+import { formatBlipErrorToast } from './blip-error-hints.js';
 import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
 import { createContextMenus } from './context-menus.js';
 import { createUpdateChecker } from './update-checker.js';
@@ -284,9 +285,10 @@ async function openCallOutgoing(peerId, video = false) {
   const id = Number(peerId);
   const peer = state.peers.find((p) => Number(p.blipId) === id);
   if (!peer?.online) {
+    const toast = formatBlipErrorToast(202);
     showAppToast({
-      title: t('call.signal_lost'),
-      body: t('call.error_code').replace('{code}', '202'),
+      title: toast.title,
+      body: toast.body,
       durationMs: 4500,
     });
     return;
@@ -295,24 +297,42 @@ async function openCallOutgoing(peerId, video = false) {
   try {
     const result = await window.blip.openCallOutgoing({ peerId: id, video });
     if (!result?.ok) {
-      const code = result?.errorCode ?? result?.error ?? '999';
+      const code = result?.errorCode ?? result?.error ?? 999;
       const blocked = Number(code) === 111 || /unencrypted_mesh_disabled/i.test(String(result?.error || ''));
-      const codeStr = String(code).replace(/\D/g, '') || '999';
+      if (blocked) {
+        showAppToast({
+          title: t('peers.unencrypted_blocked'),
+          body: formatBlipErrorToast(111).hint,
+          variant: 'danger',
+          durationMs: 5000,
+        });
+        return;
+      }
+      const toast = formatBlipErrorToast(code);
       showAppToast({
-        title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-        body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
+        title: toast.title,
+        body: toast.body,
         variant: 'danger',
         durationMs: 5000,
       });
     }
   } catch (e) {
     console.error('[BLIP] openCallOutgoing', e);
-    const raw = e?.blipCode ?? e?.errorCode ?? e?.message ?? '999';
-    const codeStr = String(raw).replace(/\D/g, '') || '999';
-    const blocked = Number(codeStr) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
+    const blocked =
+      Number(e?.blipCode) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
+    if (blocked) {
+      showAppToast({
+        title: t('peers.unencrypted_blocked'),
+        body: formatBlipErrorToast(111).hint,
+        variant: 'danger',
+        durationMs: 5000,
+      });
+      return;
+    }
+    const toast = formatBlipErrorToast(e);
     showAppToast({
-      title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-      body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
+      title: toast.title,
+      body: toast.body,
       variant: 'danger',
       durationMs: 5000,
     });
@@ -896,12 +916,17 @@ const peersView = createPeersView({
 });
 
 const chatHubView = createChatHubView({
-  getState: () => state, t, isBlocked, isFavorite, getPendingGroupInvites,
+  getState: () => state,
+  getMainContent: () => mainContent,
+  t, isBlocked, isFavorite, getPendingGroupInvites,
   acceptGroupInvite: (invite) => acceptGroupInvite(api, state.config, invite),
   declineGroupInvite: (invite) => declineGroupInviteFlow(api, state.config, invite),
   clearInviteUnread, getGroupsFor, getGroupMessages, groupDisplayName, getVoiceChannels,
   getVoiceChannelRoster, createGroupAvatarElement, createAvatarElement, getMessages,
   formatPeerDisplayName, findPeerByBlipId, normalizeBlipId, peerPresenceClass,
+  peerStatusTooltip,
+  formatPeerSubline: (peer) => meshPulse.formatPeerSubline(peer),
+  getPeerLatency: (id) => meshPulse.peerLatencyMs.get(id),
   peerHasCachedProfileGif,
   getUnreadByGroup: (id) => unreadByGroup.get(id) || 0,
   getUnreadByPeer: (id) => unreadByPeer.get(id) || 0,
@@ -1774,7 +1799,7 @@ function renderView(viewName, options = {}) {
   }
 
   void swapMainView(mainContent, view, {
-    enabled: isUiMotionEnabled(state.config),
+    enabled: options.instant ? false : isUiMotionEnabled(state.config),
   }).then(() => {
     applyI18n(mainContent);
     updateNavActive();
@@ -2099,7 +2124,23 @@ export function initUI(config, blipApi) {
   render();
 }
 
-export function updatePeers({ peers, occupiedIds }) {
+export function updatePeers({ peers, occupiedIds, meta }) {
+  if (state.config?.devMeshTrace && meta?.reason) {
+    logDiscoveryEmit(meta);
+  }
+
+  if (meta?.sublineOnly) {
+    state.peers = peers;
+    state.occupiedIds = occupiedIds;
+    if (state.view === 'chat' && (state.activePeer || state.activeGroup) && mainContent) {
+      return;
+    }
+    meshPulse.refreshPeerPulseDom();
+    peersView.refreshPeersListDom();
+    chatHubView.refreshChatHubPeerDom();
+    return;
+  }
+
   const prevPeersById = new Map(state.peers.map((p) => [Number(p.blipId), p]));
   const nextPeersById = new Map(peers.map((p) => [Number(p.blipId), p]));
   const prevOnline = new Set(state.peers.filter((p) => p.online).map((p) => p.blipId));
@@ -2113,7 +2154,6 @@ export function updatePeers({ peers, occupiedIds }) {
         prev.online !== next.online ||
         prev.displayName !== next.displayName ||
         prev.presence !== next.presence ||
-        String(prev.presenceText || '') !== String(next.presenceText || '') ||
         prev.meshTcpEncrypted !== next.meshTcpEncrypted ||
         prev.meshLegacy !== next.meshLegacy ||
         prev.meshCompat !== next.meshCompat ||
@@ -2157,16 +2197,21 @@ export function updatePeers({ peers, occupiedIds }) {
   }
 
   if (state.view === 'peers' && mainContent && hasVisualChange) {
-    renderView('peers');
+    renderView('peers', { instant: true });
   } else if (state.view === 'peers' && mainContent) {
     peersView.refreshPeersTypingDom();
     meshPulse.refreshPeerPulseDom();
+    peersView.refreshPeersListDom();
   }
   if (state.view === 'profile' && mainContent && state.profilePeerId != null) {
     if (hasVisualChange) refreshOpenProfilePageIfNeeded(mainContent);
   }
-  if (state.view === 'chat' && !state.activePeer && mainContent && hasVisualChange) {
-    renderView('chat');
+  if (state.view === 'chat' && !state.activePeer && mainContent) {
+    if (hasVisualChange) renderView('chat', { instant: true });
+    else {
+      meshPulse.refreshPeerPulseDom();
+      chatHubView.refreshChatHubPeerDom();
+    }
   }
   if (state.view === 'projects') {
     projectsViewInstance?.refreshPeers?.();

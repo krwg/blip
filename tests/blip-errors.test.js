@@ -39,6 +39,14 @@ describe('blip-errors', () => {
     expect(isSocketCloseFamily(105)).toBe(false);
   });
 
+  it('includes display / overlay / boot catalog ranges', () => {
+    expect(BlipErrorCode.CAPTURE_PICKER_EMPTY).toBe(304);
+    expect(BlipErrorCode.OVERLAY_PUSH_FAILED).toBe(310);
+    expect(BlipErrorCode.BOOT_PRELOAD_MISSING).toBe(320);
+    expect(BLIP_ERROR_CATALOG[304]?.id).toBe('CAPTURE_PICKER_EMPTY');
+    expect(BLIP_ERROR_CATALOG[320]?.id).toBe('BOOT_PRELOAD_MISSING');
+  });
+
   it('tagSocketClose stores code on socket object', () => {
     const sock = {};
     tagSocketClose(sock, BlipErrorCode.SOCKET_CLOSED_REMOTE_EOF, 'eof');
