@@ -4,6 +4,9 @@ import {
   fillSettingsDropdown,
   buildSettingsField,
   buildPanelTitleRow,
+  createPixelToggle,
+  createPixelHintIcon,
+  buildSettingsFieldWithHint,
 } from '../settings-ui.js';
 import { buildMicTestPanel } from '../mic-test-panel.js';
 import {
@@ -230,6 +233,38 @@ export function buildSettingsCallPanel({ getState, saveConfig }) {
 
   frag.appendChild(buildSettingsField('settings.call_mic', micSelect));
   frag.appendChild(buildSettingsField('settings.call_speaker', outSelect));
+
+  const pttToggle = createPixelToggle({
+    checked: !!state.config.pushToTalkEnabled,
+    labelKey: 'settings.push_to_talk',
+    onChange: async (checked) => {
+      state.config = await saveConfig({ pushToTalkEnabled: checked });
+    },
+  });
+  const pttRow = document.createElement('div');
+  pttRow.className = 'settings-toggle-with-hint';
+  pttRow.appendChild(pttToggle.el);
+  pttRow.appendChild(createPixelHintIcon('settings.push_to_talk_hint'));
+  frag.appendChild(pttRow);
+
+  const pttKeySelect = buildThemedSelect('blip-select settings-call-select');
+  fillSettingsDropdown(
+    pttKeySelect,
+    [
+      { value: 'v', label: 'V' },
+      { value: 'b', label: 'B' },
+      { value: 'f6', label: 'F6' },
+      { value: 'f7', label: 'F7' },
+    ],
+    String(state.config.pushToTalkKey || 'v').toLowerCase(),
+    async (val) => {
+      state.config = await saveConfig({ pushToTalkKey: val });
+    }
+  );
+  frag.appendChild(
+    buildSettingsFieldWithHint('settings.push_to_talk_key', pttKeySelect, 'settings.push_to_talk_key_hint')
+  );
+
   frag.appendChild(micTestWrap);
   return frag;
 }

@@ -371,6 +371,14 @@ const locales = {
       'Prepares the Discord-style HUD. It stays hidden until you press the overlay hotkey.',
     'settings.overlay_hotkey_hint':
       'Toggle overlay: Shift+Alt+O (Windows/Linux) or Control+Shift+O (macOS). Feature must be enabled above.',
+    'settings.overlay_click_through': 'Overlay click-through (games)',
+    'settings.overlay_click_through_hint':
+      'Mouse clicks pass through the HUD except call controls and PTT. Hold the mic meter in the overlay for push-to-talk.',
+    'settings.push_to_talk': 'Push-to-talk in calls',
+    'settings.push_to_talk_hint':
+      'Mic transmits only while the PTT key is held (call window) or while holding the mic meter in the overlay.',
+    'settings.push_to_talk_key': 'Push-to-talk key',
+    'settings.push_to_talk_key_hint': 'Hold this key during a call (when the call window is focused).',
     'settings.presence_detect': 'Detect running apps / games',
     'settings.presence_detect_hint':
       'Reads the foreground window locally (Windows / macOS). Never uploaded.',
@@ -1465,6 +1473,14 @@ const locales = {
       'Готовит HUD в стиле Discord. По умолчанию скрыт — показ по горячей клавише.',
     'settings.overlay_hotkey_hint':
       'Показать/скрыть оверлей: Shift+Alt+O (Windows/Linux) или Control+Shift+O (macOS). Сначала включите опцию выше.',
+    'settings.overlay_click_through': 'Click-through оверлея (игры)',
+    'settings.overlay_click_through_hint':
+      'Клики проходят сквозь HUD, кроме блока звонка и PTT. Удерживайте индикатор микрофона в оверлее для push-to-talk.',
+    'settings.push_to_talk': 'Push-to-talk в звонках',
+    'settings.push_to_talk_hint':
+      'Микрофон активен только пока зажата клавиша PTT (окно звонка) или удерживается индикатор микрофона в оверлее.',
+    'settings.push_to_talk_key': 'Клавиша push-to-talk',
+    'settings.push_to_talk_key_hint': 'Удерживайте эту клавишу во время звонка (когда фокус на окне звонка).',
     'settings.presence_detect': 'Определять приложения / игры',
     'settings.presence_detect_hint':
       'Читает переднее окно локально (Windows / macOS). Никуда не отправляется.',

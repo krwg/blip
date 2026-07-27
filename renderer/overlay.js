@@ -29,6 +29,11 @@ const STRINGS = {
     legacy: 'Legacy',
     transfer: 'Transfer',
     dndFooter: 'Do not disturb',
+    qualityGood: 'good',
+    qualityUnstable: 'unstable',
+    qualityPoor: 'poor',
+    pttIdle: 'PTT off',
+    pttHot: 'PTT on',
   },
   ru: {
     status: 'Статус',
@@ -64,6 +69,11 @@ const STRINGS = {
     legacy: 'Legacy',
     transfer: 'Передача',
     dndFooter: 'Не беспокоить',
+    qualityGood: 'хорошее',
+    qualityUnstable: 'нестабильное',
+    qualityPoor: 'плохое',
+    pttIdle: 'PTT выкл',
+    pttHot: 'PTT вкл',
   },
 };
 
@@ -102,13 +112,30 @@ const activityChips = document.getElementById('activityChips');
 const transferBox = document.getElementById('transferBox');
 const transferLabel = document.getElementById('transferLabel');
 const transferPct = document.getElementById('transferPct');
+const pttPill = document.getElementById('pttPill');
+const micBars = micMeter ? [...micMeter.querySelectorAll('span')] : [];
 
 let lastCallPeerId = null;
 let mutedOptimistic = false;
 let lang = 'en';
+let lastClickThrough = true;
+let overlayHitInteractive = false;
 
 function S() {
   return STRINGS[lang] || STRINGS.en;
+}
+
+function setMicMeterLevel(level, muted) {
+  if (!micMeter) return;
+  const m = !!muted;
+  micMeter.classList.toggle('is-muted', m);
+  const live = !m && level > 0.05;
+  micMeter.classList.toggle('is-live', live);
+  if (!live && !m) return;
+  micBars.forEach((bar, i) => {
+    const scale = m ? 0.22 : 0.35 + Math.min(1, level * 1.35) * (0.55 + i * 0.08);
+    bar.style.height = `${Math.round(scale * 100)}%`;
+  });
 }
 
 function pad(n) {
@@ -200,6 +227,15 @@ function setMuteUi(muted) {
   micMeter.classList.toggle('is-muted', mutedOptimistic);
 }
 
+function resolveCallQualityLabel(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return '';
+  const s = S();
+  if (n < 80) return s.qualityGood;
+  if (n < 170) return s.qualityUnstable;
+  return s.qualityPoor;
+}
+
 function applyPayload(data) {
   lang = data?.language === 'ru' ? 'ru' : 'en';
   applySkin(data);
@@ -219,6 +255,13 @@ function applyPayload(data) {
   const presence = String(data?.presence || 'online');
   const dnd = !!data?.doNotDisturb;
   const nest = data?.uiSkin === 'nest';
+
+  lastClickThrough = data?.overlayClickThrough !== false;
+  if (!lastClickThrough) {
+    window.blipOverlay?.setInteractive?.(true);
+  } else if (!overlayHitInteractive) {
+    window.blipOverlay?.setInteractive?.(false);
+  }
 
   if (selfName || Number.isFinite(selfId)) {
     const idBit = Number.isFinite(selfId) ? ` · #${selfId}` : '';
@@ -296,11 +339,23 @@ function applyPayload(data) {
       renderCallAvatar(peerId, peerName, nest);
     }
 
+    callAvatar.classList.toggle('call-avatar--speaking', !!data.callPeerSpeaking);
+
+    const pttOn = !!data.callPushToTalkActive;
+    if (pttPill) {
+      pttPill.classList.toggle('hidden', !pttOn);
+      pttPill.textContent = data.callPttHeld ? S().pttHot : S().pttIdle;
+      pttPill.classList.toggle('is-hot', !!data.callPttHeld);
+    }
+
+    setMicMeterLevel(Number(data.callLocalMicLevel) || 0, !!data.callMuted);
+
     callMesh.textContent = s.peersCount(peers);
     const pingMs = data.callPingMs;
     if (pingMs != null && Number.isFinite(Number(pingMs))) {
       const ms = Math.round(Number(pingMs));
-      callPing.textContent = `${ms}ms`;
+      const q = resolveCallQualityLabel(ms);
+      callPing.textContent = q ? `${ms}ms · ${q}` : `${ms}ms`;
       callPing.classList.toggle('metric-value--ok', ms < 80);
       callPing.classList.toggle('metric-value--bad', ms >= 160);
     } else {
@@ -319,7 +374,10 @@ function applyPayload(data) {
     callPeer.textContent = '';
     callElapsed.textContent = '';
     callAvatar.replaceChildren();
+    callAvatar.classList.remove('call-avatar--speaking');
     setMuteUi(false);
+    setMicMeterLevel(0, false);
+    if (pttPill) pttPill.classList.add('hidden');
   }
 
   const xferPct = Math.round(Number(data?.transferPercent) || 0);
@@ -364,6 +422,39 @@ endBtn?.addEventListener('click', (e) => {
 
 tickClock();
 setInterval(() => tickClock(), 1000);
+
+function onOverlayPointerMove(e) {
+  if (!lastClickThrough) return;
+  const hit = e.target?.closest?.('[data-overlay-interactive]');
+  const interactive = !!hit;
+  if (interactive === overlayHitInteractive) return;
+  overlayHitInteractive = interactive;
+  window.blipOverlay?.setInteractive?.(interactive);
+}
+
+document.addEventListener('mousemove', onOverlayPointerMove);
+document.addEventListener('mouseleave', () => {
+  if (!lastClickThrough) return;
+  overlayHitInteractive = false;
+  window.blipOverlay?.setInteractive?.(false);
+});
+
+function bindPttPointer(el) {
+  if (!el) return;
+  const down = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.blipOverlay?.pttHeld?.(true);
+  };
+  const up = () => window.blipOverlay?.pttHeld?.(false);
+  el.addEventListener('mousedown', down);
+  el.addEventListener('mouseup', up);
+  el.addEventListener('mouseleave', up);
+  el.addEventListener('touchstart', down, { passive: false });
+  el.addEventListener('touchend', up);
+  el.addEventListener('touchcancel', up);
+}
+bindPttPointer(micMeter);
 
 window.blipOverlay?.onUpdate?.((data) => applyPayload(data || {}));
 window.blipOverlay?.ready?.();

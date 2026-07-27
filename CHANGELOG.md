@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [2.0.5] — Morse — Unreleased
+
+Patch.
+
+### Fixed
+
+- **Peers/chats flicker (again)** — renderer now ignores transport-only peer updates (`ip`/`ips` churn, etc.) and re-renders peers/chat hub only on visual status changes.
+
+### Improved
+
+- **Mesh Pulse efficiency** — background ping is now lazy: active views get fresh latency, inactive views refresh rarely; ping rounds are batched to reduce burst load.
+- **Multi-window Electron overhead** — call/group/overlay renderers disable background throttling while active; hidden call windows are no longer pre-warmed at app boot.
+- **Overlay call UX** — call ping includes a localized quality hint; **speaking ring** on peer avatar (remote audio VAD); **push-to-talk** with HUD pill + hold on mic meter; **click-through** with dynamic interactive zones for in-call controls.
+
+### Added
+
+- **Settings** — overlay click-through toggle (System); push-to-talk toggle + key (Call).
+
 ## [2.0.3] — Morse — 2026-07-27
 
 Patch.

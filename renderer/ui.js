@@ -2100,8 +2100,34 @@ export function initUI(config, blipApi) {
 }
 
 export function updatePeers({ peers, occupiedIds }) {
+  const prevPeersById = new Map(state.peers.map((p) => [Number(p.blipId), p]));
+  const nextPeersById = new Map(peers.map((p) => [Number(p.blipId), p]));
   const prevOnline = new Set(state.peers.filter((p) => p.online).map((p) => p.blipId));
   const nextOnline = new Set(peers.filter((p) => p.online).map((p) => p.blipId));
+  const hasVisualChange = (() => {
+    if (prevPeersById.size !== nextPeersById.size) return true;
+    for (const [id, next] of nextPeersById) {
+      const prev = prevPeersById.get(id);
+      if (!prev) return true;
+      if (
+        prev.online !== next.online ||
+        prev.displayName !== next.displayName ||
+        prev.presence !== next.presence ||
+        String(prev.presenceText || '') !== String(next.presenceText || '') ||
+        prev.meshTcpEncrypted !== next.meshTcpEncrypted ||
+        prev.meshLegacy !== next.meshLegacy ||
+        prev.meshCompat !== next.meshCompat ||
+        prev.meshPlus !== next.meshPlus ||
+        prev.hasProfileGif !== next.hasProfileGif ||
+        prev.buildTrust !== next.buildTrust ||
+        prev.buildVerified !== next.buildVerified ||
+        prev.meshPlusTrust !== next.meshPlusTrust
+      ) {
+        return true;
+      }
+    }
+    return false;
+  })();
   state.peers = peers;
   state.occupiedIds = occupiedIds;
   recordPeersOnline(peers.filter((p) => p.online).length);
@@ -2130,13 +2156,16 @@ export function updatePeers({ peers, occupiedIds }) {
     return;
   }
 
-  if (state.view === 'peers' && mainContent) {
+  if (state.view === 'peers' && mainContent && hasVisualChange) {
     renderView('peers');
+  } else if (state.view === 'peers' && mainContent) {
+    peersView.refreshPeersTypingDom();
+    meshPulse.refreshPeerPulseDom();
   }
   if (state.view === 'profile' && mainContent && state.profilePeerId != null) {
-    refreshOpenProfilePageIfNeeded(mainContent);
+    if (hasVisualChange) refreshOpenProfilePageIfNeeded(mainContent);
   }
-  if (state.view === 'chat' && !state.activePeer && mainContent) {
+  if (state.view === 'chat' && !state.activePeer && mainContent && hasVisualChange) {
     renderView('chat');
   }
   if (state.view === 'projects') {
