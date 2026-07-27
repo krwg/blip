@@ -153,7 +153,11 @@ function setMuteUi(muted) {
   micMeter.classList.toggle('is-muted', mutedOptimistic);
 }
 
-function resolveCallQualityLabel(ms) {
+function resolveCallQualityLabel(data, ms) {
+  const tier = String(data?.callQualityTier || '');
+  if (tier === 'good') return t('overlay.quality_good');
+  if (tier === 'unstable') return t('overlay.quality_unstable');
+  if (tier === 'poor') return t('overlay.quality_poor');
   const n = Number(ms);
   if (!Number.isFinite(n)) return '';
   if (n < 80) return t('overlay.quality_good');
@@ -282,10 +286,16 @@ function applyPayload(data) {
     const pingMs = data.callPingMs;
     if (pingMs != null && Number.isFinite(Number(pingMs))) {
       const ms = Math.round(Number(pingMs));
-      const q = resolveCallQualityLabel(ms);
-      callPing.textContent = q ? `${ms}ms · ${q}` : `${ms}ms`;
-      callPing.classList.toggle('metric-value--ok', ms < 80);
-      callPing.classList.toggle('metric-value--bad', ms >= 160);
+      const q = resolveCallQualityLabel(data, ms);
+      const jitter = Number(data.callJitterMs);
+      const jitterBit =
+        Number.isFinite(jitter) && jitter > 0 ? ` ±${Math.round(jitter)}` : '';
+      callPing.textContent = q ? `${ms}ms${jitterBit} · ${q}` : `${ms}ms${jitterBit}`;
+      const tier = String(data.callQualityTier || '');
+      const bad = tier === 'poor' || (!tier && ms >= 160);
+      const ok = tier === 'good' || (!tier && ms < 80);
+      callPing.classList.toggle('metric-value--ok', ok);
+      callPing.classList.toggle('metric-value--bad', bad);
     } else {
       callPing.textContent = '—';
       callPing.classList.remove('metric-value--bad');

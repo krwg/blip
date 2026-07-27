@@ -11,8 +11,8 @@ import {
 } from './call-media.js';
 import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
-import { formatBlipErrorCode } from '../shared/blip-errors.js';
 import { formatBlipErrorToast } from './blip-error-hints.js';
+import { createCallQualityTracker, readPeerConnectionQuality } from './call-quality.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 import { bindCallWaveform } from './call-waveform.js';
@@ -264,6 +264,8 @@ export function createCallUI(config, api, options = {}) {
   let pttHeld = false;
   const localMicMeter = createStreamLevelMeter();
   const remoteMicMeter = createStreamLevelMeter();
+  const callQuality = createCallQualityTracker();
+  let qualitySampleTick = 0;
 
   function readPushToTalkFromConfig(cfg) {
     return {
@@ -304,14 +306,34 @@ export function createCallUI(config, api, options = {}) {
       !remoteMuted &&
       !remoteDeafened &&
       remoteMicMeter.isSpeaking({ threshold: 0.07, muted: remoteMuted });
-    api.reportCallLocalState?.({
+    const base = {
       muted,
       deafened,
       localMicLevel: localLevel,
       peerSpeaking,
       pttHeld,
       pushToTalkActive,
-    }).catch?.(() => {});
+    };
+    qualitySampleTick += 1;
+    if (!pc || qualitySampleTick % 5 !== 0) {
+      api.reportCallLocalState?.(base).catch?.(() => {});
+      return;
+    }
+    void readPeerConnectionQuality(pc).then((raw) => {
+      callQuality.noteSample(raw);
+      const q = callQuality.snapshotThrottled(750);
+      api.reportCallLocalState?.({
+        ...base,
+        ...(q.skipped
+          ? {}
+          : {
+              callRttMs: q.rttMs,
+              callJitterMs: q.jitterMs,
+              callQualityTier: q.tier,
+              callPacketLoss: q.packetLoss,
+            }),
+      }).catch?.(() => {});
+    });
   }
 
   function startOverlayMediaReports() {
@@ -635,6 +657,8 @@ export function createCallUI(config, api, options = {}) {
     remoteMicMeter.stop();
     localMicMeter.stop();
     stopOverlayMediaReports();
+    callQuality.reset();
+    qualitySampleTick = 0;
     if (pc) {
       pc.close();
       pc = null;
