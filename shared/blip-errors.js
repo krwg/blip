@@ -9,6 +9,8 @@
  *   117–139 — granular TCP close / destroy reasons (was lumped as “Socket closed”)
  *   200–299 — calls / signalling
  *   300–309 — display capture
+ *   310–319 — overlay / presence
+ *   320–329 — renderer bootstrap
  *   900–999 — unknown / wrap
  */
 export const BlipErrorCode = Object.freeze({
@@ -54,6 +56,12 @@ export const BlipErrorCode = Object.freeze({
     CAPTURE_GETUSERMEDIA_FAILED: 301,
     CAPTURE_SOURCE_NOT_FOUND: 302,
     CAPTURE_LIST_SOURCES_FAILED: 303,
+    CAPTURE_PICKER_EMPTY: 304,
+    OVERLAY_PUSH_FAILED: 310,
+    PRESENCE_DETECT_FAILED: 311,
+    OVERLAY_WINDOW_FAILED: 312,
+    BOOT_PRELOAD_MISSING: 320,
+    BOOT_INIT_FAILED: 321,
     UNKNOWN: 999,
 });
 /** @type {Record<number, { id: string, summary: string, detail: string }>} */
@@ -258,6 +266,36 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
         id: 'CAPTURE_LIST_SOURCES_FAILED',
         summary: 'Could not list display sources',
         detail: 'desktopCapturer.getSources failed (permissions or OS).',
+    },
+    304: {
+        id: 'CAPTURE_PICKER_EMPTY',
+        summary: 'No shareable screens or windows',
+        detail: 'desktopCapturer returned no usable sources for the picker.',
+    },
+    310: {
+        id: 'OVERLAY_PUSH_FAILED',
+        summary: 'Overlay update failed',
+        detail: 'Could not push HUD payload to the overlay BrowserWindow.',
+    },
+    311: {
+        id: 'PRESENCE_DETECT_FAILED',
+        summary: 'Foreground presence detect failed',
+        detail: 'OS window/process probe threw while updating activity.',
+    },
+    312: {
+        id: 'OVERLAY_WINDOW_FAILED',
+        summary: 'Overlay window create/show failed',
+        detail: 'Electron could not create or show the overlay HUD window.',
+    },
+    320: {
+        id: 'BOOT_PRELOAD_MISSING',
+        summary: 'Preload bridge missing',
+        detail: 'Renderer booted without window.blip; rebuild preload and restart.',
+    },
+    321: {
+        id: 'BOOT_INIT_FAILED',
+        summary: 'Renderer boot failed',
+        detail: 'Unhandled exception during UI bootstrap.',
     },
     999: {
         id: 'UNKNOWN',

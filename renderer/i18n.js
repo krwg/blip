@@ -855,9 +855,12 @@ const locales = {
     'settings.dev_beta_on': 'BETA updates enabled',
     'settings.dev_beta_off': 'Stable releases only',
     'settings.dev_mesh_trace': 'MESH packet trace',
-    'settings.dev_mesh_trace_hint': 'Log every TCP frame type in Network → log.',
+    'settings.dev_mesh_trace_hint':
+      'Log TCP frame types and discovery peers-updated reasons (emit:presence_text, crypto, …) in Network → log / main console.',
     'settings.dev_mesh_trace_on': 'Mesh trace on',
     'settings.dev_mesh_trace_off': 'Mesh trace off',
+    'settings.dev_error_catalog': 'Error code catalog',
+    'settings.dev_error_catalog_hint': 'Numbered BLIP codes shown in toasts and logs (display 300+, overlay 310+, boot 320+).',
     'settings.dev_beacon': 'BEACON mesh protocol',
     'settings.dev_beacon_hint':
       'LAN file library (МАЯК). Hidden from nav until enabled here.',
@@ -1993,9 +1996,13 @@ const locales = {
     'settings.dev_beta_on': 'БЕТА-обновления включены',
     'settings.dev_beta_off': 'Только стабильные релизы',
     'settings.dev_mesh_trace': 'Трассировка мэш-пакетов',
-    'settings.dev_mesh_trace_hint': 'Писать тип каждого ТСР-кадра в Сеть → журнал.',
+    'settings.dev_mesh_trace_hint':
+      'Писать типы ТСР-кадров и причины peers-updated (emit:presence_text, crypto, …) в Сеть → журнал / консоль main.',
     'settings.dev_mesh_trace_on': 'Трассировка включена',
     'settings.dev_mesh_trace_off': 'Трассировка выключена',
+    'settings.dev_error_catalog': 'Каталог кодов ошибок',
+    'settings.dev_error_catalog_hint':
+      'Номера BLIP в тостах и логах (экран 300+, оверлей 310+, загрузка 320+).',
     'settings.dev_beacon': 'Протокол МАЯК',
     'settings.dev_beacon_hint':
       'Библиотека файлов в ЛАН (МАЯК). Скрыта в меню, пока не включите здесь.',

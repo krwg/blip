@@ -2717,6 +2717,30 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
   font-variant-numeric: tabular-nums;
 }
 
+.settings-error-catalog {
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 8px 0 16px;
+  border: 1px solid var(--blip-border);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.settings-error-catalog-row {
+  padding: 2px 0;
+  color: var(--blip-muted);
+  line-height: 1.35;
+}
+
+.settings-subheading {
+  margin: 16px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blip-accent);
+}
+
 .call-peer-status {
   display: flex;
   flex-wrap: wrap;

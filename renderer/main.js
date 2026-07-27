@@ -1,4 +1,5 @@
 import { setLang, t } from './i18n.js';
+import { BlipErrorCode, formatBlipErrorCode } from '../shared/blip-errors.js';
 import {
   initUI,
   updatePeers,
@@ -57,7 +58,7 @@ async function boot() {
   if (!window.blip) {
     const lang = localStorage.getItem('blip_lang') || 'en';
     setLang(lang);
-    showBootError(t('boot.preload_missing'));
+    showBootError(`${t('boot.preload_missing')} (${formatBlipErrorCode(BlipErrorCode.BOOT_PRELOAD_MISSING)})`);
     return;
   }
   const config = await window.blip.getConfig();
@@ -108,5 +109,6 @@ boot().catch((err) => {
   } catch {
     /* ignore */
   }
-  showBootError(err?.message || String(err));
+  const code = formatBlipErrorCode(err?.blipCode != null ? err : BlipErrorCode.BOOT_INIT_FAILED);
+  showBootError(`${err?.message || String(err)} (${code})`);
 });
