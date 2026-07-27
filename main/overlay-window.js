@@ -95,6 +95,7 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');

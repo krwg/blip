@@ -285,6 +285,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -377,6 +378,7 @@ async function ensureCallWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
   callWindow.setMenuBarVisibility(false);
@@ -1518,8 +1520,6 @@ app.whenReady().then(async () => {
   refreshAppIcons();
   installTray();
   syncOverlayFeature();
-  void ensureCallWindow().catch((e) => console.warn('[BLIP] prewarm call window', e));
-  void ensureGroupCallWindow().catch((e) => console.warn('[BLIP] prewarm group call window', e));
   setupAutoUpdater(() => mainWindow, () => config);
 
   if (!app.isPackaged || process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {

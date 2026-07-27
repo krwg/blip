@@ -1,4 +1,6 @@
-const MESH_PULSE_INTERVAL_MS = 2_500;
+const MESH_PULSE_ACTIVE_INTERVAL_MS = 8_000;
+const MESH_PULSE_IDLE_INTERVAL_MS = 60_000;
+const MESH_PULSE_BATCH_SIZE = 4;
 
 export function createMeshPulse({
   getState,
@@ -11,6 +13,7 @@ export function createMeshPulse({
   const peerLatencyMs = new Map();
   const peerLatencyFails = new Map();
   let meshPulseTimer = null;
+  let meshPulseLastAt = 0;
 
   function formatPeerPulseLine(peer) {
     const lat = peerLatencyMs.get(peer.blipId);
@@ -69,20 +72,43 @@ export function createMeshPulse({
     const state = getState();
     if (!state.config?.blipId) return;
     const targets = state.peers.filter((p) => p.online && !isBlocked(p.blipId));
-    await Promise.all(targets.map((p) => pingPeerSilent(p.blipId)));
+    for (let i = 0; i < targets.length; i += MESH_PULSE_BATCH_SIZE) {
+      const slice = targets.slice(i, i + MESH_PULSE_BATCH_SIZE);
+      await Promise.all(slice.map((p) => pingPeerSilent(p.blipId)));
+    }
+    meshPulseLastAt = Date.now();
     refreshPeerPulseDom();
+  }
+
+  function isPulsePriorityView(view) {
+    return view === 'peers' || view === 'profile' || (view === 'chat' && !getState().activePeer);
+  }
+
+  function getMeshPulseIntervalMs() {
+    const state = getState();
+    return isPulsePriorityView(state.view)
+      ? MESH_PULSE_ACTIVE_INTERVAL_MS
+      : MESH_PULSE_IDLE_INTERVAL_MS;
+  }
+
+  async function maybeRunMeshPulseRound() {
+    const intervalMs = getMeshPulseIntervalMs();
+    if (Date.now() - meshPulseLastAt < intervalMs) return;
+    await runMeshPulseRound();
   }
 
   function startMeshPulse() {
     if (!getState().config?.blipId || meshPulseTimer) return;
+    meshPulseLastAt = 0;
     void runMeshPulseRound();
-    meshPulseTimer = setInterval(() => void runMeshPulseRound(), MESH_PULSE_INTERVAL_MS);
+    meshPulseTimer = setInterval(() => void maybeRunMeshPulseRound(), 2_000);
   }
 
   function stopMeshPulse() {
     if (!meshPulseTimer) return;
     clearInterval(meshPulseTimer);
     meshPulseTimer = null;
+    meshPulseLastAt = 0;
   }
 
   async function runPeerPing(peer) {
