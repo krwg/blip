@@ -47,7 +47,13 @@ import {
 } from '../shared/blip-errors.js';
 import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
-import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
+import {
+  createTray,
+  destroyTray,
+  setTrayTransferProgress,
+  setTrayCallActivity,
+  setTrayCallLabels,
+} from './tray.js';
 import {
   destroyOverlayWindow,
   refreshPresenceLoop,
@@ -153,6 +159,7 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallLocalMicLevel = 0;
     activeCallPttHeld = false;
     activeCallPushToTalkActive = false;
+    setTrayCallActivity(null);
   } else if (video != null) {
     activeCallVideo = !!video;
   }
@@ -165,6 +172,7 @@ function clearActiveCallPeer(peerId = null) {
   activeCallStartedAt = 0;
   activeCallVideo = false;
   activeCallMuted = false;
+  setTrayCallActivity(null);
   lastCallPingMs = null;
   lastCallPingAt = 0;
   activeCallPeerSpeaking = false;
@@ -1236,6 +1244,21 @@ function installTray() {
     config.language === 'ru'
       ? { show: 'Показать', quit: 'Выход' }
       : { show: 'Show', quit: 'Quit' };
+  setTrayCallLabels(
+    config.language === 'ru'
+      ? {
+          live: 'В звонке',
+          muted: 'В звонке · микрофон выкл',
+          ptt: 'В звонке · PTT',
+          speaking: 'В звонке · микрофон',
+        }
+      : {
+          live: 'In call',
+          muted: 'In call · muted',
+          ptt: 'In call · PTT',
+          speaking: 'In call · mic live',
+        }
+  );
   const { trayPath } = refreshAppIcons();
   createTray({
     getMainWindow: () => mainWindow,
@@ -1275,6 +1298,17 @@ function setupIpc() {
       if (payload?.pushToTalkActive != null) {
         activeCallPushToTalkActive = !!payload.pushToTalkActive;
       }
+      setTrayCallActivity(
+        activeCallPeerId
+          ? {
+              inCall: true,
+              muted: activeCallMuted,
+              localMicLevel: activeCallLocalMicLevel,
+              pttHeld: activeCallPttHeld,
+              pushToTalkActive: activeCallPushToTalkActive,
+            }
+          : null
+      );
     },
     sendCallPttHeld: (held) => {
       const win = callWindow;

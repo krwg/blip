@@ -90,7 +90,8 @@ export async function openScreenPickerDialog() {
         } else {
           const ph = document.createElement('span');
           ph.className = 'screen-picker-thumb screen-picker-thumb--empty';
-          ph.textContent = tab === 'screen' ? 'SCR' : 'WIN';
+          ph.textContent =
+            tab === 'screen' ? t('call.picker_thumb_screen') : t('call.picker_thumb_window');
           card.appendChild(ph);
         }
         const label = document.createElement('span');
