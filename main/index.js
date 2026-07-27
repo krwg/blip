@@ -133,6 +133,10 @@ let activeCallPeerSpeaking = false;
 let activeCallLocalMicLevel = 0;
 let activeCallPttHeld = false;
 let activeCallPushToTalkActive = false;
+let activeCallRttMs = null;
+let activeCallJitterMs = null;
+let activeCallQualityTier = '';
+let activeCallPacketLoss = null;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
@@ -148,6 +152,10 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallLocalMicLevel = 0;
     activeCallPttHeld = false;
     activeCallPushToTalkActive = false;
+    activeCallRttMs = null;
+    activeCallJitterMs = null;
+    activeCallQualityTier = '';
+    activeCallPacketLoss = null;
   }
   if (!id) {
     activeCallStartedAt = 0;
@@ -159,6 +167,10 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallLocalMicLevel = 0;
     activeCallPttHeld = false;
     activeCallPushToTalkActive = false;
+    activeCallRttMs = null;
+    activeCallJitterMs = null;
+    activeCallQualityTier = '';
+    activeCallPacketLoss = null;
     setTrayCallActivity(null);
   } else if (video != null) {
     activeCallVideo = !!video;
@@ -179,6 +191,10 @@ function clearActiveCallPeer(peerId = null) {
   activeCallLocalMicLevel = 0;
   activeCallPttHeld = false;
   activeCallPushToTalkActive = false;
+  activeCallRttMs = null;
+  activeCallJitterMs = null;
+  activeCallQualityTier = '';
+  activeCallPacketLoss = null;
 }
 
 const pendingCallIpc = [];
@@ -698,6 +714,10 @@ function syncOverlayFeature() {
         localMicLevel: activeCallLocalMicLevel,
         pttHeld: activeCallPttHeld,
         pushToTalkActive: activeCallPushToTalkActive,
+        rttMs: activeCallRttMs ?? lastCallPingMs,
+        jitterMs: activeCallJitterMs,
+        qualityTier: activeCallQualityTier,
+        packetLoss: activeCallPacketLoss,
         encrypted: !!peer?.meshTcpEncrypted,
         legacy: !!peer?.meshLegacy || !!peer?.meshCompat,
         presence: peer?.presence || (peer?.online ? 'online' : 'offline'),
@@ -1297,6 +1317,20 @@ function setupIpc() {
       if (payload?.pttHeld != null) activeCallPttHeld = !!payload.pttHeld;
       if (payload?.pushToTalkActive != null) {
         activeCallPushToTalkActive = !!payload.pushToTalkActive;
+      }
+      if (payload?.callRttMs != null && Number.isFinite(Number(payload.callRttMs))) {
+        activeCallRttMs = Number(payload.callRttMs);
+        lastCallPingMs = activeCallRttMs;
+        lastCallPingAt = Date.now();
+      }
+      if (payload?.callJitterMs != null && Number.isFinite(Number(payload.callJitterMs))) {
+        activeCallJitterMs = Number(payload.callJitterMs);
+      }
+      if (payload?.callQualityTier) {
+        activeCallQualityTier = String(payload.callQualityTier);
+      }
+      if (payload?.callPacketLoss != null && Number.isFinite(Number(payload.callPacketLoss))) {
+        activeCallPacketLoss = Number(payload.callPacketLoss);
       }
       setTrayCallActivity(
         activeCallPeerId
