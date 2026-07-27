@@ -1,5 +1,6 @@
 import { t } from './i18n.js';
-import { formatBlipErrorCode, BlipErrorCode } from '../shared/blip-errors.js';
+import { BlipErrorCode } from '../shared/blip-errors.js';
+import { formatBlipErrorToast } from './blip-error-hints.js';
 import { showAppToast } from './toasts.js';
 
 export async function openScreenPickerDialog() {
@@ -9,16 +10,22 @@ export async function openScreenPickerDialog() {
   try {
     sources = await window.blip.listDisplaySources();
   } catch (err) {
+    const toast = formatBlipErrorToast(err, { titleKey: 'call.share_failed' });
     showAppToast({
-      title: `${t('call.share_failed')} (${formatBlipErrorCode(err)})`,
+      title: `${toast.title} (${toast.code})`,
+      body: toast.hint,
       variant: 'danger',
       durationMs: 5000,
     });
     return null;
   }
   if (!sources?.length) {
+    const toast = formatBlipErrorToast(BlipErrorCode.CAPTURE_PICKER_EMPTY, {
+      titleKey: 'call.picker_empty',
+    });
     showAppToast({
-      title: `${t('call.picker_empty')} (${formatBlipErrorCode(BlipErrorCode.CAPTURE_PICKER_EMPTY)})`,
+      title: `${toast.title} (${toast.code})`,
+      body: toast.hint,
       variant: 'danger',
       durationMs: 5000,
     });
