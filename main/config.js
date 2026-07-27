@@ -217,8 +217,16 @@ function ifacePreference(name) {
   return 2;
 }
 
+let cachedLanIfaces = null;
+let cachedLanIfacesAt = 0;
+const LAN_IFACE_CACHE_MS = 2500;
+
 /** Non-internal IPv4 NICs with directed broadcast targets. */
-export function listLanIpv4Interfaces() {
+export function listLanIpv4Interfaces({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && cachedLanIfaces && now - cachedLanIfacesAt < LAN_IFACE_CACHE_MS) {
+    return cachedLanIfaces;
+  }
   const nets = os.networkInterfaces();
   const out = [];
   for (const name of Object.keys(nets)) {
@@ -235,6 +243,8 @@ export function listLanIpv4Interfaces() {
     }
   }
   out.sort((a, b) => ifacePreference(a.name) - ifacePreference(b.name));
+  cachedLanIfaces = out;
+  cachedLanIfacesAt = now;
   return out;
 }
 

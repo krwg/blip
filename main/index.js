@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
 import { Discovery } from './discovery.js';
 import { createTcpServer } from './tcp-server.js';
-import { connectToPeer } from './tcp-client.js';
+import { connectToFirstReachable } from './tcp-client.js';
 import { createTcpLineReader } from './tcp-framing.js';
 import { loadConfig, saveConfig, initConfigPath, peerDialIps } from './config.js';
 import { toPublicConfig } from './config-public.js';
@@ -901,21 +901,15 @@ async function ensurePeerSocket(blipId) {
       peerSockets.delete(socketKey);
 
       const openWired = async () => {
-        let lastErr = null;
-        for (const ip of dialIps) {
-          try {
-            const socket = await connectToPeer(ip, blipId, tcpPort);
-            const key = `${ip}:${blipId}:${tcpPort}`;
-            wirePeerSocket(socket, key, ip);
-            if (ip !== peer.ip) {
-              discovery?.noteObservedPeerIp?.(blipId, ip);
-            }
-            return { socket, key };
-          } catch (err) {
-            lastErr = classifyBlipError(err);
-          }
+        const { socket, ip } = await connectToFirstReachable(dialIps, blipId, tcpPort, {
+          timeoutMs: dialIps.length > 1 ? 2200 : 5000,
+        });
+        const key = `${ip}:${blipId}:${tcpPort}`;
+        wirePeerSocket(socket, key, ip);
+        if (ip !== peer.ip) {
+          discovery?.noteObservedPeerIp?.(blipId, ip);
         }
-        throw lastErr || createBlipError(BlipErrorCode.CONNECT_FAILED, `Connect failed for #${blipId}`);
+        return { socket, key };
       };
 
       let socket;
