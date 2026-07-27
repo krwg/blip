@@ -271,7 +271,9 @@ export function buildSettingsNetworkPanel({
         const row = document.createElement('div');
         row.className = 'network-log-row';
         const time = new Date(e.ts).toLocaleTimeString();
-        row.textContent = `${time} · #${e.peerId} · ${e.event}`;
+        const peerBit = e.peerId != null && Number.isFinite(Number(e.peerId)) ? `#${e.peerId}` : '—';
+        const detailBit = e.detail ? ` · ${e.detail}` : '';
+        row.textContent = `${time} · ${peerBit} · ${e.event}${detailBit}`;
         logList.appendChild(row);
       });
     }

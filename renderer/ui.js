@@ -35,7 +35,7 @@ import {
 } from './voice-channel.js';
 import { getVoiceChannels } from './groups.js';
 import { getVoiceChannelRoster } from './voice-channel-roster.js';
-import { logPeerEvent } from './network-log.js';
+import { logPeerEvent, logDiscoveryEmit } from './network-log.js';
 import { createMessageId } from './message-id.js';
 import { showSignalLost } from './call.js';
 import {
@@ -1779,7 +1779,7 @@ function renderView(viewName, options = {}) {
   }
 
   void swapMainView(mainContent, view, {
-    enabled: isUiMotionEnabled(state.config),
+    enabled: options.instant ? false : isUiMotionEnabled(state.config),
   }).then(() => {
     applyI18n(mainContent);
     updateNavActive();
@@ -2105,6 +2105,10 @@ export function initUI(config, blipApi) {
 }
 
 export function updatePeers({ peers, occupiedIds, meta }) {
+  if (state.config?.devMeshTrace && meta?.reason) {
+    logDiscoveryEmit(meta);
+  }
+
   if (meta?.sublineOnly) {
     state.peers = peers;
     state.occupiedIds = occupiedIds;
@@ -2173,7 +2177,7 @@ export function updatePeers({ peers, occupiedIds, meta }) {
   }
 
   if (state.view === 'peers' && mainContent && hasVisualChange) {
-    renderView('peers');
+    renderView('peers', { instant: true });
   } else if (state.view === 'peers' && mainContent) {
     peersView.refreshPeersTypingDom();
     meshPulse.refreshPeerPulseDom();
@@ -2183,7 +2187,7 @@ export function updatePeers({ peers, occupiedIds, meta }) {
     if (hasVisualChange) refreshOpenProfilePageIfNeeded(mainContent);
   }
   if (state.view === 'chat' && !state.activePeer && mainContent) {
-    if (hasVisualChange) renderView('chat');
+    if (hasVisualChange) renderView('chat', { instant: true });
     else {
       meshPulse.refreshPeerPulseDom();
       chatHubView.refreshChatHubPeerDom();

@@ -61,7 +61,14 @@ const blipApi = {
   importGiphyGif: (url) => ipcRenderer.invoke('import-giphy-gif', url),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
-  listDisplaySources: () => ipcRenderer.invoke('list-display-sources'),
+  listDisplaySources: async () => {
+    const res = await ipcRenderer.invoke('list-display-sources');
+    if (res?.ok && Array.isArray(res.sources)) return res.sources;
+    const err = new Error(res?.errorId || 'capture_failed');
+    err.blipCode = res?.errorCode ?? 999;
+    err.blipId = res?.errorId;
+    throw err;
+  },
   prepareDisplayCapture: (sourceId) => ipcRenderer.invoke('prepare-display-capture', sourceId),
   getPeers: () => ipcRenderer.invoke('get-peers'),
   getNetworkDiagnostics: () => ipcRenderer.invoke('get-network-diagnostics'),

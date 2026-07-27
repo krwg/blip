@@ -432,14 +432,14 @@ export class Discovery {
 
     if (!existing) {
       this.peers.set(data.blipId, peer);
-      this.emitPeers();
+      this.emitPeers({ reason: 'peer_new', peerId: data.blipId });
       return;
     }
 
     if (structuralChanged) {
       if (existing.ip && ips.includes(existing.ip)) peer.ip = existing.ip;
       this.peers.set(data.blipId, { ...peer, meshCompat: existing.meshCompat });
-      this.emitPeers();
+      this.emitPeers({ reason: 'structural', peerId: data.blipId });
       return;
     }
 
@@ -452,9 +452,9 @@ export class Discovery {
     if (!ips.includes(existing.ip)) existing.ip = primaryIp;
     if (presenceTextChanged) {
       existing.presenceText = peer.presenceText;
-      this.emitPeers({ sublineOnly: true });
+      this.emitPeers({ reason: 'presence_text', peerId: data.blipId, sublineOnly: true });
     } else if (wasOffline) {
-      this.emitPeers();
+      this.emitPeers({ reason: 'online', peerId: data.blipId });
     }
   }
 
@@ -469,7 +469,7 @@ export class Discovery {
         }
       }
     }
-    if (changed) this.emitPeers();
+    if (changed) this.emitPeers({ reason: 'stale_offline' });
   }
 
   getPeers() {
@@ -497,7 +497,7 @@ export class Discovery {
     const next = !!encrypted && !peer.meshLegacy;
     if (peer.meshTcpEncrypted === next) return;
     peer.meshTcpEncrypted = next;
-    this.emitPeers();
+    this.emitPeers({ reason: 'crypto', peerId: id });
   }
 
   notePeerCompat(blipId, compat) {
@@ -512,7 +512,7 @@ export class Discovery {
       peer.meshTcpEncrypted = false;
       peer.meshLegacy = true;
     }
-    this.emitPeers();
+    this.emitPeers({ reason: 'compat', peerId: id });
   }
 
   getOccupiedIds() {
@@ -525,6 +525,14 @@ export class Discovery {
   }
 
   emitPeers(meta = {}) {
+    if (this.config?.devMeshTrace) {
+      const reason = meta?.reason || 'unspecified';
+      const peerId = meta?.peerId != null ? Number(meta.peerId) : null;
+      const bits = [`[discovery] emitPeers reason=${reason}`];
+      if (Number.isFinite(peerId)) bits.push(`peer=${peerId}`);
+      if (meta?.sublineOnly) bits.push('sublineOnly');
+      console.info(bits.join(' '));
+    }
     this.onPeersChange(this.getPeers(), this.getOccupiedIds(), meta);
   }
 
