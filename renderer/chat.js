@@ -727,28 +727,38 @@ export function createChatView(
   }
 
   function hasDropFiles(dt) {
-    return !!(dt?.files?.length);
+    if (!dt) return false;
+    if (dt.files?.length) return true;
+    try {
+      return [...(dt.types || [])].includes('Files');
+    } catch {
+      return false;
+    }
   }
 
   function onDragEnter(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth += 1;
     if (hasDropFiles(e.dataTransfer)) setDropActive(true);
   }
 
   function onDragLeave(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth = Math.max(0, dragDepth - 1);
     if (dragDepth === 0) setDropActive(false);
   }
 
   function onDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
     if (hasDropFiles(e.dataTransfer)) e.dataTransfer.dropEffect = 'copy';
   }
 
   async function onDrop(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth = 0;
     setDropActive(false);
     const files = [...(e.dataTransfer?.files || [])];
@@ -929,6 +939,14 @@ export function createChatView(
     };
     if (m.id) {
       add('chat.reply', () => setReplyTarget(m));
+      add('chat.react', () => {
+        const config = getConfig();
+        const selfId = config?.blipId;
+        const emoji = getDefaultReactionEmoji(config);
+        toggleReactionOnMessage(peerId, m.id, emoji, selfId);
+        void onReaction?.(peerId, { messageId: m.id, emoji, add: true });
+        renderMessages();
+      });
       add('chat.pin', () => setPinMessage(m));
       add('chat.forward', () => void forwardMessage(m));
       if (m.outgoing && (m.text || '').trim()) {
@@ -967,12 +985,14 @@ export function createChatView(
     const selfId = config?.blipId;
 
     const chips = Object.entries(m.reactions || {}).filter(([, ids]) => ids?.length);
+    if (!chips.length) return null;
     chips.forEach(([emoji, ids]) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'chat-reaction-chip';
       if (ids.includes(selfId)) chip.classList.add('chat-reaction-chip--mine');
       chip.textContent = `${emoji} ${ids.length}`;
+      chip.title = t('chat.react');
       chip.addEventListener('click', () => {
         const add = !ids.includes(selfId);
         toggleReactionOnMessage(peerId, m.id, emoji, selfId);
@@ -981,19 +1001,6 @@ export function createChatView(
       });
       row.appendChild(chip);
     });
-
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'chat-reaction-add';
-    addBtn.title = t('chat.react');
-    addBtn.textContent = getDefaultReactionEmoji(config);
-    addBtn.addEventListener('click', () => {
-      const emoji = getDefaultReactionEmoji(config);
-      toggleReactionOnMessage(peerId, m.id, emoji, selfId);
-      void onReaction?.(peerId, { messageId: m.id, emoji, add: true });
-      renderMessages();
-    });
-    row.appendChild(addBtn);
     return row;
   }
 
@@ -1066,21 +1073,6 @@ export function createChatView(
 
       block.addEventListener('contextmenu', (e) => openMessageMenu(e, m));
 
-      const actions = document.createElement('div');
-      actions.className = 'chat-block-actions';
-      if (m.id) {
-        const replyBtn = document.createElement('button');
-        replyBtn.type = 'button';
-        replyBtn.className = 'btn btn-lang chat-reply-btn chat-reply-btn--pixel';
-        replyBtn.title = t('chat.reply');
-        replyBtn.innerHTML = '<span class="pixel-glyph pixel-glyph--reply"></span>';
-        replyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setReplyTarget(m);
-        });
-        actions.appendChild(replyBtn);
-      }
-
       const metaRow = document.createElement('div');
       metaRow.className = 'chat-meta-row';
       if (m.timestamp) {
@@ -1090,10 +1082,12 @@ export function createChatView(
         time.title = new Date(m.timestamp).toLocaleString();
         metaRow.appendChild(time);
       }
-      if (actions.childElementCount) block.appendChild(actions);
       block.appendChild(metaRow);
 
-      if (m.id) block.appendChild(buildReactionRow(m));
+      if (m.id) {
+        const reactionRow = buildReactionRow(m);
+        if (reactionRow) block.appendChild(reactionRow);
+      }
 
       messagesEl.appendChild(block);
     });

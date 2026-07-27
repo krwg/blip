@@ -458,31 +458,42 @@ export function createGroupChatView(
   }
 
   function hasDropFiles(dt) {
-    return !!(dt?.files?.length);
+    if (!dt) return false;
+    if (dt.files?.length) return true;
+    try {
+      return [...(dt.types || [])].includes('Files');
+    } catch {
+      return false;
+    }
   }
 
   function onDragEnter(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth += 1;
     if (hasDropFiles(e.dataTransfer)) setDropActive(true);
   }
 
   function onDragLeave(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth = Math.max(0, dragDepth - 1);
     if (dragDepth === 0) setDropActive(false);
   }
 
   function onDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
     if (hasDropFiles(e.dataTransfer)) e.dataTransfer.dropEffect = 'copy';
   }
 
   async function onDrop(e) {
     e.preventDefault();
+    e.stopPropagation();
     dragDepth = 0;
     setDropActive(false);
     const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
     for (const file of files) {
       await sendAttachment(file);
     }
@@ -528,21 +539,6 @@ export function createGroupChatView(
 
       block.addEventListener('contextmenu', (e) => openMessageMenu(e, m));
 
-      const actions = document.createElement('div');
-      actions.className = 'chat-block-actions';
-      if (m.id) {
-        const replyBtn = document.createElement('button');
-        replyBtn.type = 'button';
-        replyBtn.className = 'btn btn-lang chat-reply-btn chat-reply-btn--pixel';
-        replyBtn.title = t('chat.reply');
-        replyBtn.innerHTML = '<span class="pixel-glyph pixel-glyph--reply"></span>';
-        replyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setReplyTarget(m);
-        });
-        actions.appendChild(replyBtn);
-      }
-
       const metaRow = document.createElement('div');
       metaRow.className = 'chat-meta-row';
       if (m.timestamp) {
@@ -551,7 +547,6 @@ export function createGroupChatView(
         time.textContent = formatChatTime(m.timestamp);
         metaRow.appendChild(time);
       }
-      if (actions.childElementCount) block.appendChild(actions);
       block.appendChild(metaRow);
 
       messagesEl.appendChild(block);

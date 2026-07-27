@@ -69,6 +69,14 @@ async function boot() {
   initUI(bootState.config, api);
   initMediaViewer();
 
+  // Prevent Chromium from navigating away when files are dropped on the window.
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+  });
+
   const { peers, occupiedIds } = await window.blip.getPeers();
   updatePeers({ peers, occupiedIds });
 
