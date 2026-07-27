@@ -47,7 +47,13 @@ import {
 } from '../shared/blip-errors.js';
 import { parseMeshTcpLine } from './mesh-session-crypto.js';
 import { isPeerBlocked } from './trust-policy.js';
-import { createTray, destroyTray, setTrayTransferProgress } from './tray.js';
+import {
+  createTray,
+  destroyTray,
+  setTrayTransferProgress,
+  setTrayCallActivity,
+  setTrayCallLabels,
+} from './tray.js';
 import {
   destroyOverlayWindow,
   refreshPresenceLoop,
@@ -127,6 +133,10 @@ let activeCallPeerSpeaking = false;
 let activeCallLocalMicLevel = 0;
 let activeCallPttHeld = false;
 let activeCallPushToTalkActive = false;
+let activeCallRttMs = null;
+let activeCallJitterMs = null;
+let activeCallQualityTier = '';
+let activeCallPacketLoss = null;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
@@ -142,6 +152,10 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallLocalMicLevel = 0;
     activeCallPttHeld = false;
     activeCallPushToTalkActive = false;
+    activeCallRttMs = null;
+    activeCallJitterMs = null;
+    activeCallQualityTier = '';
+    activeCallPacketLoss = null;
   }
   if (!id) {
     activeCallStartedAt = 0;
@@ -153,6 +167,11 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallLocalMicLevel = 0;
     activeCallPttHeld = false;
     activeCallPushToTalkActive = false;
+    activeCallRttMs = null;
+    activeCallJitterMs = null;
+    activeCallQualityTier = '';
+    activeCallPacketLoss = null;
+    setTrayCallActivity(null);
   } else if (video != null) {
     activeCallVideo = !!video;
   }
@@ -165,12 +184,17 @@ function clearActiveCallPeer(peerId = null) {
   activeCallStartedAt = 0;
   activeCallVideo = false;
   activeCallMuted = false;
+  setTrayCallActivity(null);
   lastCallPingMs = null;
   lastCallPingAt = 0;
   activeCallPeerSpeaking = false;
   activeCallLocalMicLevel = 0;
   activeCallPttHeld = false;
   activeCallPushToTalkActive = false;
+  activeCallRttMs = null;
+  activeCallJitterMs = null;
+  activeCallQualityTier = '';
+  activeCallPacketLoss = null;
 }
 
 const pendingCallIpc = [];
@@ -690,6 +714,10 @@ function syncOverlayFeature() {
         localMicLevel: activeCallLocalMicLevel,
         pttHeld: activeCallPttHeld,
         pushToTalkActive: activeCallPushToTalkActive,
+        rttMs: activeCallRttMs ?? lastCallPingMs,
+        jitterMs: activeCallJitterMs,
+        qualityTier: activeCallQualityTier,
+        packetLoss: activeCallPacketLoss,
         encrypted: !!peer?.meshTcpEncrypted,
         legacy: !!peer?.meshLegacy || !!peer?.meshCompat,
         presence: peer?.presence || (peer?.online ? 'online' : 'offline'),
@@ -1193,8 +1221,8 @@ async function rollbackNetworking(reasonErr) {
 async function bootstrapNetworking() {
   const { tcpPort } = resolvePorts(config);
   tcpServer = await createTcpServer(createTcpHandlers(), tcpPort);
-  discovery = new Discovery(config, (peers, occupiedIds) => {
-    sendToRenderer('peers-updated', { peers, occupiedIds });
+  discovery = new Discovery(config, (peers, occupiedIds, meta) => {
+    sendToRenderer('peers-updated', { peers, occupiedIds, meta: meta || {} });
   });
   discovery.onSeedPacket = (data) => sendToRenderer('seed-udp', data);
   await discovery.start();
@@ -1236,6 +1264,21 @@ function installTray() {
     config.language === 'ru'
       ? { show: 'Показать', quit: 'Выход' }
       : { show: 'Show', quit: 'Quit' };
+  setTrayCallLabels(
+    config.language === 'ru'
+      ? {
+          live: 'В звонке',
+          muted: 'В звонке · микрофон выкл',
+          ptt: 'В звонке · PTT',
+          speaking: 'В звонке · микрофон',
+        }
+      : {
+          live: 'In call',
+          muted: 'In call · muted',
+          ptt: 'In call · PTT',
+          speaking: 'In call · mic live',
+        }
+  );
   const { trayPath } = refreshAppIcons();
   createTray({
     getMainWindow: () => mainWindow,
@@ -1275,6 +1318,31 @@ function setupIpc() {
       if (payload?.pushToTalkActive != null) {
         activeCallPushToTalkActive = !!payload.pushToTalkActive;
       }
+      if (payload?.callRttMs != null && Number.isFinite(Number(payload.callRttMs))) {
+        activeCallRttMs = Number(payload.callRttMs);
+        lastCallPingMs = activeCallRttMs;
+        lastCallPingAt = Date.now();
+      }
+      if (payload?.callJitterMs != null && Number.isFinite(Number(payload.callJitterMs))) {
+        activeCallJitterMs = Number(payload.callJitterMs);
+      }
+      if (payload?.callQualityTier) {
+        activeCallQualityTier = String(payload.callQualityTier);
+      }
+      if (payload?.callPacketLoss != null && Number.isFinite(Number(payload.callPacketLoss))) {
+        activeCallPacketLoss = Number(payload.callPacketLoss);
+      }
+      setTrayCallActivity(
+        activeCallPeerId
+          ? {
+              inCall: true,
+              muted: activeCallMuted,
+              localMicLevel: activeCallLocalMicLevel,
+              pttHeld: activeCallPttHeld,
+              pushToTalkActive: activeCallPushToTalkActive,
+            }
+          : null
+      );
     },
     sendCallPttHeld: (held) => {
       const win = callWindow;

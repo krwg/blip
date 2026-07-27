@@ -1,4 +1,7 @@
 import { t } from './i18n.js';
+import { BlipErrorCode } from '../shared/blip-errors.js';
+import { formatBlipErrorToast } from './blip-error-hints.js';
+import { showAppToast } from './toasts.js';
 
 export async function openScreenPickerDialog() {
   if (!window.blip?.listDisplaySources) return null;
@@ -6,10 +9,28 @@ export async function openScreenPickerDialog() {
   let sources;
   try {
     sources = await window.blip.listDisplaySources();
-  } catch {
+  } catch (err) {
+    const toast = formatBlipErrorToast(err, { titleKey: 'call.share_failed' });
+    showAppToast({
+      title: `${toast.title} (${toast.code})`,
+      body: toast.hint,
+      variant: 'danger',
+      durationMs: 5000,
+    });
     return null;
   }
-  if (!sources?.length) return null;
+  if (!sources?.length) {
+    const toast = formatBlipErrorToast(BlipErrorCode.CAPTURE_PICKER_EMPTY, {
+      titleKey: 'call.picker_empty',
+    });
+    showAppToast({
+      title: `${toast.title} (${toast.code})`,
+      body: toast.hint,
+      variant: 'danger',
+      durationMs: 5000,
+    });
+    return null;
+  }
 
   const screens = sources.filter((s) => s.displayType === 'screen');
   const windows = sources.filter((s) => s.displayType === 'window');
@@ -90,7 +111,8 @@ export async function openScreenPickerDialog() {
         } else {
           const ph = document.createElement('span');
           ph.className = 'screen-picker-thumb screen-picker-thumb--empty';
-          ph.textContent = tab === 'screen' ? 'SCR' : 'WIN';
+          ph.textContent =
+            tab === 'screen' ? t('call.picker_thumb_screen') : t('call.picker_thumb_window');
           card.appendChild(ph);
         }
         const label = document.createElement('span');

@@ -57,6 +57,7 @@ export function createPeersView({
         row.className = `peer-row glass ${peer.online ? 'online' : 'offline'} ${
           isFavorite(peer.blipId) ? 'peer-row--favorite' : ''
         }`;
+        row.dataset.peerRow = String(peer.blipId);
         const avatar = createTrustedAvatarElement(peer.blipId, 2, { selfBlipId: state.config.blipId });
         avatar.classList.add('peer-row-avatar');
         avatar.style.cursor = 'pointer';
@@ -112,6 +113,7 @@ export function createPeersView({
         info.append(name, pulseLine, typingLine, idSpan);
         const dot = document.createElement('span');
         dot.className = `status-dot ${peerPresenceClass(peer)}`;
+        dot.dataset.peerStatusDot = String(peer.blipId);
         dot.title = peerStatusTooltip(peer);
         row.append(avatar, info, dot);
         row.addEventListener('contextmenu', (e) => {
@@ -139,6 +141,24 @@ export function createPeersView({
     return wrap;
   }
 
+  function refreshPeersListDom() {
+    const state = getState();
+    const mainContent = getMainContent();
+    if (state.view !== 'peers' || !mainContent?.isConnected) return;
+    mainContent.querySelectorAll('[data-peer-row]').forEach((row) => {
+      const id = Number(row.dataset.peerRow);
+      const peer = state.peers.find((p) => p.blipId === id);
+      if (!peer) return;
+      row.classList.toggle('online', !!peer.online);
+      row.classList.toggle('offline', !peer.online);
+      const dot = row.querySelector('[data-peer-status-dot]');
+      if (dot) {
+        dot.className = `status-dot ${peerPresenceClass(peer)}`;
+        dot.title = peerStatusTooltip(peer);
+      }
+    });
+  }
+
   function refreshPeersTypingDom() {
     const state = getState();
     const mainContent = getMainContent();
@@ -151,5 +171,5 @@ export function createPeersView({
     });
   }
 
-  return { renderPeersView, refreshPeersTypingDom };
+  return { renderPeersView, refreshPeersTypingDom, refreshPeersListDom };
 }

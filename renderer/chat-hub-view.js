@@ -1,5 +1,6 @@
 export function createChatHubView({
   getState,
+  getMainContent,
   t,
   isBlocked,
   isFavorite,
@@ -16,9 +17,12 @@ export function createChatHubView({
   createAvatarElement,
   getMessages,
   formatPeerDisplayName,
+  formatPeerSubline,
+  getPeerLatency,
   findPeerByBlipId,
   normalizeBlipId,
   peerPresenceClass,
+  peerStatusTooltip,
   peerHasCachedProfileGif,
   getUnreadByGroup,
   getUnreadByPeer,
@@ -201,6 +205,7 @@ export function createChatHubView({
         const item = document.createElement('button');
         item.type = 'button';
         item.className = `chat-hub-row glass ${row.online ? 'online' : 'offline'}`;
+        item.dataset.peerRow = String(row.blipId);
         const avatar = createAvatarElement(row.blipId, 2, { selfBlipId: state.config.blipId });
         avatar.classList.add('chat-hub-avatar');
         avatar.addEventListener('click', (e) => {
@@ -216,7 +221,19 @@ export function createChatHubView({
         const idSpan = document.createElement('span');
         idSpan.className = 'peer-id';
         idSpan.textContent = `#${row.blipId}`;
-        info.append(name, idSpan);
+        const pulseLine = document.createElement('span');
+        pulseLine.className = 'peer-pulse chat-hub-pulse';
+        pulseLine.dataset.peerPulse = String(row.blipId);
+        const hubPeer = peer || peerForProfile;
+        pulseLine.textContent = formatPeerSubline(hubPeer);
+        pulseLine.classList.toggle(
+          'peer-pulse--status',
+          !!(hubPeer.online && (hubPeer.presenceText || '').trim()),
+        );
+        const lat = getPeerLatency?.(row.blipId);
+        pulseLine.classList.toggle('peer-pulse--live', hubPeer.online && lat != null);
+        pulseLine.classList.toggle('peer-pulse--offline', !hubPeer.online);
+        info.append(name, pulseLine, idSpan);
         if (row.lastMsg) {
           const preview = document.createElement('span');
           preview.className = 'chat-hub-preview';
@@ -229,6 +246,8 @@ export function createChatHubView({
         }
         const dot = document.createElement('span');
         dot.className = `status-dot ${peerPresenceClass(peerForProfile)}`;
+        dot.dataset.peerStatusDot = String(row.blipId);
+        dot.title = peerStatusTooltip(peerForProfile);
         const unread = getUnreadByPeer(row.blipId);
         if (unread > 0) {
           const badge = document.createElement('span');
@@ -255,5 +274,24 @@ export function createChatHubView({
     wrap.append(title, list);
     return wrap;
   }
-  return { renderChatHubView };
+
+  function refreshChatHubPeerDom() {
+    const state = getState();
+    const mainContent = getMainContent?.();
+    if (state.view !== 'chat' || state.activePeer || !mainContent?.isConnected) return;
+    mainContent.querySelectorAll('[data-peer-row]').forEach((row) => {
+      const id = Number(row.dataset.peerRow);
+      const peer = state.peers.find((p) => p.blipId === id);
+      if (!peer) return;
+      row.classList.toggle('online', !!peer.online);
+      row.classList.toggle('offline', !peer.online);
+      const dot = row.querySelector('[data-peer-status-dot]');
+      if (dot) {
+        dot.className = `status-dot ${peerPresenceClass(peer)}`;
+        dot.title = peerStatusTooltip(peer);
+      }
+    });
+  }
+
+  return { renderChatHubView, refreshChatHubPeerDom };
 }

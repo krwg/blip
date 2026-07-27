@@ -409,11 +409,10 @@ export class Discovery {
       meshPlusTrust: peerMeshPlusTrustFromAnnounce(data),
     };
 
-    const uiChanged =
+    const structuralChanged =
       !existing ||
       existing.displayName !== peer.displayName ||
       existing.presence !== peer.presence ||
-      existing.presenceText !== peer.presenceText ||
       existing.tcpPort !== peer.tcpPort ||
       existing.meshVerified !== peer.meshVerified ||
       existing.meshLegacy !== peer.meshLegacy ||
@@ -426,28 +425,37 @@ export class Discovery {
       existing.buildVerified !== peer.buildVerified ||
       existing.meshPlusTrust !== peer.meshPlusTrust;
 
-    let changed = false;
-    if (!existing) {
-      this.peers.set(data.blipId, peer);
-      changed = true;
-    } else if (uiChanged) {
-      if (existing.ip && ips.includes(existing.ip)) peer.ip = existing.ip;
-      this.peers.set(data.blipId, { ...peer, meshCompat: existing.meshCompat });
-      changed = true;
-    } else {
-      const wasOffline = !existing.online;
-      existing.lastSeen = Date.now();
-      existing.online = true;
-      existing.tcpPort = peerTcp;
-      existing.udpPort = peerUdp;
-      existing.ips = ips;
-      if (!ips.includes(existing.ip)) existing.ip = primaryIp;
-      if (wasOffline) changed = true;
-    }
+    const presenceTextChanged =
+      !!existing && existing.presenceText !== peer.presenceText;
 
     this.occupiedIds.add(data.blipId);
-    // Keep lastSeen warm without rebuilding the contacts UI every announce (~5s).
-    if (changed) this.emitPeers();
+
+    if (!existing) {
+      this.peers.set(data.blipId, peer);
+      this.emitPeers({ reason: 'peer_new', peerId: data.blipId });
+      return;
+    }
+
+    if (structuralChanged) {
+      if (existing.ip && ips.includes(existing.ip)) peer.ip = existing.ip;
+      this.peers.set(data.blipId, { ...peer, meshCompat: existing.meshCompat });
+      this.emitPeers({ reason: 'structural', peerId: data.blipId });
+      return;
+    }
+
+    const wasOffline = !existing.online;
+    existing.lastSeen = Date.now();
+    existing.online = true;
+    existing.tcpPort = peerTcp;
+    existing.udpPort = peerUdp;
+    existing.ips = ips;
+    if (!ips.includes(existing.ip)) existing.ip = primaryIp;
+    if (presenceTextChanged) {
+      existing.presenceText = peer.presenceText;
+      this.emitPeers({ reason: 'presence_text', peerId: data.blipId, sublineOnly: true });
+    } else if (wasOffline) {
+      this.emitPeers({ reason: 'online', peerId: data.blipId });
+    }
   }
 
   cleanupStale() {
@@ -461,7 +469,7 @@ export class Discovery {
         }
       }
     }
-    if (changed) this.emitPeers();
+    if (changed) this.emitPeers({ reason: 'stale_offline' });
   }
 
   getPeers() {
@@ -489,7 +497,7 @@ export class Discovery {
     const next = !!encrypted && !peer.meshLegacy;
     if (peer.meshTcpEncrypted === next) return;
     peer.meshTcpEncrypted = next;
-    this.emitPeers();
+    this.emitPeers({ reason: 'crypto', peerId: id });
   }
 
   notePeerCompat(blipId, compat) {
@@ -504,7 +512,7 @@ export class Discovery {
       peer.meshTcpEncrypted = false;
       peer.meshLegacy = true;
     }
-    this.emitPeers();
+    this.emitPeers({ reason: 'compat', peerId: id });
   }
 
   getOccupiedIds() {
@@ -516,8 +524,16 @@ export class Discovery {
     this.announce();
   }
 
-  emitPeers() {
-    this.onPeersChange(this.getPeers(), this.getOccupiedIds());
+  emitPeers(meta = {}) {
+    if (this.config?.devMeshTrace) {
+      const reason = meta?.reason || 'unspecified';
+      const peerId = meta?.peerId != null ? Number(meta.peerId) : null;
+      const bits = [`[discovery] emitPeers reason=${reason}`];
+      if (Number.isFinite(peerId)) bits.push(`peer=${peerId}`);
+      if (meta?.sublineOnly) bits.push('sublineOnly');
+      console.info(bits.join(' '));
+    }
+    this.onPeersChange(this.getPeers(), this.getOccupiedIds(), meta);
   }
 
   stop() {
