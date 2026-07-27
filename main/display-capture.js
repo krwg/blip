@@ -16,13 +16,16 @@ export async function listDisplaySources() {
   const sources = await desktopCapturer.getSources({
     types: ['screen', 'window'],
     thumbnailSize: { width: 320, height: 180 },
+    fetchWindowIcons: true,
   });
-  return sources.map((s) => ({
-    id: s.id,
-    name: s.name,
-    thumbnail: s.thumbnail?.isEmpty?.() ? '' : s.thumbnail.toDataURL(),
-    displayType: s.id.startsWith('screen:') ? 'screen' : 'window',
-  }));
+  return sources
+    .filter((s) => s?.id && String(s.name || '').trim())
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      thumbnail: s.thumbnail?.isEmpty?.() ? '' : s.thumbnail.toDataURL(),
+      displayType: s.id.startsWith('screen:') ? 'screen' : 'window',
+    }));
 }
 
 export async function resolveDisplaySourceForCallback() {
@@ -30,6 +33,7 @@ export async function resolveDisplaySourceForCallback() {
   const sources = await desktopCapturer.getSources({
     types: ['screen', 'window'],
     thumbnailSize: { width: 1920, height: 1080 },
+    fetchWindowIcons: true,
   });
   if (pendingId) {
     const pick = sources.find((s) => s.id === pendingId);

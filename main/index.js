@@ -1193,8 +1193,8 @@ async function rollbackNetworking(reasonErr) {
 async function bootstrapNetworking() {
   const { tcpPort } = resolvePorts(config);
   tcpServer = await createTcpServer(createTcpHandlers(), tcpPort);
-  discovery = new Discovery(config, (peers, occupiedIds) => {
-    sendToRenderer('peers-updated', { peers, occupiedIds });
+  discovery = new Discovery(config, (peers, occupiedIds, meta) => {
+    sendToRenderer('peers-updated', { peers, occupiedIds, meta: meta || {} });
   });
   discovery.onSeedPacket = (data) => sendToRenderer('seed-udp', data);
   await discovery.start();

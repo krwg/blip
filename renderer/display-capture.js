@@ -1,8 +1,9 @@
-import { getScreenCaptureConstraints, getScreenCaptureMandatory } from './call-media.js';
+import { getScreenCaptureMandatory } from './call-media.js';
+import { BlipErrorCode, createBlipError } from '../shared/blip-errors.js';
 
 export async function captureDisplayStream(sourceId, config, { withAudio = false } = {}) {
   if (!sourceId || typeof sourceId !== 'string') {
-    throw new Error('no_source');
+    throw createBlipError(BlipErrorCode.CAPTURE_NO_SOURCE);
   }
 
   const chromeMediaSource = sourceId.startsWith('window:') ? 'window' : 'desktop';
@@ -27,19 +28,7 @@ export async function captureDisplayStream(sourceId, config, { withAudio = false
       video: { mandatory: videoMandatory },
     });
   } catch (err) {
-    console.warn('[BLIP] desktop getUserMedia capture failed:', err.message);
+    console.warn('[BLIP] desktop getUserMedia capture failed:', err?.message || err);
+    throw createBlipError(BlipErrorCode.CAPTURE_GETUSERMEDIA_FAILED, err?.message || '', err);
   }
-
-  if (window.blip?.prepareDisplayCapture) {
-    const prepared = await window.blip.prepareDisplayCapture(sourceId);
-    if (prepared?.ok) {
-      const base = getScreenCaptureConstraints(config);
-      return navigator.mediaDevices.getDisplayMedia({
-        ...base,
-        audio: withAudio,
-      });
-    }
-  }
-
-  throw new Error('capture_failed');
 }

@@ -8,6 +8,7 @@
  *   100–116 — discovery / connect / handshake (base)
  *   117–139 — granular TCP close / destroy reasons (was lumped as “Socket closed”)
  *   200–299 — calls / signalling
+ *   300–309 — display capture
  *   900–999 — unknown / wrap
  */
 
@@ -53,6 +54,11 @@ export const BlipErrorCode = Object.freeze({
   CALL_SIGNAL_FAILED: 201,
   CALL_PEER_UNREACHABLE: 202,
   CALL_ENSURE_FAILED: 203,
+
+  CAPTURE_NO_SOURCE: 300,
+  CAPTURE_GETUSERMEDIA_FAILED: 301,
+  CAPTURE_SOURCE_NOT_FOUND: 302,
+  CAPTURE_LIST_SOURCES_FAILED: 303,
 
   UNKNOWN: 999,
 });
@@ -241,6 +247,26 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
     id: 'CALL_ENSURE_FAILED',
     summary: 'Call ensurePeerSocket failed',
     detail: 'Outgoing call blocked at mesh socket ensure; see nested code in terminal.',
+  },
+  300: {
+    id: 'CAPTURE_NO_SOURCE',
+    summary: 'No display source selected',
+    detail: 'Screen share started without a valid desktopCapturer source id.',
+  },
+  301: {
+    id: 'CAPTURE_GETUSERMEDIA_FAILED',
+    summary: 'Desktop capture getUserMedia failed',
+    detail: 'Electron chromeMediaSourceId capture rejected or failed.',
+  },
+  302: {
+    id: 'CAPTURE_SOURCE_NOT_FOUND',
+    summary: 'Display source disappeared',
+    detail: 'Pre-selected screen/window id was not returned by desktopCapturer.',
+  },
+  303: {
+    id: 'CAPTURE_LIST_SOURCES_FAILED',
+    summary: 'Could not list display sources',
+    detail: 'desktopCapturer.getSources failed (permissions or OS).',
   },
   999: {
     id: 'UNKNOWN',
