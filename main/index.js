@@ -123,6 +123,10 @@ let activeCallMuted = false;
 let lastTransferInfo = null;
 let lastCallPingMs = null;
 let lastCallPingAt = 0;
+let activeCallPeerSpeaking = false;
+let activeCallLocalMicLevel = 0;
+let activeCallPttHeld = false;
+let activeCallPushToTalkActive = false;
 let groupCallWindow = null;
 let callWindowReady = false;
 let groupCallWindowReady = false;
@@ -134,6 +138,10 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallMuted = false;
     lastCallPingMs = null;
     lastCallPingAt = 0;
+    activeCallPeerSpeaking = false;
+    activeCallLocalMicLevel = 0;
+    activeCallPttHeld = false;
+    activeCallPushToTalkActive = false;
   }
   if (!id) {
     activeCallStartedAt = 0;
@@ -141,6 +149,10 @@ function setActiveCallPeer(peerId, { video = null } = {}) {
     activeCallMuted = false;
     lastCallPingMs = null;
     lastCallPingAt = 0;
+    activeCallPeerSpeaking = false;
+    activeCallLocalMicLevel = 0;
+    activeCallPttHeld = false;
+    activeCallPushToTalkActive = false;
   } else if (video != null) {
     activeCallVideo = !!video;
   }
@@ -155,6 +167,10 @@ function clearActiveCallPeer(peerId = null) {
   activeCallMuted = false;
   lastCallPingMs = null;
   lastCallPingAt = 0;
+  activeCallPeerSpeaking = false;
+  activeCallLocalMicLevel = 0;
+  activeCallPttHeld = false;
+  activeCallPushToTalkActive = false;
 }
 
 const pendingCallIpc = [];
@@ -625,6 +641,7 @@ function patchConfig(updates) {
   }
   if (
     updates?.overlayEnabled !== undefined ||
+    updates?.overlayClickThrough !== undefined ||
     updates?.presenceDetectEnabled !== undefined ||
     updates?.presenceShareEnabled !== undefined ||
     updates?.presencePreferGames !== undefined ||
@@ -669,6 +686,10 @@ function syncOverlayFeature() {
         video: activeCallVideo,
         muted: activeCallMuted,
         pingMs: lastCallPingMs,
+        peerSpeaking: activeCallPeerSpeaking,
+        localMicLevel: activeCallLocalMicLevel,
+        pttHeld: activeCallPttHeld,
+        pushToTalkActive: activeCallPushToTalkActive,
         encrypted: !!peer?.meshTcpEncrypted,
         legacy: !!peer?.meshLegacy || !!peer?.meshCompat,
         presence: peer?.presence || (peer?.online ? 'online' : 'offline'),
@@ -1244,6 +1265,27 @@ function setupIpc() {
     setActiveCallMuted: (muted) => {
       activeCallMuted = !!muted;
     },
+    setActiveCallMedia: (payload) => {
+      if (payload?.muted != null) activeCallMuted = !!payload.muted;
+      if (payload?.localMicLevel != null) {
+        activeCallLocalMicLevel = Math.max(0, Math.min(1, Number(payload.localMicLevel) || 0));
+      }
+      if (payload?.peerSpeaking != null) activeCallPeerSpeaking = !!payload.peerSpeaking;
+      if (payload?.pttHeld != null) activeCallPttHeld = !!payload.pttHeld;
+      if (payload?.pushToTalkActive != null) {
+        activeCallPushToTalkActive = !!payload.pushToTalkActive;
+      }
+    },
+    sendCallPttHeld: (held) => {
+      const win = callWindow;
+      if (win && !win.isDestroyed()) {
+        try {
+          win.webContents.send('call-ptt-held', { held: !!held });
+        } catch {
+          /* ignore */
+        }
+      }
+    },
   });
 
   ipcMain.handle('save-config', (_, updates) => {
@@ -1294,6 +1336,7 @@ function setupIpc() {
     }
     if (
       updates?.overlayEnabled !== undefined ||
+      updates?.overlayClickThrough !== undefined ||
       updates?.presenceDetectEnabled !== undefined ||
       updates?.presenceShareEnabled !== undefined ||
       updates?.presencePreferGames !== undefined ||
