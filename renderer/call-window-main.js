@@ -36,6 +36,7 @@ const api = {
   callState: (payload) => window.blip.callState(payload),
   callRenegotiate: (payload) => window.blip.callRenegotiate(payload),
   callRenegotiateAnswer: (payload) => window.blip.callRenegotiateAnswer(payload),
+  reportCallLocalState: (payload) => window.blip.reportCallLocalState(payload),
 };
 
 function applyCallWindowChrome(cfg) {
@@ -157,6 +158,36 @@ async function boot() {
   });
   window.blip.onOverlayToggleMute?.(() => {
     callUI?.toggleMute?.();
+  });
+  window.blip.onCallPttHeld?.((data) => {
+    callUI?.setPttHeld?.(!!data?.held);
+  });
+
+  function pttKeyFromConfig(cfg) {
+    return String(cfg?.pushToTalkKey || 'v').trim().toLowerCase() || 'v';
+  }
+
+  function isPttKey(e, key) {
+    if (!key) return false;
+    if (key.length === 1) return e.key.toLowerCase() === key;
+    return e.code.toLowerCase() === key.toLowerCase() || e.key.toLowerCase() === key.toLowerCase();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!liveConfig?.pushToTalkEnabled || e.repeat) return;
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (isPttKey(e, pttKeyFromConfig(liveConfig))) {
+      callUI?.setPttHeld?.(true);
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (!liveConfig?.pushToTalkEnabled) return;
+    if (isPttKey(e, pttKeyFromConfig(liveConfig))) {
+      callUI?.setPttHeld?.(false);
+      e.preventDefault();
+    }
   });
 
   document.addEventListener('keydown', (e) => {

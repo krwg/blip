@@ -14,6 +14,7 @@ import { captureDisplayStream } from './display-capture.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 import { bindCallWaveform } from './call-waveform.js';
+import { createStreamLevelMeter } from './call-audio-level.js';
 import {
   toSdpWire,
   normalizeSdp,
@@ -227,6 +228,71 @@ export function createCallUI(config, api, options = {}) {
   let heldRemoteScreenStream = null;
   let pseudoFullscreen = false;
   let stateHeartbeat = null;
+  let overlayReportTimer = null;
+  let pushToTalkActive = false;
+  let pttHeld = false;
+  const localMicMeter = createStreamLevelMeter();
+  const remoteMicMeter = createStreamLevelMeter();
+
+  function readPushToTalkFromConfig(cfg) {
+    return {
+      enabled: cfg?.pushToTalkEnabled === true,
+      key: String(cfg?.pushToTalkKey || 'v').trim().toLowerCase() || 'v',
+    };
+  }
+
+  function applyMicTransmission() {
+    const transmit = !muted && (!pushToTalkActive || pttHeld);
+    localStream?.getAudioTracks().forEach((tr) => {
+      tr.enabled = transmit;
+    });
+    micWaveform.setMuted(!transmit);
+    muteBtn.classList.toggle('active', muted || (pushToTalkActive && !pttHeld));
+  }
+
+  function refreshPushToTalkMode(cfg) {
+    const next = readPushToTalkFromConfig(cfg);
+    const was = pushToTalkActive;
+    pushToTalkActive = next.enabled;
+    if (pushToTalkActive && !was) {
+      pttHeld = false;
+    }
+    applyMicTransmission();
+  }
+
+  function setPttHeld(next) {
+    if (!pushToTalkActive) return;
+    pttHeld = !!next;
+    applyMicTransmission();
+    pushOverlayMediaState();
+  }
+
+  function pushOverlayMediaState() {
+    const localLevel = localMicMeter.getLevel();
+    const peerSpeaking =
+      !remoteMuted &&
+      !remoteDeafened &&
+      remoteMicMeter.isSpeaking({ threshold: 0.07, muted: remoteMuted });
+    api.reportCallLocalState?.({
+      muted,
+      deafened,
+      localMicLevel: localLevel,
+      peerSpeaking,
+      pttHeld,
+      pushToTalkActive,
+    }).catch?.(() => {});
+  }
+
+  function startOverlayMediaReports() {
+    stopOverlayMediaReports();
+    pushOverlayMediaState();
+    overlayReportTimer = setInterval(() => pushOverlayMediaState(), 200);
+  }
+
+  function stopOverlayMediaReports() {
+    if (overlayReportTimer) clearInterval(overlayReportTimer);
+    overlayReportTimer = null;
+  }
 
   let stageMode = 'off';
 
@@ -535,6 +601,9 @@ export function createCallUI(config, api, options = {}) {
       localStream = null;
     }
     micWaveform.stop();
+    remoteMicMeter.stop();
+    localMicMeter.stop();
+    stopOverlayMediaReports();
     if (pc) {
       pc.close();
       pc = null;
@@ -667,6 +736,7 @@ export function createCallUI(config, api, options = {}) {
     updateRemoteBadges();
     broadcastCallState();
     startStateHeartbeat();
+    startOverlayMediaReports();
   }
 
   async function waitRenegotiateAnswer() {
@@ -871,6 +941,11 @@ export function createCallUI(config, api, options = {}) {
     remoteVideo.srcObject = videoTracks.length ? new MediaStream(videoTracks) : null;
     remoteAudio.srcObject = audioTracks.length ? new MediaStream(audioTracks) : null;
     remoteAudio.muted = deafened;
+    if (remoteAudio.srcObject) {
+      void remoteMicMeter.attach(remoteAudio.srcObject);
+    } else {
+      remoteMicMeter.stop();
+    }
     void applyRemoteAudioSink();
     void ensureRemoteAudioPlaying();
   }
@@ -1030,8 +1105,10 @@ export function createCallUI(config, api, options = {}) {
         }
       }
       if (!result?.ok) throw new Error(result?.error || 'Call failed');
+      refreshPushToTalkMode(iceCfg);
+      void localMicMeter.attach(localStream);
+      applyMicTransmission();
       dispatchReactiveAudio({ active: true, stream: localStream });
-      micWaveform.setMuted(muted);
       void micWaveform.start(localStream);
     } catch (err) {
       console.error('[call] outgoing:', err);
@@ -1109,8 +1186,10 @@ export function createCallUI(config, api, options = {}) {
       sounds.callConnected();
       statusEl.dataset.i18n = 'call.connected';
       showInCallControls();
+      refreshPushToTalkMode(iceCfg);
+      void localMicMeter.attach(localStream);
+      applyMicTransmission();
       dispatchReactiveAudio({ active: true, stream: localStream });
-      micWaveform.setMuted(muted);
       void micWaveform.start(localStream);
     } catch (err) {
       console.error('[BLIP call] accept:', err);
@@ -1262,11 +1341,7 @@ export function createCallUI(config, api, options = {}) {
   function toggleMute() {
     if (muteBtn.classList.contains('hidden')) return;
     muted = !muted;
-    localStream?.getAudioTracks().forEach((tr) => {
-      tr.enabled = !muted;
-    });
-    micWaveform.setMuted(muted);
-    muteBtn.classList.toggle('active', muted);
+    applyMicTransmission();
     broadcastCallState();
   }
 
@@ -1323,6 +1398,7 @@ export function createCallUI(config, api, options = {}) {
     toggleDeafen,
     toggleScreenShare,
     toggleVideoFullscreen,
+    setPttHeld,
     isVideoFullscreen: () => !!document.fullscreenElement || pseudoFullscreen,
     isIncomingRinging,
     hide,
