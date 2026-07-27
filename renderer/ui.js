@@ -110,6 +110,7 @@ import {
 import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
 import { showAppToast } from './toasts.js';
+import { formatBlipErrorToast } from './blip-error-hints.js';
 import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
 import { createContextMenus } from './context-menus.js';
 import { createUpdateChecker } from './update-checker.js';
@@ -284,9 +285,10 @@ async function openCallOutgoing(peerId, video = false) {
   const id = Number(peerId);
   const peer = state.peers.find((p) => Number(p.blipId) === id);
   if (!peer?.online) {
+    const toast = formatBlipErrorToast(202);
     showAppToast({
-      title: t('call.signal_lost'),
-      body: t('call.error_code').replace('{code}', '202'),
+      title: toast.title,
+      body: toast.body,
       durationMs: 4500,
     });
     return;
@@ -295,24 +297,42 @@ async function openCallOutgoing(peerId, video = false) {
   try {
     const result = await window.blip.openCallOutgoing({ peerId: id, video });
     if (!result?.ok) {
-      const code = result?.errorCode ?? result?.error ?? '999';
+      const code = result?.errorCode ?? result?.error ?? 999;
       const blocked = Number(code) === 111 || /unencrypted_mesh_disabled/i.test(String(result?.error || ''));
-      const codeStr = String(code).replace(/\D/g, '') || '999';
+      if (blocked) {
+        showAppToast({
+          title: t('peers.unencrypted_blocked'),
+          body: formatBlipErrorToast(111).hint,
+          variant: 'danger',
+          durationMs: 5000,
+        });
+        return;
+      }
+      const toast = formatBlipErrorToast(code);
       showAppToast({
-        title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-        body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
+        title: toast.title,
+        body: toast.body,
         variant: 'danger',
         durationMs: 5000,
       });
     }
   } catch (e) {
     console.error('[BLIP] openCallOutgoing', e);
-    const raw = e?.blipCode ?? e?.errorCode ?? e?.message ?? '999';
-    const codeStr = String(raw).replace(/\D/g, '') || '999';
-    const blocked = Number(codeStr) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
+    const blocked =
+      Number(e?.blipCode) === 111 || /unencrypted_mesh_disabled/i.test(e?.message || '');
+    if (blocked) {
+      showAppToast({
+        title: t('peers.unencrypted_blocked'),
+        body: formatBlipErrorToast(111).hint,
+        variant: 'danger',
+        durationMs: 5000,
+      });
+      return;
+    }
+    const toast = formatBlipErrorToast(e);
     showAppToast({
-      title: blocked ? t('peers.unencrypted_blocked') : t('call.signal_lost'),
-      body: blocked ? '' : t('call.error_code').replace('{code}', codeStr),
+      title: toast.title,
+      body: toast.body,
       variant: 'danger',
       durationMs: 5000,
     });
