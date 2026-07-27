@@ -12,6 +12,8 @@ let lastSharedText = '';
 /** Runtime visibility — hotkey toggles; settings only enable the feature. */
 let overlayShown = false;
 let lastPayload = null;
+let lastPayloadFingerprint = '';
+let presenceTick = 0;
 
 const ACCENT_HEX = {
   mint: '#00ffc8',
@@ -134,6 +136,7 @@ export function setOverlayVisible(show, deps) {
   }
   const win = createOverlayWindow(deps);
   if (!win.isDestroyed()) {
+    lastPayloadFingerprint = '';
     win.showInactive();
     if (lastPayload) pushOverlayUpdate(lastPayload);
   }
@@ -155,6 +158,12 @@ export function pushOverlayUpdate(payload) {
   } catch {
 
   }
+}
+
+function fingerprintOverlayPayload(payload) {
+  if (!payload) return '';
+  const { now, ...rest } = payload;
+  return JSON.stringify(rest);
 }
 
 function formatCallElapsed(startedAt) {
@@ -189,9 +198,16 @@ export function startPresenceLoop({
   const tick = async () => {
     const cfg = getConfig?.() || {};
     if (!cfg.presenceDetectEnabled && !cfg.overlayEnabled) return;
+    presenceTick += 1;
 
     let activity = null;
-    if (cfg.presenceDetectEnabled) {
+    // Foreground detect is expensive (PowerShell/osascript) — only when sharing
+    // status or the overlay HUD is actually visible. Throttle when only sharing.
+    const needDetect =
+      !!cfg.presenceDetectEnabled &&
+      (!!cfg.presenceShareEnabled || overlayShown);
+    const detectEvery = overlayShown ? 1 : 3;
+    if (needDetect && presenceTick % detectEvery === 0) {
       const snap = await detectForegroundApp();
       activity = classifyActivity(snap, {
         preferGames: cfg.presencePreferGames !== false,
@@ -204,8 +220,10 @@ export function startPresenceLoop({
       }
     }
 
+    // Nothing to push if overlay is hidden and we are not sharing activity.
+    if (!overlayShown && !cfg.presenceShareEnabled) return;
+
     const call = getCallInfo?.() || null;
-    // Prefer cached ping — avoid dialing TCP every tick (triggers peer IP churn / UI flicker).
     if (!call?.active) {
       setCallPing?.(null);
     }
@@ -220,12 +238,13 @@ export function startPresenceLoop({
     const uiSkin = cfg.uiSkin === 'nest' ? 'nest' : 'pixel';
     const themeMode = cfg.themeMode === 'light' ? 'light' : 'dark';
     const payload = {
-      activityKind: activity?.kind || '',
-      activityLabel: activity?.label || '',
-      activityApp: activity?.app || '',
-      activityTitle: activity?.title || '',
-      activityElapsed: activity?.elapsedLabel || '',
-      statusLine: activity?.statusLine || cfg.presenceText || '',
+      activityKind: activity?.kind || lastPayload?.activityKind || '',
+      activityLabel: activity?.label || lastPayload?.activityLabel || '',
+      activityApp: activity?.app || lastPayload?.activityApp || '',
+      activityTitle: activity?.title || lastPayload?.activityTitle || '',
+      activityElapsed: activity?.elapsedLabel || lastPayload?.activityElapsed || '',
+      statusLine:
+        activity?.statusLine || cfg.presenceText || lastPayload?.statusLine || '',
       unread: getUnreadTotal?.() || 0,
       peersOnline: getPeersOnline?.() || 0,
       selfName: cfg.displayName || `BLIP-${cfg.blipId || '?'}`,
@@ -251,8 +270,17 @@ export function startPresenceLoop({
       transferPercent: transfer?.percent || 0,
       now: Date.now(),
     };
-    onOverlayPayload?.(payload);
-    pushOverlayUpdate(payload);
+
+    if (cfg.presenceShareEnabled) onOverlayPayload?.(payload);
+
+    if (overlayShown) {
+      const fp = fingerprintOverlayPayload(payload);
+      if (fp === lastPayloadFingerprint) return;
+      lastPayloadFingerprint = fp;
+      pushOverlayUpdate(payload);
+    } else {
+      lastPayload = payload;
+    }
   };
 
   void tick();
@@ -264,6 +292,8 @@ export function stopPresenceLoop() {
     clearInterval(presenceTimer);
     presenceTimer = null;
   }
+  presenceTick = 0;
+  lastPayloadFingerprint = '';
 }
 
 /**
