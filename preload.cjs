@@ -246,6 +246,11 @@ const blipApi = {
     ipcRenderer.on('overlay-toggle-mute', handler);
     return () => ipcRenderer.removeListener('overlay-toggle-mute', handler);
   },
+  onCallPttHeld: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('call-ptt-held', handler);
+    return () => ipcRenderer.removeListener('call-ptt-held', handler);
+  },
   openGroupCall: (payload) => ipcRenderer.invoke('open-group-call', payload),
   openGroupCallIncoming: (payload) => ipcRenderer.invoke('open-group-call-incoming', payload),
   leaveGroupCall: () => ipcRenderer.invoke('leave-group-call'),
@@ -309,4 +314,6 @@ contextBridge.exposeInMainWorld('blipOverlay', {
   ready: () => ipcRenderer.send('overlay-ready'),
   callMute: () => ipcRenderer.invoke('overlay-call-mute'),
   callHangup: () => ipcRenderer.invoke('overlay-call-hangup'),
+  setInteractive: (interactive) => ipcRenderer.send('overlay-set-interactive', !!interactive),
+  pttHeld: (held) => ipcRenderer.send('overlay-ptt-held', !!held),
 });

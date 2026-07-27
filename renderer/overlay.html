@@ -185,6 +185,12 @@
       background: #0b3d32;
       display: grid;
       place-items: center;
+      transition: box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+    }
+    .call-avatar--speaking {
+      border-color: color-mix(in srgb, var(--call) 85%, #fff);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--call) 55%, transparent),
+        0 0 14px color-mix(in srgb, var(--call) 35%, transparent);
     }
     html[data-ui-skin='nest'] .call-avatar { border-radius: 999px; }
     .call-avatar canvas,
@@ -303,11 +309,30 @@
     .mic-meter span:nth-child(2) { height: 75%; animation-delay: 120ms; }
     .mic-meter span:nth-child(3) { height: 55%; animation-delay: 240ms; }
     .mic-meter span:nth-child(4) { height: 90%; animation-delay: 80ms; }
+    .mic-meter.is-live span {
+      animation: none;
+      background: color-mix(in srgb, var(--call) 85%, transparent);
+    }
     .mic-meter.is-muted span {
       animation: none;
       height: 22% !important;
       background: color-mix(in srgb, var(--muted) 70%, transparent);
     }
+    .ptt-pill {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: var(--pill-radius, 0px);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .ptt-pill.is-hot {
+      color: var(--call);
+      border-color: color-mix(in srgb, var(--call) 45%, transparent);
+      background: color-mix(in srgb, var(--call) 12%, transparent);
+    }
+    .ptt-pill.hidden { display: none; }
     @keyframes micPulse {
       0%, 100% { transform: scaleY(0.55); }
       50% { transform: scaleY(1); }
@@ -402,7 +427,7 @@
         <div class="chips" id="activityChips"></div>
       </div>
 
-      <div class="call-box hidden" id="callBox">
+      <div class="call-box hidden" id="callBox" data-overlay-interactive>
         <div class="call-head">
           <div class="call-peer-row">
             <div class="call-avatar" id="callAvatar"></div>
@@ -414,8 +439,8 @@
           <div class="call-badge" id="callBadge">in call</div>
         </div>
         <div class="call-actions">
-          <button type="button" class="call-btn call-btn--mute" id="muteBtn">mute</button>
-          <button type="button" class="call-btn call-btn--end" id="endBtn">end</button>
+          <button type="button" class="call-btn call-btn--mute" id="muteBtn" data-overlay-interactive>mute</button>
+          <button type="button" class="call-btn call-btn--end" id="endBtn" data-overlay-interactive>end</button>
         </div>
         <div class="call-foot">
           <div class="call-metrics">
@@ -427,9 +452,10 @@
               <div class="metric-label" id="labelCallPing">Ping</div>
               <div class="metric-value metric-value--ok" id="callPing">—</div>
             </div>
-            <div class="mic-meter" id="micMeter" title="Microphone">
+            <div class="mic-meter" id="micMeter" data-overlay-interactive title="Microphone">
               <span></span><span></span><span></span><span></span>
             </div>
+            <span class="ptt-pill hidden" id="pttPill">PTT</span>
           </div>
           <span class="legacy-pill hidden" id="legacyPill">Legacy</span>
         </div>

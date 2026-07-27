@@ -103,6 +103,19 @@ export function buildSettingsSystemPanel({ getState, saveConfig }) {
   hotkeyHint.textContent = t('settings.overlay_hotkey_hint');
   frag.appendChild(hotkeyHint);
 
+  const clickThroughToggle = createPixelToggle({
+    checked: state.config.overlayClickThrough !== false,
+    labelKey: 'settings.overlay_click_through',
+    onChange: async (checked) => {
+      state.config = await saveConfig({ overlayClickThrough: checked });
+    },
+  });
+  const clickRow = document.createElement('div');
+  clickRow.className = 'settings-toggle-with-hint';
+  clickRow.appendChild(clickThroughToggle.el);
+  clickRow.appendChild(createPixelHintIcon('settings.overlay_click_through_hint'));
+  frag.appendChild(clickRow);
+
   const detectToggle = createPixelToggle({
     checked: !!state.config.presenceDetectEnabled,
     labelKey: 'settings.presence_detect',

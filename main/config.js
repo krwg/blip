@@ -35,6 +35,8 @@ const DEFAULT_CONFIG = {
   reactiveBackground: false,
 
   overlayEnabled: false,
+  /** Pass mouse clicks through HUD except interactive zones (games). */
+  overlayClickThrough: true,
   presenceDetectEnabled: false,
   presenceShareEnabled: false,
   /** Prefer games over generic apps when writing status / overlay. */
@@ -69,6 +71,10 @@ const DEFAULT_CONFIG = {
   audioOutputDeviceId: '',
 
   globalShortcutsEnabled: true,
+
+  pushToTalkEnabled: false,
+  /** Hold this key in the call window for transmit (e.g. v, b, f6). */
+  pushToTalkKey: 'v',
 
   presenceStatus: 'online',
 

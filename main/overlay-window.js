@@ -14,6 +14,36 @@ let overlayShown = false;
 let lastPayload = null;
 let lastPayloadFingerprint = '';
 let presenceTick = 0;
+let overlayInteractive = false;
+
+function syncOverlayPointerFromConfig(cfg, { callActive = false } = {}) {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return;
+  const clickThrough = cfg?.overlayClickThrough !== false;
+  try {
+    if (!clickThrough) {
+      overlayWindow.setIgnoreMouseEvents(false);
+      overlayWindow.setFocusable(true);
+      return;
+    }
+    if (overlayInteractive) {
+      overlayWindow.setIgnoreMouseEvents(false);
+      overlayWindow.setFocusable(true);
+    } else {
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      overlayWindow.setFocusable(false);
+    }
+    if (callActive && clickThrough && !overlayInteractive) {
+      // default passthrough until renderer hits an interactive zone
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setOverlayInteractive(interactive) {
+  overlayInteractive = !!interactive;
+  syncOverlayPointerFromConfig(lastPayload, { callActive: !!lastPayload?.callActive });
+}
 
 const ACCENT_HEX = {
   mint: '#00ffc8',
@@ -50,18 +80,8 @@ function resolveOverlayUrl(rootDir, useViteDev) {
 }
 
 function syncOverlayPointer(interactive) {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return;
-  try {
-    if (interactive) {
-      overlayWindow.setIgnoreMouseEvents(false);
-      overlayWindow.setFocusable(true);
-    } else {
-      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-      overlayWindow.setFocusable(false);
-    }
-  } catch {
-    /* ignore */
-  }
+  overlayInteractive = !!interactive;
+  syncOverlayPointerFromConfig(lastPayload, { callActive: !!lastPayload?.callActive });
 }
 
 export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) {
@@ -100,7 +120,8 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
   });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  syncOverlayPointer(false);
+  overlayInteractive = false;
+  syncOverlayPointerFromConfig({ overlayClickThrough: true });
 
   const url = resolveOverlayUrl(rootDir, useViteDev);
   if (url.startsWith('http')) overlayWindow.loadURL(url);
@@ -152,7 +173,7 @@ export function toggleOverlayVisible(deps) {
 
 export function pushOverlayUpdate(payload) {
   lastPayload = payload || {};
-  syncOverlayPointer(!!lastPayload.callActive);
+  syncOverlayPointerFromConfig(lastPayload, { callActive: !!lastPayload.callActive });
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayShown) return;
   try {
     overlayWindow.webContents.send('overlay-update', lastPayload);
@@ -264,6 +285,11 @@ export function startPresenceLoop({
       callVideo: !!callFresh?.video,
       callMuted: !!callFresh?.muted,
       callPingMs: callFresh?.pingMs ?? null,
+      callPeerSpeaking: !!callFresh?.peerSpeaking,
+      callLocalMicLevel: callFresh?.localMicLevel ?? 0,
+      callPttHeld: !!callFresh?.pttHeld,
+      callPushToTalkActive: !!callFresh?.pushToTalkActive,
+      overlayClickThrough: cfg.overlayClickThrough !== false,
       callEncrypted: !!callFresh?.encrypted,
       callLegacy: !!callFresh?.legacy,
       callPeerPresence: callFresh?.presence || '',

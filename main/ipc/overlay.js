@@ -4,7 +4,7 @@
  */
 
 import { ipcMain } from 'electron';
-import { pushOverlayUpdate } from '../overlay-window.js';
+import { pushOverlayUpdate, setOverlayInteractive } from '../overlay-window.js';
 import { detectForegroundApp } from '../presence-detect.js';
 
 /**
@@ -16,6 +16,8 @@ import { detectForegroundApp } from '../presence-detect.js';
  * @param {() => import('electron').BrowserWindow|null} [deps.getCallWindow]
  * @param {() => Promise<void>|void} [deps.hangupActiveCall]
  * @param {(muted: boolean) => void} [deps.setActiveCallMuted]
+ * @param {(payload: object) => void} [deps.setActiveCallMedia]
+ * @param {(held: boolean) => void} [deps.sendCallPttHeld]
  */
 export function registerOverlayIpc(deps) {
   const {
@@ -26,6 +28,8 @@ export function registerOverlayIpc(deps) {
     getCallWindow,
     hangupActiveCall,
     setActiveCallMuted,
+    setActiveCallMedia,
+    sendCallPttHeld,
   } = deps;
 
   ipcMain.handle('get-foreground-presence', async () => detectForegroundApp());
@@ -81,9 +85,20 @@ export function registerOverlayIpc(deps) {
   });
 
   ipcMain.handle('call-report-local-state', (_, payload) => {
-    if (typeof setActiveCallMuted === 'function') {
-      setActiveCallMuted(!!payload?.muted);
+    if (typeof setActiveCallMuted === 'function' && payload?.muted != null) {
+      setActiveCallMuted(!!payload.muted);
+    }
+    if (typeof setActiveCallMedia === 'function') {
+      setActiveCallMedia(payload || {});
     }
     return { ok: true };
+  });
+
+  ipcMain.on('overlay-set-interactive', (_, interactive) => {
+    setOverlayInteractive(!!interactive);
+  });
+
+  ipcMain.on('overlay-ptt-held', (_, held) => {
+    if (typeof sendCallPttHeld === 'function') sendCallPttHeld(!!held);
   });
 }
