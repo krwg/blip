@@ -29,6 +29,9 @@ const STRINGS = {
     legacy: 'Legacy',
     transfer: 'Transfer',
     dndFooter: 'Do not disturb',
+    qualityGood: 'good',
+    qualityUnstable: 'unstable',
+    qualityPoor: 'poor',
   },
   ru: {
     status: 'Статус',
@@ -64,6 +67,9 @@ const STRINGS = {
     legacy: 'Legacy',
     transfer: 'Передача',
     dndFooter: 'Не беспокоить',
+    qualityGood: 'хорошее',
+    qualityUnstable: 'нестабильное',
+    qualityPoor: 'плохое',
   },
 };
 
@@ -200,6 +206,15 @@ function setMuteUi(muted) {
   micMeter.classList.toggle('is-muted', mutedOptimistic);
 }
 
+function resolveCallQualityLabel(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return '';
+  const s = S();
+  if (n < 80) return s.qualityGood;
+  if (n < 170) return s.qualityUnstable;
+  return s.qualityPoor;
+}
+
 function applyPayload(data) {
   lang = data?.language === 'ru' ? 'ru' : 'en';
   applySkin(data);
@@ -300,7 +315,8 @@ function applyPayload(data) {
     const pingMs = data.callPingMs;
     if (pingMs != null && Number.isFinite(Number(pingMs))) {
       const ms = Math.round(Number(pingMs));
-      callPing.textContent = `${ms}ms`;
+      const q = resolveCallQualityLabel(ms);
+      callPing.textContent = q ? `${ms}ms · ${q}` : `${ms}ms`;
       callPing.classList.toggle('metric-value--ok', ms < 80);
       callPing.classList.toggle('metric-value--bad', ms >= 160);
     } else {
