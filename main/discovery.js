@@ -6,6 +6,7 @@ import {
   getLocalIpv4Set,
   listLanIpv4Interfaces,
   normalizePeerIp,
+  peerDialIps,
 } from './config.js';
 import { resolvePorts, getDiscoveryBroadcastPorts } from './ports.js';
 import {
@@ -23,8 +24,10 @@ import {
 } from './trust-state.js';
 
 const ANNOUNCE_INTERVAL = 5000;
+const IFACE_REFRESH_INTERVAL = 20000;
 const PEER_TIMEOUT = 30000;
 const MAX_PRESENCE_TEXT = 48;
+const MAX_UNICAST_PEERS = 24;
 
 function uniqueIps(...lists) {
   const out = [];
@@ -64,6 +67,8 @@ export class Discovery {
     this.onSeedPacket = null;
     /** @type {Map<string, { socket: import('dgram').Socket, broadcast: string }>} */
     this.ifaceSenders = new Map();
+    this.lastIfaceRefreshAt = 0;
+    this.announceBurstTimers = [];
   }
 
   async start() {
@@ -96,15 +101,24 @@ export class Discovery {
       throw err;
     }
 
-    await this.refreshIfaceSenders();
+    await this.refreshIfaceSenders({ force: true });
     this.startMdns();
     this.announce();
+    // Burst helps Wi‑Fi ↔ Ethernet peers hear each other after join.
+    this.announceBurstTimers = [
+      setTimeout(() => this.announce(), 700),
+      setTimeout(() => this.announce(), 1800),
+      setTimeout(() => this.announce(), 3500),
+    ];
     this.announceTimer = setInterval(() => this.announce(), ANNOUNCE_INTERVAL);
     this.cleanupTimer = setInterval(() => this.cleanupStale(), 5000);
   }
 
-  async refreshIfaceSenders() {
-    const ifaces = listLanIpv4Interfaces();
+  async refreshIfaceSenders({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && now - this.lastIfaceRefreshAt < IFACE_REFRESH_INTERVAL) return;
+    this.lastIfaceRefreshAt = now;
+    const ifaces = listLanIpv4Interfaces({ force });
     const keep = new Set(ifaces.map((i) => i.address));
     for (const [addr, entry] of this.ifaceSenders) {
       if (keep.has(addr)) continue;
@@ -154,30 +168,57 @@ export class Discovery {
     for (const iface of listLanIpv4Interfaces()) {
       if (iface.broadcast) hosts.add(iface.broadcast);
     }
+    const sendOne = (socket, host, port) => {
+      try {
+        socket.send(buf, 0, buf.length, port, host);
+      } catch {
+        /* ignore */
+      }
+    };
     if (this.socket) {
       for (const host of hosts) {
-        for (const port of ports) {
-          try {
-            this.socket.send(buf, 0, buf.length, port, host);
-          } catch {
-            /* ignore */
-          }
-        }
+        for (const port of ports) sendOne(this.socket, host, port);
       }
     }
     for (const { socket, broadcast } of this.ifaceSenders.values()) {
       const targets = new Set(['255.255.255.255']);
       if (broadcast) targets.add(broadcast);
       for (const host of targets) {
-        for (const port of ports) {
-          try {
-            socket.send(buf, 0, buf.length, port, host);
-          } catch {
-            /* ignore */
+        for (const port of ports) sendOne(socket, host, port);
+      }
+    }
+    // Unicast to known peers — bridges asymmetric broadcast (Wi‑Fi ↔ Ethernet).
+    if (this.socket) {
+      let n = 0;
+      for (const peer of this.peers.values()) {
+        if (!peer?.online || n >= MAX_UNICAST_PEERS) break;
+        const ips = peerDialIps(peer).slice(0, 2);
+        if (!ips.length) continue;
+        n += 1;
+        const peerUdp = Number(peer.udpPort) || this.udpPort;
+        for (const ip of ips) {
+          sendOne(this.socket, ip, peerUdp);
+          for (const port of ports) {
+            if (port !== peerUdp) sendOne(this.socket, ip, port);
           }
         }
       }
     }
+  }
+
+  announce() {
+    if (!this.config.blipId || !this.socket) return;
+    void (async () => {
+      try {
+        await this.refreshIfaceSenders();
+      } catch {
+        /* ignore */
+      }
+      const payload = JSON.stringify(this.buildAnnounce());
+      const buf = Buffer.from(payload);
+      this.sendBroadcastBuf(buf);
+      this.announceMdns();
+    })();
   }
 
   startMdns() {
@@ -276,21 +317,6 @@ export class Discovery {
       meshPlusTrust: meshPlus ? buildTrust.meshPlusTrust : null,
       ips,
     };
-  }
-
-  announce() {
-    if (!this.config.blipId || !this.socket) return;
-    void (async () => {
-      try {
-        await this.refreshIfaceSenders();
-      } catch {
-        /* ignore */
-      }
-      const payload = JSON.stringify(this.buildAnnounce());
-      const buf = Buffer.from(payload);
-      this.sendBroadcastBuf(buf);
-      this.announceMdns();
-    })();
   }
 
   broadcastPacket(obj) {
@@ -497,6 +523,8 @@ export class Discovery {
   stop() {
     clearInterval(this.announceTimer);
     clearInterval(this.cleanupTimer);
+    for (const t of this.announceBurstTimers || []) clearTimeout(t);
+    this.announceBurstTimers = [];
     if (this.socket) {
       this.socket.close();
       this.socket = null;

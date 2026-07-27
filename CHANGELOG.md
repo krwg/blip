@@ -9,7 +9,7 @@ Release **version numbers** track [`app-metadata.json`](app-metadata.json) (sync
 
 ## [2.0.3] — Morse — 2026-07-27
 
-Patch (dev).
+Patch.
 
 ### Fixed
 
@@ -18,6 +18,11 @@ Patch (dev).
 - **Peers/chats flicker** — stop emitting `peers-updated` on silent IP route updates; drop overlay TCP ping churn.
 - **macOS** — Control+Shift+O overlay hotkey; ask for mic/camera access; publish zip last so `latest-mac.yml` is not DMG-only (“ZIP file not provided”).
 - **Missed calls** — red DM system line with phone icon when a call is missed or rejected while busy.
+
+### Improved
+
+- **LAN reachability / dial speed** — parallel multi-IP TCP race; burst announce on start; unicast announce to known peers (Wi‑Fi ↔ Ethernet); cache NIC list; refresh iface senders every 20s instead of every announce.
+- **Overlay loop** — skip identical HUD payloads; run expensive foreground detect only when overlay is shown or status sharing is on.
 
 ## [2.0.2] — Morse — 2026-07-26
 
