@@ -242,8 +242,12 @@ function ensureRoot() {
   closeBtn.addEventListener('click', closeFn);
   shareBtn.addEventListener('click', () => void shareCurrent());
   dlBtn.addEventListener('click', () => void downloadCurrent());
+  img.addEventListener('click', (e) => {
+    e.stopPropagation();
+    img.classList.toggle('media-viewer-img--zoomed');
+  });
   root.addEventListener('click', (e) => {
-    if (e.target === root) closeFn();
+    if (e.target === root || e.target === stage) closeFn();
   });
   document.addEventListener('keydown', (e) => {
     if (root.classList.contains('hidden')) return;
@@ -253,6 +257,7 @@ function ensureRoot() {
   root._open = (payload) => {
     state = { ...payload };
     hideAllMedia();
+    img.classList.remove('media-viewer-img--zoomed');
     if (payload.type === 'image') {
       img.src = payload.src;
       img.classList.remove('hidden');

@@ -2153,9 +2153,9 @@ select.blip-select:focus {
 }
 
 .chat-block--missed-call {
-  border-color: color-mix(in srgb, var(--blip-danger) 55%, transparent);
-  background: color-mix(in srgb, var(--blip-danger) 12%, transparent);
-  color: var(--blip-danger);
+  border-color: color-mix(in srgb, var(--blip-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--blip-accent) 12%, transparent);
+  color: var(--blip-accent);
 }
 
 .chat-missed-call {
@@ -2167,7 +2167,7 @@ select.blip-select:focus {
 .chat-missed-call-icon {
   display: inline-flex;
   flex-shrink: 0;
-  color: var(--blip-danger);
+  color: var(--blip-accent);
 }
 
 .chat-missed-call-text {
@@ -2324,12 +2324,13 @@ select.blip-select:focus {
 }
 
 .call-video-wrap--stage {
-  width: min(92vw, 1280px);
+  width: min(100%, 960px);
   aspect-ratio: 16 / 9;
   height: auto;
-  max-height: min(62vh, 560px);
+  max-height: min(52vh, 480px);
   background: #000;
   border: 2px solid var(--blip-accent);
+  overflow: hidden;
 }
 
 .call-overlay--theater {
@@ -2338,11 +2339,12 @@ select.blip-select:focus {
 
 .call-inner--stage {
   width: min(96vw, 1320px);
-  max-width: none;
+  max-width: 100%;
   max-height: 100%;
-  overflow: auto;
-  padding: 16px 20px 20px;
-  gap: 12px;
+  overflow: hidden;
+  padding: 10px 12px 12px;
+  gap: 10px;
+  box-sizing: border-box;
 }
 
 .call-overlay--theater .call-controls,
@@ -6466,14 +6468,32 @@ body.media-viewer-open {
   justify-content: center;
   padding: 8px 16px 0;
   min-height: 0;
+  overflow: auto;
 }
 
 .media-viewer-img,
 .media-viewer-video,
 .media-viewer-yt {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: min(100%, 96vw);
+  max-height: min(100%, 88vh);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  image-rendering: auto;
   border: 2px solid var(--blip-accent);
+}
+
+.media-viewer-img {
+  cursor: zoom-in;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.media-viewer-img.media-viewer-img--zoomed {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  cursor: zoom-out;
 }
 
 .media-viewer-yt {
