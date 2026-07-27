@@ -1,81 +1,13 @@
 import { createAvatarElement } from './avatar.js';
+import { t, setLang, getLang } from './i18n.js';
 
-const STRINGS = {
-  en: {
-    status: 'Status',
-    mesh: 'Mesh',
-    unread: 'Unread',
-    ping: 'Ping',
-    online: 'Online',
-    away: 'Away',
-    busy: 'Busy',
-    dnd: 'DND',
-    solo: 'Solo',
-    peersOnline: (n) => (n === 1 ? '1 online' : `${n} online`),
-    peersCount: (n) => (n === 1 ? '1 peer' : `${n} peers`),
-    playing: 'Playing',
-    inApp: 'In app',
-    activity: 'Activity',
-    listening: 'Listening…',
-    listeningSub: 'No foreground game or app pinned',
-    game: 'Game',
-    app: 'App',
-    voice: 'Voice',
-    video: 'Video',
-    inCall: 'in call',
-    mute: 'mute',
-    unmute: 'unmute',
-    end: 'end',
-    legacy: 'Legacy',
-    transfer: 'Transfer',
-    dndFooter: 'Do not disturb',
-    qualityGood: 'good',
-    qualityUnstable: 'unstable',
-    qualityPoor: 'poor',
-    pttIdle: 'PTT off',
-    pttHot: 'PTT on',
-  },
-  ru: {
-    status: 'Статус',
-    mesh: 'Меш',
-    unread: 'Непрочит.',
-    ping: 'Пинг',
-    online: 'В сети',
-    away: 'Отошёл',
-    busy: 'Занят',
-    dnd: 'Не беспокоить',
-    solo: 'Один',
-    peersOnline: (n) => (n === 1 ? '1 онлайн' : `${n} онлайн`),
-    peersCount: (n) => {
-      const mod10 = n % 10;
-      const mod100 = n % 100;
-      if (mod10 === 1 && mod100 !== 11) return `${n} пир`;
-      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} пира`;
-      return `${n} пиров`;
-    },
-    playing: 'Играет',
-    inApp: 'В приложении',
-    activity: 'Активность',
-    listening: 'Слушаю…',
-    listeningSub: 'Нет закреплённой игры или приложения',
-    game: 'Игра',
-    app: 'Прилож.',
-    voice: 'Голос',
-    video: 'Видео',
-    inCall: 'в звонке',
-    mute: 'мьют',
-    unmute: 'вкл. мик',
-    end: 'сброс',
-    legacy: 'Legacy',
-    transfer: 'Передача',
-    dndFooter: 'Не беспокоить',
-    qualityGood: 'хорошее',
-    qualityUnstable: 'нестабильное',
-    qualityPoor: 'плохое',
-    pttIdle: 'PTT выкл',
-    pttHot: 'PTT вкл',
-  },
-};
+function peersOnlineLabel(n) {
+  return t('overlay.peers_online').replace('{n}', String(n));
+}
+
+function peersCountLabel(n) {
+  return t('overlay.peers_count').replace('{n}', String(n));
+}
 
 const panel = document.getElementById('panel');
 const kindEl = document.getElementById('kind');
@@ -117,13 +49,8 @@ const micBars = micMeter ? [...micMeter.querySelectorAll('span')] : [];
 
 let lastCallPeerId = null;
 let mutedOptimistic = false;
-let lang = 'en';
 let lastClickThrough = true;
 let overlayHitInteractive = false;
-
-function S() {
-  return STRINGS[lang] || STRINGS.en;
-}
 
 function setMicMeterLevel(level, muted) {
   if (!micMeter) return;
@@ -167,7 +94,7 @@ function applySkin(data) {
   html.dataset.uiSkin = skin;
   html.dataset.theme = theme;
   html.dataset.accent = accent;
-  html.lang = lang === 'ru' ? 'ru' : 'en';
+  html.lang = getLang() === 'ru' ? 'ru' : 'en';
   if (data?.accentHex) {
     html.style.setProperty('--accent', data.accentHex);
   } else {
@@ -176,23 +103,22 @@ function applySkin(data) {
 }
 
 function applyStaticLabels() {
-  const s = S();
-  if (labelStatus) labelStatus.textContent = s.status;
-  if (labelMesh) labelMesh.textContent = s.mesh;
-  if (labelUnread) labelUnread.textContent = s.unread;
-  if (labelCallMesh) labelCallMesh.textContent = s.mesh;
-  if (labelCallPing) labelCallPing.textContent = s.ping;
-  if (callBadge) callBadge.textContent = s.inCall;
-  if (legacyPill) legacyPill.textContent = s.legacy;
-  if (endBtn) endBtn.textContent = s.end;
-  if (micMeter) micMeter.title = s.mute;
+  if (labelStatus) labelStatus.textContent = t('overlay.status');
+  if (labelMesh) labelMesh.textContent = t('overlay.mesh');
+  if (labelUnread) labelUnread.textContent = t('overlay.unread');
+  if (labelCallMesh) labelCallMesh.textContent = t('overlay.mesh');
+  if (labelCallPing) labelCallPing.textContent = t('overlay.ping');
+  if (callBadge) callBadge.textContent = t('overlay.in_call');
+  if (legacyPill) legacyPill.textContent = t('overlay.legacy');
+  if (endBtn) endBtn.textContent = t('overlay.end');
+  if (micMeter) micMeter.title = t('overlay.mute');
   setMuteUi(mutedOptimistic);
 }
 
 function tickClock(now = Date.now()) {
   const d = new Date(now);
   clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  clockDate.textContent = d.toLocaleDateString(lang === 'ru' ? 'ru-RU' : undefined, {
+  clockDate.textContent = d.toLocaleDateString(getLang() === 'ru' ? 'ru-RU' : undefined, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -223,25 +149,23 @@ function renderCallAvatar(peerId, peerName, nest) {
 function setMuteUi(muted) {
   mutedOptimistic = !!muted;
   muteBtn.classList.toggle('is-muted', mutedOptimistic);
-  muteBtn.textContent = mutedOptimistic ? S().unmute : S().mute;
+  muteBtn.textContent = mutedOptimistic ? t('overlay.unmute') : t('overlay.mute');
   micMeter.classList.toggle('is-muted', mutedOptimistic);
 }
 
 function resolveCallQualityLabel(ms) {
   const n = Number(ms);
   if (!Number.isFinite(n)) return '';
-  const s = S();
-  if (n < 80) return s.qualityGood;
-  if (n < 170) return s.qualityUnstable;
-  return s.qualityPoor;
+  if (n < 80) return t('overlay.quality_good');
+  if (n < 170) return t('overlay.quality_unstable');
+  return t('overlay.quality_poor');
 }
 
 function applyPayload(data) {
-  lang = data?.language === 'ru' ? 'ru' : 'en';
+  setLang(data?.language === 'ru' ? 'ru' : 'en');
   applySkin(data);
   applyStaticLabels();
 
-  const s = S();
   const kind = String(data?.activityKind || '');
   const label = String(data?.activityLabel || '').trim();
   const status = String(data?.statusLine || '').trim();
@@ -271,14 +195,14 @@ function applyPayload(data) {
   }
 
   const presenceLabel = dnd
-    ? s.dnd
+    ? t('overlay.dnd')
     : presence === 'away'
-      ? s.away
+      ? t('overlay.away')
       : presence === 'busy'
-        ? s.busy
-        : s.online;
+        ? t('overlay.busy')
+        : t('overlay.online');
   statPresence.textContent = presenceLabel;
-  statPeers.textContent = peers > 0 ? s.peersOnline(peers) : s.solo;
+  statPeers.textContent = peers > 0 ? peersOnlineLabel(peers) : t('overlay.solo');
 
   if (unread > 0) {
     statsEl.classList.add('has-unread');
@@ -300,7 +224,11 @@ function applyPayload(data) {
     panel.classList.remove('idle');
     activityBlock.classList.remove('hidden');
     kindEl.textContent =
-      kind === 'game' ? s.playing : kind === 'app' ? s.inApp : s.activity;
+      kind === 'game'
+        ? t('overlay.playing')
+        : kind === 'app'
+          ? t('overlay.in_app')
+          : t('overlay.activity');
     kindEl.className = `kind${kind === 'game' ? ' kind--game' : ''}`;
     titleEl.textContent = label || status || '—';
     const bits = [];
@@ -311,15 +239,15 @@ function applyPayload(data) {
       bits.push(winTitle.length > 42 ? `${winTitle.slice(0, 40)}…` : winTitle);
     }
     subEl.textContent = bits.join(' · ');
-    if (kind === 'game') activityChips.appendChild(chip(s.game, 'ok'));
-    else if (kind === 'app') activityChips.appendChild(chip(s.app));
+    if (kind === 'game') activityChips.appendChild(chip(t('overlay.game'), 'ok'));
+    else if (kind === 'app') activityChips.appendChild(chip(t('overlay.app')));
   } else if (!data?.callActive) {
     panel.classList.add('idle');
     activityBlock.classList.remove('hidden');
     kindEl.textContent = '';
     kindEl.className = 'kind';
-    titleEl.textContent = s.listening;
-    subEl.textContent = s.listeningSub;
+    titleEl.textContent = t('overlay.listening');
+    subEl.textContent = t('overlay.listening_sub');
   } else {
     panel.classList.remove('idle');
     activityBlock.classList.add('hidden');
@@ -331,7 +259,7 @@ function applyPayload(data) {
     const peerId = data.callPeerId != null ? Number(data.callPeerId) : null;
     const idBit = Number.isFinite(peerId) ? ` #${peerId}` : '';
     callPeer.textContent = `${peerName}${idBit}`;
-    const mode = data.callVideo ? s.video : s.voice;
+    const mode = data.callVideo ? t('overlay.video') : t('overlay.voice');
     callElapsed.textContent = data.callElapsed ? `${mode} · ${data.callElapsed}` : mode;
 
     if (peerId !== lastCallPeerId) {
@@ -344,13 +272,13 @@ function applyPayload(data) {
     const pttOn = !!data.callPushToTalkActive;
     if (pttPill) {
       pttPill.classList.toggle('hidden', !pttOn);
-      pttPill.textContent = data.callPttHeld ? S().pttHot : S().pttIdle;
+      pttPill.textContent = data.callPttHeld ? t('overlay.ptt_hot') : t('overlay.ptt_idle');
       pttPill.classList.toggle('is-hot', !!data.callPttHeld);
     }
 
     setMicMeterLevel(Number(data.callLocalMicLevel) || 0, !!data.callMuted);
 
-    callMesh.textContent = s.peersCount(peers);
+    callMesh.textContent = peersCountLabel(peers);
     const pingMs = data.callPingMs;
     if (pingMs != null && Number.isFinite(Number(pingMs))) {
       const ms = Math.round(Number(pingMs));
@@ -384,7 +312,7 @@ function applyPayload(data) {
   const xferLabel = String(data?.transferLabel || '').trim();
   if (xferLabel && xferPct > 0 && xferPct < 100) {
     transferBox.classList.remove('hidden');
-    transferLabel.textContent = xferLabel || s.transfer;
+    transferLabel.textContent = xferLabel || t('overlay.transfer');
     transferPct.textContent = ` · ${xferPct}%`;
   } else {
     transferBox.classList.add('hidden');
@@ -398,7 +326,7 @@ function applyPayload(data) {
     footerApp.textContent = `${app}${elapsedBit}`;
   } else if (dnd) {
     footerApp.classList.remove('hidden');
-    footerApp.textContent = s.dndFooter;
+    footerApp.textContent = t('overlay.dnd_footer');
   } else {
     footerApp.classList.add('hidden');
     footerApp.textContent = '';

@@ -1,4 +1,4 @@
-import { setLang } from './i18n.js';
+import { setLang, t } from './i18n.js';
 import {
   initUI,
   updatePeers,
@@ -35,21 +35,29 @@ const api = {
   callHangup: (payload) => window.blip.callHangup(payload),
 };
 
-function showBootError(message) {
+function showBootError(message, { title, hint } = {}) {
   const root = document.getElementById('app');
   if (!root) return;
   const box = document.createElement('div');
   box.style.cssText =
     'padding:24px;font-family:monospace;color:#ff3366;border:2px solid #ff3366;margin:48px;';
-  box.innerHTML = `<strong>BLIP BOOT ERROR</strong>
-    <p style="color:#e0e0e0;margin-top:12px;">${message}</p>
-    <p style="color:#333;margin-top:8px;font-size:12px;">Run: npm run build && npx electron .</p>`;
+  const titleEl = document.createElement('strong');
+  titleEl.textContent = title || t('boot.error_title');
+  const p = document.createElement('p');
+  p.style.cssText = 'color:#e0e0e0;margin-top:12px;';
+  p.textContent = message;
+  const hintEl = document.createElement('p');
+  hintEl.style.cssText = 'color:#333;margin-top:8px;font-size:12px;';
+  hintEl.textContent = hint || t('boot.error_hint');
+  box.append(titleEl, p, hintEl);
   root.replaceChildren(box);
 }
 
 async function boot() {
   if (!window.blip) {
-    showBootError('Preload bridge not loaded. Rebuild and restart the app.');
+    const lang = localStorage.getItem('blip_lang') || 'en';
+    setLang(lang);
+    showBootError(t('boot.preload_missing'));
     return;
   }
   const config = await window.blip.getConfig();
@@ -90,10 +98,15 @@ async function boot() {
   window.blip.onGlobalToggleDnd?.(() => {
     void toggleDoNotDisturb();
   });
-
 }
 
 boot().catch((err) => {
   console.error(err);
+  try {
+    const lang = localStorage.getItem('blip_lang') || 'en';
+    setLang(lang);
+  } catch {
+    /* ignore */
+  }
   showBootError(err?.message || String(err));
 });

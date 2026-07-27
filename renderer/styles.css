@@ -2685,6 +2685,38 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
   justify-content: center;
 }
 
+.call-volume-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+  padding: 4px 8px;
+  border: 2px solid var(--blip-accent);
+  color: var(--blip-accent);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.call-volume-wrap.hidden {
+  display: none;
+}
+
+.call-volume-label {
+  white-space: nowrap;
+}
+
+.call-volume-range {
+  width: 88px;
+  accent-color: var(--blip-accent);
+}
+
+.call-volume-value {
+  min-width: 2.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .call-peer-status {
   display: flex;
   flex-wrap: wrap;

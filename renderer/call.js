@@ -17,6 +17,10 @@ import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 import { bindCallWaveform } from './call-waveform.js';
 import { createStreamLevelMeter } from './call-audio-level.js';
 import {
+  getPeerCallVolumePct,
+  setPeerCallVolumePct,
+} from './peer-call-volume.js';
+import {
   toSdpWire,
   normalizeSdp,
   normalizeCandidate,
@@ -191,6 +195,27 @@ export function createCallUI(config, api, options = {}) {
 
   controls.appendChild(muteBtn);
   controls.appendChild(deafenBtn);
+
+  const volWrap = document.createElement('label');
+  volWrap.className = 'call-volume-wrap hidden';
+  volWrap.title = t('call.volume');
+  const volLabel = document.createElement('span');
+  volLabel.className = 'call-volume-label';
+  volLabel.dataset.i18n = 'call.volume';
+  volLabel.textContent = t('call.volume');
+  const volRange = document.createElement('input');
+  volRange.type = 'range';
+  volRange.className = 'call-volume-range';
+  volRange.min = '0';
+  volRange.max = '200';
+  volRange.step = '5';
+  volRange.value = '100';
+  const volValue = document.createElement('span');
+  volValue.className = 'call-volume-value';
+  volValue.textContent = t('call.volume_pct').replace('{pct}', '100');
+  volWrap.append(volLabel, volRange, volValue);
+
+  controls.appendChild(volWrap);
   controls.appendChild(shareBtn);
   controls.appendChild(acceptBtn);
   controls.appendChild(rejectBtn);
@@ -211,6 +236,10 @@ export function createCallUI(config, api, options = {}) {
   let withVideo = false;
   let muted = false;
   let deafened = false;
+  let peerOutputVolumePct = 100;
+  let remoteOutCtx = null;
+  let remoteGainNode = null;
+  let remoteMediaSource = null;
   let sharingScreen = false;
   let screenStream = null;
   let savedCameraTrack = null;
@@ -612,6 +641,7 @@ export function createCallUI(config, api, options = {}) {
     localVideo.srcObject = null;
     remoteVideo.srcObject = null;
     remoteAudio.srcObject = null;
+    teardownRemoteGain();
     remotePlayback = null;
     if (outgoingAudioCtx) {
       void outgoingAudioCtx.close();
@@ -734,6 +764,9 @@ export function createCallUI(config, api, options = {}) {
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
+    volWrap.classList.remove('hidden');
+    peerOutputVolumePct = getPeerCallVolumePct(peerId);
+    applyPeerOutputGain();
     updateRemoteBadges();
     broadcastCallState();
     startStateHeartbeat();
@@ -915,6 +948,14 @@ export function createCallUI(config, api, options = {}) {
 
   async function applyRemoteAudioSink() {
     const deviceId = await resolveAudioDeviceId('output');
+    if (remoteOutCtx?.setSinkId && deviceId) {
+      try {
+        await remoteOutCtx.setSinkId(deviceId);
+        return;
+      } catch (err) {
+        console.warn('[call] AudioContext setSinkId:', err.message);
+      }
+    }
     if (!deviceId || !remoteAudio.setSinkId) return;
     try {
       await remoteAudio.setSinkId(deviceId);
@@ -923,8 +964,68 @@ export function createCallUI(config, api, options = {}) {
     }
   }
 
+  function teardownRemoteGain() {
+    try {
+      remoteMediaSource?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    try {
+      remoteGainNode?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    remoteMediaSource = null;
+    remoteGainNode = null;
+  }
+
+  function applyPeerOutputGain() {
+    const linear = deafened ? 0 : peerOutputVolumePct / 100;
+    if (remoteGainNode) {
+      remoteGainNode.gain.value = linear;
+      remoteAudio.muted = true;
+    } else {
+      remoteAudio.volume = Math.min(1, Math.max(0, linear));
+      remoteAudio.muted = deafened;
+    }
+    volValue.textContent = t('call.volume_pct').replace('{pct}', String(peerOutputVolumePct));
+    volRange.value = String(peerOutputVolumePct);
+  }
+
+  function wireRemoteGain(stream) {
+    teardownRemoteGain();
+    if (!stream?.getAudioTracks?.()?.length) {
+      applyPeerOutputGain();
+      return;
+    }
+    try {
+      remoteOutCtx = remoteOutCtx || new AudioContext();
+      if (remoteOutCtx.state === 'suspended') void remoteOutCtx.resume();
+      remoteMediaSource = remoteOutCtx.createMediaStreamSource(stream);
+      remoteGainNode = remoteOutCtx.createGain();
+      remoteMediaSource.connect(remoteGainNode);
+      remoteGainNode.connect(remoteOutCtx.destination);
+      applyPeerOutputGain();
+    } catch (err) {
+      console.warn('[call] remote gain:', err.message);
+      teardownRemoteGain();
+      applyPeerOutputGain();
+    }
+  }
+
   async function ensureRemoteAudioPlaying() {
-    if (!remoteAudio.srcObject || deafened) return;
+    if (deafened) return;
+    if (remoteGainNode) {
+      if (remoteOutCtx?.state === 'suspended') {
+        try {
+          await remoteOutCtx.resume();
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    if (!remoteAudio.srcObject) return;
     try {
       await remoteAudio.play();
     } catch (err) {
@@ -936,17 +1037,22 @@ export function createCallUI(config, api, options = {}) {
     if (!stream) {
       remoteVideo.srcObject = null;
       remoteAudio.srcObject = null;
+      teardownRemoteGain();
+      remoteMicMeter.stop();
       return;
     }
     const videoTracks = stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
     const audioTracks = stream.getAudioTracks().filter((t) => t.readyState !== 'ended');
     remoteVideo.srcObject = videoTracks.length ? new MediaStream(videoTracks) : null;
-    remoteAudio.srcObject = audioTracks.length ? new MediaStream(audioTracks) : null;
-    remoteAudio.muted = deafened;
-    if (remoteAudio.srcObject) {
-      void remoteMicMeter.attach(remoteAudio.srcObject);
+    const audioStream = audioTracks.length ? new MediaStream(audioTracks) : null;
+    remoteAudio.srcObject = audioStream;
+    if (audioStream) {
+      void remoteMicMeter.attach(audioStream);
+      wireRemoteGain(audioStream);
     } else {
       remoteMicMeter.stop();
+      teardownRemoteGain();
+      applyPeerOutputGain();
     }
     void applyRemoteAudioSink();
     void ensureRemoteAudioPlaying();
@@ -1204,6 +1310,7 @@ export function createCallUI(config, api, options = {}) {
       endBtn.classList.add('hidden');
       muteBtn.classList.add('hidden');
       deafenBtn.classList.add('hidden');
+      volWrap.classList.add('hidden');
     }
   }
 
@@ -1241,6 +1348,7 @@ export function createCallUI(config, api, options = {}) {
     endBtn.classList.add('hidden');
     muteBtn.classList.add('hidden');
     deafenBtn.classList.add('hidden');
+    volWrap.classList.add('hidden');
     shareBtn.classList.add('hidden');
     videoWrap.classList.toggle('hidden', !withVideo);
     voiceWrap.classList.toggle('hidden', withVideo);
@@ -1350,7 +1458,7 @@ export function createCallUI(config, api, options = {}) {
   function toggleDeafen() {
     if (deafenBtn.classList.contains('hidden')) return;
     deafened = !deafened;
-    remoteAudio.muted = deafened;
+    applyPeerOutputGain();
     deafenBtn.classList.toggle('active', deafened);
     if (!deafened) void ensureRemoteAudioPlaying();
     broadcastCallState();
@@ -1362,6 +1470,10 @@ export function createCallUI(config, api, options = {}) {
 
   muteBtn.addEventListener('click', () => toggleMute());
   deafenBtn.addEventListener('click', () => toggleDeafen());
+  volRange.addEventListener('input', () => {
+    peerOutputVolumePct = setPeerCallVolumePct(peerId, volRange.value);
+    applyPeerOutputGain();
+  });
   shareBtn.addEventListener('click', () => {
     void toggleScreenShare();
   });
