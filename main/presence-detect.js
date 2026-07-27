@@ -151,15 +151,22 @@ export function classifyActivity(snap, opts = {}) {
   }
 
   const elapsedMs = Date.now() - session.since;
+  const appPretty = prettyApp(appRaw);
+  const shareLine =
+    kind === 'game'
+      ? `Playing ${label}`.slice(0, 48)
+      : `In ${appPretty}`.slice(0, 48);
+  const statusLine =
+    kind === 'game'
+      ? shareLine
+      : `In ${appPretty} · ${formatDuration(elapsedMs)}`.slice(0, 48);
   return {
     ...session,
     elapsedMs,
     elapsedLabel: formatDuration(elapsedMs),
     current: true,
-    statusLine:
-      kind === 'game'
-        ? `Playing ${label}`.slice(0, 48)
-        : `In ${prettyApp(appRaw)} · ${formatDuration(elapsedMs)}`.slice(0, 48),
+    shareLine,
+    statusLine,
   };
 }
 

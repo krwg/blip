@@ -31,7 +31,7 @@ export function createMeshPulse({
   function refreshPeerPulseDom() {
     const state = getState();
     const mainContent = getMainContent();
-    if (state.view !== 'peers' || !mainContent?.isConnected) return;
+    if (!mainContent?.isConnected) return;
     mainContent.querySelectorAll('[data-peer-pulse]').forEach((el) => {
       const id = Number(el.dataset.peerPulse);
       const peer = state.peers.find((p) => p.blipId === id);

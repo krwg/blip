@@ -896,12 +896,17 @@ const peersView = createPeersView({
 });
 
 const chatHubView = createChatHubView({
-  getState: () => state, t, isBlocked, isFavorite, getPendingGroupInvites,
+  getState: () => state,
+  getMainContent: () => mainContent,
+  t, isBlocked, isFavorite, getPendingGroupInvites,
   acceptGroupInvite: (invite) => acceptGroupInvite(api, state.config, invite),
   declineGroupInvite: (invite) => declineGroupInviteFlow(api, state.config, invite),
   clearInviteUnread, getGroupsFor, getGroupMessages, groupDisplayName, getVoiceChannels,
   getVoiceChannelRoster, createGroupAvatarElement, createAvatarElement, getMessages,
   formatPeerDisplayName, findPeerByBlipId, normalizeBlipId, peerPresenceClass,
+  peerStatusTooltip,
+  formatPeerSubline: (peer) => meshPulse.formatPeerSubline(peer),
+  getPeerLatency: (id) => meshPulse.peerLatencyMs.get(id),
   peerHasCachedProfileGif,
   getUnreadByGroup: (id) => unreadByGroup.get(id) || 0,
   getUnreadByPeer: (id) => unreadByPeer.get(id) || 0,
@@ -2099,7 +2104,19 @@ export function initUI(config, blipApi) {
   render();
 }
 
-export function updatePeers({ peers, occupiedIds }) {
+export function updatePeers({ peers, occupiedIds, meta }) {
+  if (meta?.sublineOnly) {
+    state.peers = peers;
+    state.occupiedIds = occupiedIds;
+    if (state.view === 'chat' && (state.activePeer || state.activeGroup) && mainContent) {
+      return;
+    }
+    meshPulse.refreshPeerPulseDom();
+    peersView.refreshPeersListDom();
+    chatHubView.refreshChatHubPeerDom();
+    return;
+  }
+
   const prevPeersById = new Map(state.peers.map((p) => [Number(p.blipId), p]));
   const nextPeersById = new Map(peers.map((p) => [Number(p.blipId), p]));
   const prevOnline = new Set(state.peers.filter((p) => p.online).map((p) => p.blipId));
@@ -2113,7 +2130,6 @@ export function updatePeers({ peers, occupiedIds }) {
         prev.online !== next.online ||
         prev.displayName !== next.displayName ||
         prev.presence !== next.presence ||
-        String(prev.presenceText || '') !== String(next.presenceText || '') ||
         prev.meshTcpEncrypted !== next.meshTcpEncrypted ||
         prev.meshLegacy !== next.meshLegacy ||
         prev.meshCompat !== next.meshCompat ||
@@ -2161,12 +2177,17 @@ export function updatePeers({ peers, occupiedIds }) {
   } else if (state.view === 'peers' && mainContent) {
     peersView.refreshPeersTypingDom();
     meshPulse.refreshPeerPulseDom();
+    peersView.refreshPeersListDom();
   }
   if (state.view === 'profile' && mainContent && state.profilePeerId != null) {
     if (hasVisualChange) refreshOpenProfilePageIfNeeded(mainContent);
   }
-  if (state.view === 'chat' && !state.activePeer && mainContent && hasVisualChange) {
-    renderView('chat');
+  if (state.view === 'chat' && !state.activePeer && mainContent) {
+    if (hasVisualChange) renderView('chat');
+    else {
+      meshPulse.refreshPeerPulseDom();
+      chatHubView.refreshChatHubPeerDom();
+    }
   }
   if (state.view === 'projects') {
     projectsViewInstance?.refreshPeers?.();

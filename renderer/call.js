@@ -11,6 +11,7 @@ import {
 } from './call-media.js';
 import { openScreenPickerDialog } from './screen-picker-dialog.js';
 import { captureDisplayStream } from './display-capture.js';
+import { formatBlipErrorCode } from '../shared/blip-errors.js';
 import { getVoiceMediaStream, getVoiceAudioConstraints } from './audio-capture.js';
 import { dispatchReactiveAudio } from './reactive-wallpaper.js';
 import { bindCallWaveform } from './call-waveform.js';
@@ -886,8 +887,9 @@ export function createCallUI(config, api, options = {}) {
       sharingScreen = false;
       setShareButton(false);
       if (window.__blipShowToast) {
+        const code = formatBlipErrorCode(err);
         window.__blipShowToast({
-          title: t('call.share_failed'),
+          title: `${t('call.share_failed')} (${code})`,
           variant: 'danger',
           durationMs: 5000,
         });
