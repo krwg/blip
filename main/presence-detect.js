@@ -41,6 +41,18 @@ let lastSnapshot = { title: '', app: '', pid: 0, at: 0 };
 /** @type {{ key: string, since: number, kind: string, label: string, app: string, title: string } | null} */
 let session = null;
 
+function isSelfApp(appName, title = '') {
+  const app = String(appName || '').trim().toLowerCase();
+  const t = String(title || '').trim().toLowerCase();
+  if (!app && !t) return false;
+  if (app === 'blip' || app === 'electron') return true;
+  // Windows may report shell host process while BLIP window is focused.
+  if (t.includes('blip') && (app === 'explorer' || app === 'applicationframehost')) {
+    return true;
+  }
+  return t === 'blip' || t.startsWith('blip ');
+}
+
 export async function detectForegroundApp() {
   if (process.platform === 'win32') return detectWindowsForeground();
   if (process.platform === 'darwin') return detectMacForeground();
@@ -60,7 +72,7 @@ export function isLikelyGame(appName, title = '') {
   const app = String(appName || '').toLowerCase();
   const t = String(title || '').toLowerCase();
   if (!app) return false;
-  if (app === 'blip' || app === 'electron' || app === 'powershell' || app === 'cmd') {
+  if (isSelfApp(app, t) || app === 'powershell' || app === 'cmd') {
     return false;
   }
   return GAME_HINTS.some((g) => app.includes(g.toLowerCase()) || t.includes(g.toLowerCase()));
@@ -101,7 +113,8 @@ export function classifyActivity(snap, opts = {}) {
 
   const appRaw = String(snap.app);
   const app = appRaw.toLowerCase();
-  if (excludeSelf && (app === 'blip' || app === 'electron')) {
+  const title = String(snap.title || '').trim();
+  if (excludeSelf && isSelfApp(appRaw, title)) {
     return session
       ? {
           ...session,
@@ -111,8 +124,6 @@ export function classifyActivity(snap, opts = {}) {
         }
       : null;
   }
-
-  const title = String(snap.title || '').trim();
   const game = isLikelyGame(appRaw, title);
   const pinnedHit = pinned && (app === pinned || app.includes(pinned));
 
