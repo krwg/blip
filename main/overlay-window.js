@@ -12,7 +12,7 @@ let lastSharedText = '';
 let lastSharedActivityKey = '';
 let lastSharedPatchAt = 0;
 const PRESENCE_SHARE_MIN_MS = 45_000;
-const PRESENCE_SHARE_TIMER_MIN_MS = 6_000;
+const PRESENCE_SHARE_TIMER_MIN_MS = 15_000;
 /** Runtime visibility — hotkey toggles; settings only enable the feature. */
 let overlayShown = false;
 let lastPayload = null;
