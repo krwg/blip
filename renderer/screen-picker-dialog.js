@@ -54,7 +54,7 @@ export async function openScreenPickerDialog() {
     audioRow.className = 'screen-picker-audio-row settings-tray-toggle-row';
     const audioCb = document.createElement('input');
     audioCb.type = 'checkbox';
-    audioCb.checked = true;
+    audioCb.checked = false;
     const audioSpan = document.createElement('span');
     audioSpan.dataset.i18n = 'call.picker_share_audio';
     audioSpan.textContent = t('call.picker_share_audio');

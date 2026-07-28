@@ -51,6 +51,23 @@ function applyCallWindowChrome(cfg) {
   applyCallWindowAppearance(cfg);
   applyI18n(document);
   callUI?.refreshI18n?.();
+  const pref = String(cfg?.windowControlStyle || 'auto');
+  const isMacStyle = pref === 'mac' || (pref === 'auto' && window.blip?.platform === 'darwin');
+  const bar = document.querySelector('.call-window-titlebar');
+  const controls = bar?.querySelector('.win-controls');
+  const min = document.getElementById('call-win-min');
+  const max = document.getElementById('call-win-max');
+  const close = document.getElementById('call-win-close');
+  bar?.classList.toggle('call-window-titlebar--mac', isMacStyle);
+  bar?.classList.toggle('call-window-titlebar--win', !isMacStyle);
+  if (min) min.textContent = isMacStyle ? '−' : '—';
+  if (max) max.textContent = isMacStyle ? '◦' : '□';
+  if (close) close.textContent = isMacStyle ? '•' : '×';
+  if (controls && min && max && close) {
+    controls.replaceChildren();
+    if (isMacStyle) controls.append(close, min, max);
+    else controls.append(min, max, close);
+  }
 }
 
 async function boot() {

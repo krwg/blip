@@ -104,6 +104,7 @@ export function buildSettingsSoundPanel({ getState, saveConfig, applySoundPrefs 
         { value: 'pulse', label: t('settings.sound_pack_pulse') },
         { value: 'wire', label: t('settings.sound_pack_wire') },
         { value: 'static', label: t('settings.sound_pack_static') },
+        { value: 'nest', label: t('settings.sound_pack_nest') },
       ],
       MESH_PLUS_FEATURES.sound_pack,
       state.config
@@ -126,6 +127,7 @@ export function buildSettingsSoundPanel({ getState, saveConfig, applySoundPrefs 
         { value: 'grid', label: t('settings.melody_pack_grid') },
         { value: 'beacon', label: t('settings.melody_pack_beacon') },
         { value: 'chime', label: t('settings.melody_pack_chime') },
+        { value: 'nest', label: t('settings.melody_pack_nest') },
       ],
       MESH_PLUS_FEATURES.melody_pack,
       state.config

@@ -16,6 +16,7 @@ export function createChatHubView({
   createGroupAvatarElement,
   createAvatarElement,
   getMessages,
+  getStoredChatPeerIds,
   formatPeerDisplayName,
   formatPeerSubline,
   getPeerLatency,
@@ -165,6 +166,7 @@ export function createChatHubView({
     });
 
     const peerIds = new Set(state.peers.map((p) => p.blipId));
+    for (const id of getStoredChatPeerIds?.() || []) peerIds.add(id);
     for (const id of state.chatViews.keys()) peerIds.add(id);
     const rows = [...peerIds]
       .filter((id) => !isBlocked(id))

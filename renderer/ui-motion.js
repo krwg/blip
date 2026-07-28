@@ -57,9 +57,14 @@ export function swapMainView(mainEl, nextView, { enabled } = {}) {
  */
 export function swapPanelContent(hostEl, nextPanel, { enabled } = {}) {
   if (!hostEl || !nextPanel) return Promise.resolve();
-  const motionOn = enabled !== false && document.documentElement.dataset.uiMotion !== '0';
+  // Settings panels: always replace instantly. Exit animations left empty hosts
+  // when animationend never fired (flex/overflow), which looked like "nav does nothing".
+  const motionOn = false && enabled !== false && document.documentElement.dataset.uiMotion !== '0';
   if (!motionOn) {
     hostEl.replaceChildren(nextPanel);
+    nextPanel.style.opacity = '';
+    nextPanel.style.transform = '';
+    nextPanel.classList.remove('ui-motion-panel-enter', 'ui-motion-panel-exit');
     return Promise.resolve();
   }
   const current = hostEl.firstElementChild;
@@ -72,6 +77,8 @@ export function swapPanelContent(hostEl, nextPanel, { enabled } = {}) {
   return settleClass(current, 'ui-motion-panel-exit', EXIT_MS).then(() => {
     hostEl.replaceChildren(nextPanel);
     nextPanel.classList.add('ui-motion-panel-enter');
+    nextPanel.style.opacity = '';
+    nextPanel.style.transform = '';
     return settleClass(nextPanel, 'ui-motion-panel-enter', ENTER_MS);
   });
 }

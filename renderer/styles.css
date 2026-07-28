@@ -206,6 +206,15 @@ textarea {
   -webkit-app-region: drag;
 }
 
+.win-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar--mac .win-controls {
+  gap: 6px;
+}
+
 .title-logo {
   font-weight: bold;
   color: var(--blip-accent);
@@ -229,7 +238,6 @@ textarea {
 }
 
 .win-btn {
-  -webkit-app-region: no-drag;
   width: 32px;
   height: 24px;
   margin-left: 2px;
@@ -238,6 +246,31 @@ textarea {
   color: var(--blip-text);
   font-family: monospace;
   cursor: pointer;
+}
+
+.title-bar--mac .win-btn {
+  width: 18px;
+  height: 18px;
+  margin-left: 0;
+  border-radius: 999px;
+  border-width: 1px;
+  font-size: 0;
+  line-height: 0;
+}
+
+.title-bar--mac .win-btn--mac-close {
+  background: #ff5f56;
+  border-color: #e0443e;
+}
+
+.title-bar--mac .win-btn--mac-min {
+  background: #ffbd2e;
+  border-color: #d7a026;
+}
+
+.title-bar--mac .win-btn--mac-max {
+  background: #27c93f;
+  border-color: #20a535;
 }
 
 .win-btn:hover {
@@ -2679,23 +2712,63 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .call-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
+  width: min(100%, 360px);
+  justify-items: stretch;
+  align-items: stretch;
+}
+
+.call-controls--ring {
+  margin-top: 8px;
 }
 
 .call-volume-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 140px;
-  padding: 4px 8px;
+  gap: 4px;
+  min-width: 116px;
+  padding: 3px 6px;
   border: 2px solid var(--blip-accent);
   color: var(--blip-accent);
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.call-controls > .btn,
+.call-controls > .call-tools-wrap > .btn {
+  min-height: 40px;
+}
+
+.call-tools-wrap {
+  position: relative;
+}
+
+.call-tools-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-bg) 92%, #000);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.call-tools-menu .btn,
+.call-tools-menu .call-volume-wrap {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.call-volume-wrap--compact .call-volume-label {
+  opacity: 0.9;
 }
 
 .call-volume-wrap.hidden {
@@ -2707,24 +2780,27 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .call-volume-range {
-  width: 88px;
+  width: 70px;
   accent-color: var(--blip-accent);
 }
 
 .call-volume-value {
-  min-width: 2.5em;
+  min-width: 2.2em;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .settings-error-catalog {
-  max-height: 220px;
   overflow-y: auto;
   margin: 8px 0 16px;
   border: 1px solid var(--blip-border);
   padding: 6px 8px;
   font-size: 11px;
   font-family: ui-monospace, Consolas, monospace;
+}
+
+.settings-panel:not(.settings-panel--developer) .settings-error-catalog {
+  max-height: 220px;
 }
 
 .settings-error-catalog-row {
@@ -2967,7 +3043,10 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .settings-shell__main > .settings-panel {
-  flex: 1;
+  flex: 0 1 auto;
+  align-self: stretch;
+  width: 100%;
+  max-height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -3163,15 +3242,32 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .settings-panel--shortcuts {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
 .settings-panel--shortcuts .settings-shortcuts-panel {
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
-  overflow: visible;
+  overflow-y: auto;
+}
+
+.settings-panel--call {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.settings-panel--developer .settings-error-catalog {
+  flex: 1 1 auto;
+  min-height: min(42vh, 360px);
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .settings-appearance-wrap .settings-list-panel {

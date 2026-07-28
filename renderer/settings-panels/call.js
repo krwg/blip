@@ -53,7 +53,7 @@ function fillDeviceSelect(select, devices, currentId, deviceLabelKey) {
 export function buildSettingsCallPanel({ getState, saveConfig }) {
   const state = getState();
   const frag = document.createElement('div');
-  frag.className = 'settings-panel';
+  frag.className = 'settings-panel settings-panel--call';
   frag.appendChild(buildPanelTitleRow('settings.section_call', 'settings.call_hint'));
 
   const micTest = buildMicTestPanel(state.config, async (patch) => {

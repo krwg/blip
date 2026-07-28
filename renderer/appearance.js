@@ -186,6 +186,10 @@ export function applyUiPreferences(config) {
   const chatScale = clampScale(config?.chatFontScale, 0.85, 1.35, 1);
   html.style.setProperty('--ui-font-scale', String(uiScale));
   html.style.setProperty('--chat-font-scale', String(chatScale));
+  const glass = clampScale(config?.nestGlassStrength, 0.6, 1.4, 1);
+  const radius = clampScale(config?.nestRadiusScale, 0.75, 1.35, 1);
+  html.style.setProperty('--nest-glass-strength', String(glass));
+  html.style.setProperty('--nest-radius-scale', String(radius));
 }
 
 export function applyCallWindowAppearance(config) {
