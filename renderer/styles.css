@@ -206,6 +206,15 @@ textarea {
   -webkit-app-region: drag;
 }
 
+.win-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar--mac .win-controls {
+  gap: 6px;
+}
+
 .title-logo {
   font-weight: bold;
   color: var(--blip-accent);
@@ -229,7 +238,6 @@ textarea {
 }
 
 .win-btn {
-  -webkit-app-region: no-drag;
   width: 32px;
   height: 24px;
   margin-left: 2px;
@@ -238,6 +246,31 @@ textarea {
   color: var(--blip-text);
   font-family: monospace;
   cursor: pointer;
+}
+
+.title-bar--mac .win-btn {
+  width: 18px;
+  height: 18px;
+  margin-left: 0;
+  border-radius: 999px;
+  border-width: 1px;
+  font-size: 0;
+  line-height: 0;
+}
+
+.title-bar--mac .win-btn--mac-close {
+  background: #ff5f56;
+  border-color: #e0443e;
+}
+
+.title-bar--mac .win-btn--mac-min {
+  background: #ffbd2e;
+  border-color: #d7a026;
+}
+
+.title-bar--mac .win-btn--mac-max {
+  background: #27c93f;
+  border-color: #20a535;
 }
 
 .win-btn:hover {
@@ -2680,22 +2713,28 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 
 .call-controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .call-volume-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 140px;
-  padding: 4px 8px;
+  gap: 4px;
+  min-width: 116px;
+  padding: 3px 6px;
   border: 2px solid var(--blip-accent);
   color: var(--blip-accent);
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.call-volume-wrap--compact .call-volume-label {
+  opacity: 0.9;
 }
 
 .call-volume-wrap.hidden {
@@ -2707,12 +2746,12 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .call-volume-range {
-  width: 88px;
+  width: 70px;
   accent-color: var(--blip-accent);
 }
 
 .call-volume-value {
-  min-width: 2.5em;
+  min-width: 2.2em;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -2831,17 +2870,19 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 .settings-view {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   gap: 12px;
   max-width: none;
   width: 100%;
   align-self: stretch;
+  justify-content: flex-start;
 }
 
 .settings-view > .settings-shell {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: min(78vh, 920px);
 }
 
 .settings-view > label,

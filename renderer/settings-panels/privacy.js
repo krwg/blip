@@ -2,6 +2,7 @@ import { t } from '../i18n.js';
 import {
   buildPanelTitleRow,
   createSettingsListPanel,
+  createPixelToggle,
 } from '../settings-ui.js';
 import { formatPeerDisplayName } from '../peer-labels.js';
 import { showAppToast } from '../toasts.js';
@@ -10,14 +11,25 @@ import { getBlockedPeerIds, unblockPeer } from '../peer-trust.js';
 /**
  * @param {{
  *   getState: () => { peers: array, view: string, config: object },
+ *   saveConfig: (patch: object) => Promise<object>,
  *   renderPeersIfOpen: () => void,
  * }} deps
  */
-export function buildSettingsPrivacyPanel({ getState, renderPeersIfOpen }) {
+export function buildSettingsPrivacyPanel({ getState, saveConfig, renderPeersIfOpen }) {
   const state = getState();
   const frag = document.createElement('div');
   frag.className = 'settings-panel settings-panel--privacy';
   frag.appendChild(buildPanelTitleRow('settings.section_privacy', 'settings.privacy_hint'));
+  frag.appendChild(
+    createPixelToggle({
+      checked: state.config.chatHistoryEnabled !== false,
+      labelKey: 'settings.privacy_chat_history',
+      onChange: async (checked) => {
+        const next = await saveConfig?.({ chatHistoryEnabled: checked });
+        if (next) getState().config = next;
+      },
+    }).el
+  );
 
   const list = createSettingsListPanel('settings-blocked-list settings-list-panel--stretch-x');
 

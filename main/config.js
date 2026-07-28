@@ -129,6 +129,7 @@ const DEFAULT_CONFIG = {
   micInputGain: 100,
 
   autoDownloadUpdates: true,
+  autoCheckUpdates: true,
 
   meshPlusLicenseId: '',
 
@@ -137,6 +138,7 @@ const DEFAULT_CONFIG = {
   meshPlusActivatedAt: 0,
 
   appIconVariant: 'main',
+  windowControlStyle: 'auto',
 
   achievementsEnabled: false,
 
@@ -157,6 +159,7 @@ const DEFAULT_CONFIG = {
   uiSkin: 'pixel',
 
   typingSoundEnabled: false,
+  chatHistoryEnabled: true,
 
   idleAwayMinutes: 5,
 

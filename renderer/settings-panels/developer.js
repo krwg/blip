@@ -82,6 +82,37 @@ export function buildSettingsDeveloperPanel({
   betaRow.appendChild(createPixelHintIcon('settings.dev_hint'));
   frag.appendChild(betaRow);
 
+  const winStyleField = document.createElement('label');
+  winStyleField.className = 'settings-field';
+  const winStyleLabel = document.createElement('span');
+  winStyleLabel.className = 'settings-field-label';
+  winStyleLabel.dataset.i18n = 'settings.dev_window_controls';
+  winStyleLabel.textContent = t('settings.dev_window_controls');
+  const winStyleSel = document.createElement('select');
+  winStyleSel.className = 'blip-select';
+  const wsAuto = document.createElement('option');
+  wsAuto.value = 'auto';
+  wsAuto.dataset.i18n = 'settings.dev_window_controls_auto';
+  wsAuto.textContent = t('settings.dev_window_controls_auto');
+  const wsWin = document.createElement('option');
+  wsWin.value = 'windows';
+  wsWin.dataset.i18n = 'settings.dev_window_controls_windows';
+  wsWin.textContent = t('settings.dev_window_controls_windows');
+  const wsMac = document.createElement('option');
+  wsMac.value = 'mac';
+  wsMac.dataset.i18n = 'settings.dev_window_controls_mac';
+  wsMac.textContent = t('settings.dev_window_controls_mac');
+  winStyleSel.append(wsAuto, wsWin, wsMac);
+  winStyleSel.value = String(state.config?.windowControlStyle || 'auto');
+  winStyleSel.addEventListener('change', async () => {
+    const value = winStyleSel.value === 'mac' || winStyleSel.value === 'windows' ? winStyleSel.value : 'auto';
+    const next = await saveConfig({ windowControlStyle: value });
+    getState().config = next;
+    renderSettingsIfOpen?.();
+  });
+  winStyleField.append(winStyleLabel, winStyleSel);
+  frag.appendChild(winStyleField);
+
   const traceRow = document.createElement('div');
   traceRow.className = 'settings-toggle-with-hint';
   const traceToggle = createPixelToggle({

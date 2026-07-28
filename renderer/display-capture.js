@@ -28,6 +28,9 @@ export async function captureDisplayStream(sourceId, config, { withAudio = false
       video: { mandatory: videoMandatory },
     });
   } catch (err) {
+    if (err?.name === 'NotAllowedError' || /permission/i.test(String(err?.message || ''))) {
+      throw createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, err?.message || '', err);
+    }
     console.warn('[BLIP] desktop getUserMedia capture failed:', err?.message || err);
     throw createBlipError(BlipErrorCode.CAPTURE_GETUSERMEDIA_FAILED, err?.message || '', err);
   }

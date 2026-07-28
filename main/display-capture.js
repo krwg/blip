@@ -25,10 +25,10 @@ export async function listDisplaySources() {
     throw createBlipError(BlipErrorCode.CAPTURE_LIST_SOURCES_FAILED, err?.message || '', err);
   }
   const mapped = sources
-    .filter((s) => s?.id && String(s.name || '').trim())
-    .map((s) => ({
+    .filter((s) => s?.id)
+    .map((s, idx) => ({
       id: s.id,
-      name: s.name,
+      name: String(s.name || '').trim() || (s.id.startsWith('screen:') ? `Screen ${idx + 1}` : `Window ${idx + 1}`),
       thumbnail: s.thumbnail?.isEmpty?.() ? '' : s.thumbnail.toDataURL(),
       displayType: s.id.startsWith('screen:') ? 'screen' : 'window',
     }));

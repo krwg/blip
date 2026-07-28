@@ -1,6 +1,13 @@
 import { t, setLang, getLang, applyLangChange, onLangChange, applyI18n } from './i18n.js';
 import { createIdGrid } from './grid.js';
-import { createChatView, getMessages, addMessage, addMissedCallMessage } from './chat.js';
+import {
+  createChatView,
+  getMessages,
+  addMessage,
+  addMissedCallMessage,
+  getStoredChatPeerIds,
+  setChatPersistenceEnabled,
+} from './chat.js';
 import { isFavorite, comparePeersFavoriteFirst } from './peer-favorites.js';
 import {
   getGroup,
@@ -392,18 +399,35 @@ function escapeHtml(s) {
 }
 
 function createTitleBar() {
+  const pref = String(state.config?.windowControlStyle || 'auto');
+  const isMacStyle = pref === 'mac' || (pref === 'auto' && window.blip?.platform === 'darwin');
   const bar = document.createElement('div');
-  bar.className = 'title-bar';
-  bar.innerHTML = `
-    <span class="title-logo" data-i18n="app.title">${t('app.title')}</span>
-    <span class="title-spacer"></span>
-    <button type="button" class="win-btn" id="btn-min" aria-label="Minimize">—</button>
-    <button type="button" class="win-btn" id="btn-max" aria-label="Maximize">□</button>
-    <button type="button" class="win-btn win-close" id="btn-close" aria-label="Close">×</button>
-  `;
-  bar.querySelector('#btn-min')?.addEventListener('click', () => window.blip.windowMinimize());
-  bar.querySelector('#btn-max')?.addEventListener('click', () => window.blip.windowMaximize());
-  bar.querySelector('#btn-close')?.addEventListener('click', () => window.blip.windowClose());
+  bar.className = `title-bar ${isMacStyle ? 'title-bar--mac' : 'title-bar--win'}`;
+  const logo = document.createElement('span');
+  logo.className = 'title-logo';
+  logo.dataset.i18n = 'app.title';
+  logo.textContent = t('app.title');
+  const spacer = document.createElement('span');
+  spacer.className = 'title-spacer';
+  const controls = document.createElement('div');
+  controls.className = 'win-controls';
+
+  const mkBtn = (id, cls, label, text, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = id;
+    btn.className = `win-btn ${cls}`.trim();
+    btn.setAttribute('aria-label', label);
+    btn.textContent = text;
+    btn.addEventListener('click', onClick);
+    return btn;
+  };
+  const minBtn = mkBtn('btn-min', isMacStyle ? 'win-btn--mac win-btn--mac-min' : '', 'Minimize', isMacStyle ? '−' : '—', () => window.blip.windowMinimize());
+  const maxBtn = mkBtn('btn-max', isMacStyle ? 'win-btn--mac win-btn--mac-max' : '', 'Maximize', isMacStyle ? '◦' : '□', () => window.blip.windowMaximize());
+  const closeBtn = mkBtn('btn-close', `win-close ${isMacStyle ? 'win-btn--mac win-btn--mac-close' : ''}`, 'Close', isMacStyle ? '•' : '×', () => window.blip.windowClose());
+  if (isMacStyle) controls.append(closeBtn, minBtn, maxBtn);
+  else controls.append(minBtn, maxBtn, closeBtn);
+  bar.append(logo, spacer, controls);
   return bar;
 }
 
@@ -735,6 +759,11 @@ function renderDialView() {
   callBtn.className = 'btn btn-accent';
   callBtn.dataset.i18n = 'dial.call';
   callBtn.textContent = t('dial.call');
+  const videoBtn = document.createElement('button');
+  videoBtn.type = 'button';
+  videoBtn.className = 'btn btn-lang';
+  videoBtn.dataset.i18n = 'dial.video_call';
+  videoBtn.textContent = t('dial.video_call');
 
   const dialError = document.createElement('p');
   dialError.className = 'hint dial-error hidden';
@@ -801,9 +830,24 @@ function renderDialView() {
     }
     openCallOutgoing(id, false);
   });
+  videoBtn.addEventListener('click', () => {
+    const id = resolvePeerId();
+    if (id === 'invalid') {
+      showDialError();
+      return;
+    }
+    if (!id) return;
+    hideDialError();
+    if (!findPeer(id)) {
+      showSignalLost(wrap);
+      return;
+    }
+    openCallOutgoing(id, true);
+  });
 
   actions.appendChild(msgBtn);
   actions.appendChild(callBtn);
+  actions.appendChild(videoBtn);
   const dialBody = document.createElement('div');
   dialBody.className = 'dial-body';
   dialBody.appendChild(input);
@@ -934,7 +978,7 @@ const chatHubView = createChatHubView({
   acceptGroupInvite: (invite) => acceptGroupInvite(api, state.config, invite),
   declineGroupInvite: (invite) => declineGroupInviteFlow(api, state.config, invite),
   clearInviteUnread, getGroupsFor, getGroupMessages, groupDisplayName, getVoiceChannels,
-  getVoiceChannelRoster, createGroupAvatarElement, createAvatarElement, getMessages,
+  getVoiceChannelRoster, createGroupAvatarElement, createAvatarElement, getMessages, getStoredChatPeerIds,
   formatPeerDisplayName, findPeerByBlipId, normalizeBlipId, peerPresenceClass,
   peerStatusTooltip,
   formatPeerSubline: (peer) => meshPulse.formatPeerSubline(peer),
@@ -1254,6 +1298,7 @@ function buildSettingsNotificationsPanel() {
 function buildSettingsPrivacyPanel() {
   return buildPrivacyPanelView({
     getState: () => state,
+    saveConfig: (patch) => api.saveConfig(patch),
     renderPeersIfOpen: () => {
       if (state.view === 'peers') renderView('peers');
     },
@@ -1866,6 +1911,7 @@ function render() {
 
 export function initUI(config, blipApi) {
   state.config = config;
+  setChatPersistenceEnabled(config?.chatHistoryEnabled !== false);
   api = {
     ...blipApi,
     get config() {
@@ -2047,6 +2093,7 @@ export function initUI(config, blipApi) {
   if (typeof window.blip.onConfigUpdated === 'function') {
     window.blip.onConfigUpdated((cfg) => {
       state.config = cfg;
+      setChatPersistenceEnabled(cfg?.chatHistoryEnabled !== false);
       refreshBeaconMesh();
       applyTrustFromConfig(cfg);
       restartClipboardSync();
@@ -2258,11 +2305,10 @@ export function handleMissedCall(payload) {
   });
   bumpUnread(peerId);
   ensureChatView(peerId);
-  state.chatViews.get(peerId)?.render?.();
   if (state.view === 'chat' && !state.activePeer && mainContent) {
-    renderView('chat');
+    schedulePeersOrHubRefresh('chat');
   } else if (state.view === 'chat' && state.activePeer === peerId) {
-    state.chatViews.get(peerId)?.render?.();
+    state.chatViews.get(peerId)?.renderMessages?.();
   }
 }
 
