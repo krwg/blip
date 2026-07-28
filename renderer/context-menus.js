@@ -199,12 +199,6 @@ export function createContextMenus(deps) {
     bindItem(callItem, () => {
       if (peer.online) openCallOutgoing(peer.blipId, false);
     });
-    const videoCallItem = document.createElement('button');
-    videoCallItem.type = 'button';
-    videoCallItem.textContent = t('dial.video_call');
-    bindItem(videoCallItem, () => {
-      if (peer.online) openCallOutgoing(peer.blipId, true);
-    });
 
     const labelItem = document.createElement('button');
     labelItem.type = 'button';
@@ -278,7 +272,6 @@ export function createContextMenus(deps) {
     menu.appendChild(profileItem);
     if (!options.hideMessage) menu.appendChild(msgItem);
     menu.appendChild(callItem);
-    menu.appendChild(videoCallItem);
     menu.appendChild(labelItem);
     menu.appendChild(pingItem);
     menu.appendChild(copyIdItem);

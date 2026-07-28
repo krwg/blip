@@ -28,6 +28,7 @@ import {
   formatCallDuration,
   createCallPeerConnection,
 } from './call-signalling.js';
+import { BlipErrorCode, createBlipError } from '../shared/blip-errors.js';
 
 let activeCall = null;
 let pendingCandidates = [];
@@ -172,7 +173,7 @@ export function createCallUI(config, api, options = {}) {
 
   const shareBtn = document.createElement('button');
   shareBtn.type = 'button';
-  shareBtn.className = 'btn btn-accent hidden';
+  shareBtn.className = 'btn btn-accent';
   shareBtn.dataset.i18n = 'call.share';
   shareBtn.textContent = t('call.share');
 
@@ -197,6 +198,16 @@ export function createCallUI(config, api, options = {}) {
   controls.appendChild(muteBtn);
   controls.appendChild(deafenBtn);
 
+  const toolsWrap = document.createElement('div');
+  toolsWrap.className = 'call-tools-wrap hidden';
+  const toolsBtn = document.createElement('button');
+  toolsBtn.type = 'button';
+  toolsBtn.className = 'btn btn-accent';
+  toolsBtn.dataset.i18n = 'call.tools';
+  toolsBtn.textContent = t('call.tools');
+  const toolsMenu = document.createElement('div');
+  toolsMenu.className = 'call-tools-menu hidden';
+
   const volWrap = document.createElement('label');
   volWrap.className = 'call-volume-wrap call-volume-wrap--compact hidden';
   volWrap.title = t('call.volume');
@@ -216,8 +227,11 @@ export function createCallUI(config, api, options = {}) {
   volValue.textContent = t('call.volume_pct').replace('{pct}', '100');
   volWrap.append(volLabel, volRange, volValue);
 
-  controls.appendChild(volWrap);
-  controls.appendChild(shareBtn);
+  toolsMenu.appendChild(shareBtn);
+  toolsMenu.appendChild(volWrap);
+  toolsWrap.appendChild(toolsBtn);
+  toolsWrap.appendChild(toolsMenu);
+  controls.appendChild(toolsWrap);
   controls.appendChild(acceptBtn);
   controls.appendChild(rejectBtn);
   controls.appendChild(endBtn);
@@ -693,6 +707,8 @@ export function createCallUI(config, api, options = {}) {
     peerStatus.classList.add('hidden');
     remoteMicBadge.classList.add('hidden');
     remoteDeafBadge.classList.add('hidden');
+    toolsMenu.classList.add('hidden');
+    toolsWrap.classList.add('hidden');
   }
 
   function updateRemoteBadges() {
@@ -790,7 +806,7 @@ export function createCallUI(config, api, options = {}) {
   }
 
   function showInCallControls() {
-    shareBtn.classList.remove('hidden');
+    toolsWrap.classList.remove('hidden');
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
@@ -892,6 +908,11 @@ export function createCallUI(config, api, options = {}) {
       await restoreMicAudioSender();
     } catch (err) {
       console.warn('[call] stop share:', err.message);
+      try {
+        await restoreMicAudioSender();
+      } catch {
+        /* ignore */
+      }
     }
 
     broadcastCallState();
@@ -1125,6 +1146,9 @@ export function createCallUI(config, api, options = {}) {
         video: getCameraVideoConstraints(config),
       });
     } catch (err) {
+      if (err?.name === 'NotAllowedError' || /permission/i.test(String(err?.message || ''))) {
+        throw createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, err?.message || 'camera permission denied', err);
+      }
       console.warn('[call] getUserMedia:', err.message);
       throw err;
     }
@@ -1382,6 +1406,7 @@ export function createCallUI(config, api, options = {}) {
     muteBtn.classList.add('hidden');
     deafenBtn.classList.add('hidden');
     volWrap.classList.add('hidden');
+    toolsWrap.classList.add('hidden');
     shareBtn.classList.add('hidden');
     videoWrap.classList.toggle('hidden', !withVideo);
     voiceWrap.classList.toggle('hidden', withVideo);
@@ -1510,6 +1535,12 @@ export function createCallUI(config, api, options = {}) {
   shareBtn.addEventListener('click', () => {
     void toggleScreenShare();
   });
+  toolsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toolsMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => toolsMenu.classList.add('hidden'));
+  toolsMenu.addEventListener('click', (e) => e.stopPropagation());
   fsBtn.addEventListener('click', () => {
     void toggleVideoFullscreen();
   });

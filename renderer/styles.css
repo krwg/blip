@@ -2712,12 +2712,12 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .call-controls {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 8px;
+  width: min(100%, 360px);
+  justify-items: stretch;
+  align-items: stretch;
 }
 
 .call-volume-wrap {
@@ -2731,6 +2731,36 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.call-controls > .btn,
+.call-controls > .call-tools-wrap > .btn {
+  min-height: 40px;
+}
+
+.call-tools-wrap {
+  position: relative;
+}
+
+.call-tools-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-bg) 92%, #000);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.call-tools-menu .btn,
+.call-tools-menu .call-volume-wrap {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .call-volume-wrap--compact .call-volume-label {
@@ -2870,19 +2900,17 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 .settings-view {
   display: flex;
   flex-direction: column;
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   gap: 12px;
   max-width: none;
   width: 100%;
   align-self: stretch;
-  justify-content: flex-start;
 }
 
 .settings-view > .settings-shell {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
-  max-height: min(78vh, 920px);
 }
 
 .settings-view > label,
@@ -3204,15 +3232,22 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .settings-panel--shortcuts {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
 .settings-panel--shortcuts .settings-shortcuts-panel {
-  flex-shrink: 0;
-  max-height: none;
-  overflow: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(34vh, 360px);
+  overflow-y: auto;
+}
+
+.settings-panel--developer .settings-error-catalog {
+  min-height: 160px;
+  max-height: min(44vh, 420px);
+  overflow-y: auto;
 }
 
 .settings-appearance-wrap .settings-list-panel {

@@ -314,7 +314,7 @@ async function openCallOutgoing(peerId, video = false) {
   }
   recordCallStarted();
   try {
-    const result = await window.blip.openCallOutgoing({ peerId: id, video });
+    const result = await window.blip.openCallOutgoing({ peerId: id, video: true });
     if (!result?.ok) {
       const code = result?.errorCode ?? result?.error ?? 999;
       const blocked = Number(code) === 111 || /unencrypted_mesh_disabled/i.test(String(result?.error || ''));
@@ -759,11 +759,6 @@ function renderDialView() {
   callBtn.className = 'btn btn-accent';
   callBtn.dataset.i18n = 'dial.call';
   callBtn.textContent = t('dial.call');
-  const videoBtn = document.createElement('button');
-  videoBtn.type = 'button';
-  videoBtn.className = 'btn btn-lang';
-  videoBtn.dataset.i18n = 'dial.video_call';
-  videoBtn.textContent = t('dial.video_call');
 
   const dialError = document.createElement('p');
   dialError.className = 'hint dial-error hidden';
@@ -830,24 +825,9 @@ function renderDialView() {
     }
     openCallOutgoing(id, false);
   });
-  videoBtn.addEventListener('click', () => {
-    const id = resolvePeerId();
-    if (id === 'invalid') {
-      showDialError();
-      return;
-    }
-    if (!id) return;
-    hideDialError();
-    if (!findPeer(id)) {
-      showSignalLost(wrap);
-      return;
-    }
-    openCallOutgoing(id, true);
-  });
 
   actions.appendChild(msgBtn);
   actions.appendChild(callBtn);
-  actions.appendChild(videoBtn);
   const dialBody = document.createElement('div');
   dialBody.className = 'dial-body';
   dialBody.appendChild(input);
@@ -2092,8 +2072,14 @@ export function initUI(config, blipApi) {
 
   if (typeof window.blip.onConfigUpdated === 'function') {
     window.blip.onConfigUpdated((cfg) => {
+      const prevWindowStyle = state.config?.windowControlStyle;
       state.config = cfg;
       setChatPersistenceEnabled(cfg?.chatHistoryEnabled !== false);
+      if (prevWindowStyle !== cfg?.windowControlStyle) {
+        const oldBar = rootEl?.querySelector('.title-bar');
+        const nextBar = createTitleBar();
+        if (oldBar && nextBar) oldBar.replaceWith(nextBar);
+      }
       refreshBeaconMesh();
       applyTrustFromConfig(cfg);
       restartClipboardSync();
