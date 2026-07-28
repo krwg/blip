@@ -6,7 +6,10 @@ const args = process.argv.slice(2);
 const prerelease =
   process.env.ELECTRON_BUILDER_PRERELEASE === '1' ||
   process.env.ELECTRON_BUILDER_PRERELEASE === 'true';
-const builderArgs = [...args, ...(prerelease ? ['--prerelease'] : [])];
+const builderArgs = [
+  ...args,
+  ...(prerelease ? ['--config.publish.releaseType=prerelease'] : []),
+];
 if (!args.length) {
   console.error('[run-electron-builder] usage: node scripts/run-electron-builder.mjs --win|--mac|--linux …');
   process.exit(1);
