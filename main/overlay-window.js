@@ -12,7 +12,6 @@ let lastSharedText = '';
 let lastSharedActivityKey = '';
 let lastSharedPatchAt = 0;
 const PRESENCE_SHARE_MIN_MS = 45_000;
-const PRESENCE_SHARE_TIMER_MIN_MS = 15_000;
 /** Runtime visibility — hotkey toggles; settings only enable the feature. */
 let overlayShown = false;
 let lastPayload = null;
@@ -192,10 +191,6 @@ function fingerprintOverlayPayload(payload) {
   return JSON.stringify(rest);
 }
 
-function hasElapsedTimer(text) {
-  return /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(String(text || ''));
-}
-
 function formatCallElapsed(startedAt) {
   if (!startedAt) return '';
   const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
@@ -216,6 +211,7 @@ function resolveAccentHex(cfg) {
 export function startPresenceLoop({
   getConfig,
   patchConfig,
+  patchSharedPresenceText,
   getPeersOnline,
   getUnreadTotal,
   getCallInfo,
@@ -243,25 +239,23 @@ export function startPresenceLoop({
         preferGames: cfg.presencePreferGames !== false,
         pinnedApp: cfg.presencePinnedApp || '',
       });
-      const statusLine = String(activity?.statusLine || '').slice(0, 48);
-      const shareLine = String(activity?.shareLine || '').slice(0, 48);
-      const sharedText = (statusLine || shareLine).slice(0, 48);
+      const sharedText = String(activity?.shareLine || '').slice(0, 48);
       const activityKey = activity?.key || sharedText;
       const now = Date.now();
-      const minShareMs = hasElapsedTimer(sharedText)
-        ? PRESENCE_SHARE_TIMER_MIN_MS
-        : PRESENCE_SHARE_MIN_MS;
       if (
         cfg.presenceShareEnabled &&
         sharedText &&
         sharedText !== lastSharedText &&
-        (activityKey !== lastSharedActivityKey ||
-          now - lastSharedPatchAt >= minShareMs)
+        (activityKey !== lastSharedActivityKey || now - lastSharedPatchAt >= PRESENCE_SHARE_MIN_MS)
       ) {
         lastSharedText = sharedText;
         lastSharedActivityKey = activityKey;
         lastSharedPatchAt = now;
-        patchConfig?.({ presenceText: sharedText });
+        if (patchSharedPresenceText) {
+          patchSharedPresenceText(sharedText);
+        } else {
+          patchConfig?.({ presenceText: sharedText });
+        }
       }
     }
 

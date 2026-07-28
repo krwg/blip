@@ -227,6 +227,18 @@ let state = {
 
 let lastUpdateStatus = null;
 
+let peersHubRenderTimer = null;
+
+function schedulePeersOrHubRefresh(viewName) {
+  clearTimeout(peersHubRenderTimer);
+  peersHubRenderTimer = setTimeout(() => {
+    peersHubRenderTimer = null;
+    if (state.view === viewName && mainContent?.isConnected) {
+      renderView(viewName, { instant: true });
+    }
+  }, 120);
+}
+
 let rootEl = null;
 let mainContent = null;
 let gridComponent = null;
@@ -2197,7 +2209,7 @@ export function updatePeers({ peers, occupiedIds, meta }) {
   }
 
   if (state.view === 'peers' && mainContent && hasVisualChange) {
-    renderView('peers', { instant: true });
+    schedulePeersOrHubRefresh('peers');
   } else if (state.view === 'peers' && mainContent) {
     peersView.refreshPeersTypingDom();
     meshPulse.refreshPeerPulseDom();
@@ -2207,7 +2219,7 @@ export function updatePeers({ peers, occupiedIds, meta }) {
     if (hasVisualChange) refreshOpenProfilePageIfNeeded(mainContent);
   }
   if (state.view === 'chat' && !state.activePeer && mainContent) {
-    if (hasVisualChange) renderView('chat', { instant: true });
+    if (hasVisualChange) schedulePeersOrHubRefresh('chat');
     else {
       meshPulse.refreshPeerPulseDom();
       chatHubView.refreshChatHubPeerDom();
