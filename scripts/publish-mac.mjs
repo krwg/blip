@@ -28,6 +28,11 @@ function run(args) {
 }
 
 const publish = process.argv.includes('--publish') ? ['--publish', 'always'] : [];
+const prerelease =
+  process.env.ELECTRON_BUILDER_PRERELEASE === '1' ||
+  process.env.ELECTRON_BUILDER_PRERELEASE === 'true'
+    ? ['--prerelease']
+    : [];
 
 run([
   '--mac',
@@ -35,6 +40,7 @@ run([
   '--arm64',
   `--config.dmg.title=BLIP-${version}-arm64`,
   ...publish,
+  ...prerelease,
 ]);
 run([
   '--mac',
@@ -42,6 +48,7 @@ run([
   '--x64',
   `--config.dmg.title=BLIP-${version}-x64`,
   ...publish,
+  ...prerelease,
 ]);
 // Last: zip feed wins in latest-mac.yml
-run(['--mac', 'zip', '--x64', '--arm64', ...publish]);
+run(['--mac', 'zip', '--x64', '--arm64', ...publish, ...prerelease]);
