@@ -7,6 +7,9 @@ on:
     tags:
       - '*'
 
+env:
+  ELECTRON_BUILDER_PRERELEASE: ${{ (contains(github.ref_name, 'beta') || contains(github.ref_name, 'Beta')) && '1' || '0' }}
+
 permissions:
   contents: write
 

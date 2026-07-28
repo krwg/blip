@@ -3,6 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 const args = process.argv.slice(2);
+const prerelease =
+  process.env.ELECTRON_BUILDER_PRERELEASE === '1' ||
+  process.env.ELECTRON_BUILDER_PRERELEASE === 'true';
+const builderArgs = [...args, ...(prerelease ? ['--prerelease'] : [])];
 if (!args.length) {
   console.error('[run-electron-builder] usage: node scripts/run-electron-builder.mjs --win|--mac|--linux …');
   process.exit(1);
@@ -19,7 +23,7 @@ for (const key of ['CSC_LINK', 'WIN_CSC_LINK']) {
   }
 }
 
-const r = spawnSync('npx', ['electron-builder', ...args], {
+const r = spawnSync('npx', ['electron-builder', ...builderArgs], {
   stdio: 'inherit',
   shell: true,
   env: process.env,
