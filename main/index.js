@@ -915,7 +915,9 @@ async function ensurePeerSocket(blipId) {
   try {
     const inbound = tcpServer?.getConnection?.(blipId);
     if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
-      console.error(`[BLIP dial] reuse inbound authenticated socket for #${blipId}`);
+      if (config?.devMeshTrace) {
+        console.info(`[BLIP dial] reuse inbound authenticated socket for #${blipId}`);
+      }
       return inbound;
     }
 
@@ -937,14 +939,18 @@ async function ensurePeerSocket(blipId) {
 
     const hit = findCached();
     if (hit) {
-      console.error(`[BLIP dial] reuse cached outbound socket for #${blipId}`);
+      if (config?.devMeshTrace) {
+        console.info(`[BLIP dial] reuse cached outbound socket for #${blipId}`);
+      }
       return hit.socket;
     }
 
     const inflight = peerSocketConnectInflight.get(socketKey);
     if (inflight) return inflight;
 
-    console.error(`[BLIP dial] ensurePeerSocket ${formatPeerDialDebug(peer)}`);
+    if (config?.devMeshTrace) {
+      console.info(`[BLIP dial] ensurePeerSocket ${formatPeerDialDebug(peer)}`);
+    }
 
     const registerConnection = (id, sock) => tcpServer?.registerConnection?.(id, sock);
 
