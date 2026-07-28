@@ -6,9 +6,15 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing git tag to build/publish (e.g. v2.0.5-beta.6)'
+        required: true
+        type: string
 
 env:
-  ELECTRON_BUILDER_PRERELEASE: ${{ (contains(github.ref_name, 'beta') || contains(github.ref_name, 'Beta')) && '1' || '0' }}
+  ELECTRON_BUILDER_PRERELEASE: ${{ (contains(github.ref_name, 'beta') || contains(github.ref_name, 'Beta') || contains(inputs.tag, 'beta') || contains(inputs.tag, 'Beta')) && '1' || '0' }}
 
 permissions:
   contents: write
@@ -18,11 +24,27 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+
+      - name: Allow overwrite of same-version beta release
+        if: env.ELECTRON_BUILDER_PRERELEASE == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          TAG="v${VER}"
+          # electron-builder skips upload if the GitHub release is >2h old and published.
+          # Keep the same tag (v2.0.5) for beta channel, but mark draft so assets can be replaced.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --prerelease || true
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -36,11 +58,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+
+      - name: Allow overwrite of same-version beta release
+        if: env.ELECTRON_BUILDER_PRERELEASE == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          TAG="v${VER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --prerelease || true
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -54,11 +90,25 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+
+      - name: Allow overwrite of same-version beta release
+        if: env.ELECTRON_BUILDER_PRERELEASE == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          TAG="v${VER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --prerelease || true
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -70,3 +120,22 @@ jobs:
           USE_HARD_LINKS: 'false'
           # Optional signing / notarization (set in repo secrets when ready):
           # CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+
+  publish_release:
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    if: always() && needs.windows.result == 'success' && needs.linux.result == 'success' && needs.macos.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Publish GitHub pre-release (undraft)
+        if: env.ELECTRON_BUILDER_PRERELEASE == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          TAG="v${VER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
+          fi
