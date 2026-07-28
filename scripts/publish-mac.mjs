@@ -31,7 +31,7 @@ const publish = process.argv.includes('--publish') ? ['--publish', 'always'] : [
 const prerelease =
   process.env.ELECTRON_BUILDER_PRERELEASE === '1' ||
   process.env.ELECTRON_BUILDER_PRERELEASE === 'true'
-    ? ['--prerelease']
+    ? ['--config.publish.releaseType=prerelease']
     : [];
 
 run([
