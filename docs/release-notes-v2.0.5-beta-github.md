@@ -26,6 +26,17 @@ Patch line after **2.0.3 Morse**. Version in app: **2.0.5**.
 - **Tray call indicator** — stronger call-state visibility; macOS tray title marker added.
 - **Settings layout** — reduced hidden empty area at bottom of settings page.
 
+## Beta patch addendum (PR close-out)
+
+- **Settings nav** — Call / Shortcuts panels swap instantly (no empty host after motion); short panels no longer stretch into empty glass at the bottom.
+- **Error catalog** — larger readable viewport in Developer.
+- **Call grid** — strict 2×2: MUTE / DEAFEN / MORE / END (`ЕЩЁ` menu: screen, camera, peer volume). Incoming accept/reject use a separate ring row.
+- **Video calls** — camera failure falls back to voice with toast (305), keeps recvonly video m-line when needed; camera toggle in MORE.
+- **Screen share** — enumerate windows with 0×0 thumbnails first (Windows was dropping sources); stop share tears down screen audio track before restoring mic/camera UI.
+- **Window controls** — toast after style change + restart hint if titlebar lags.
+- **NestUI 1.2** — stronger liquid glass, richer shadows, clearer type hierarchy; Appearance sliders for glass strength + corner radius.
+- **Nest sound pack** — soft sine notifications/ringtones (Sound settings).
+
 ## Beta patch addendum (call/capture pass)
 
 - **Video calls default on** — outgoing and incoming calls use camera unless explicitly disabled in signaling.

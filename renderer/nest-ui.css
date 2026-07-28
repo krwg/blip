@@ -4,18 +4,23 @@ html[data-ui-skin='nest'] {
   --blip-font: var(--floke-font-main);
   --blip-mono: var(--floke-font-mono);
   --floke-accent: var(--blip-accent);
-  --nest-radius-sm: 10px;
-  --nest-radius-md: 14px;
-  --nest-radius-lg: 18px;
-  --nest-radius-xl: 24px;
-  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
-  --nest-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --nest-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --nest-radius-scale: 1;
+  --nest-glass-strength: 1;
+  --nest-radius-sm: calc(10px * var(--nest-radius-scale));
+  --nest-radius-md: calc(14px * var(--nest-radius-scale));
+  --nest-radius-lg: calc(18px * var(--nest-radius-scale));
+  --nest-radius-xl: calc(24px * var(--nest-radius-scale));
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --nest-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.16), 0 6px 16px rgba(0, 0, 0, 0.08);
+  --nest-blur: calc(28px * var(--nest-glass-strength));
+  --nest-blur-strong: calc(40px * var(--nest-glass-strength));
+  --nest-sat: calc(1.35 + (var(--nest-glass-strength) - 1) * 0.35);
   --blip-bg: #f5f5f7;
   --blip-text: var(--floke-text-primary);
   --blip-muted: var(--floke-text-secondary);
   --blip-danger: var(--floke-accent-red);
-  --blip-glass: rgba(255, 255, 255, 0.64);
+  --blip-glass: rgba(255, 255, 255, 0.52);
   --blip-chat-incoming: rgba(255, 255, 255, 0.88);
   --blip-toast-bg: rgba(255, 255, 255, 0.92);
   --blip-input-bg: rgba(255, 255, 255, 0.55);
@@ -29,26 +34,26 @@ html[data-ui-skin='nest'] {
 
 html[data-ui-skin='nest'][data-theme='light'] {
   --blip-bg: #f5f5f7;
-  --blip-glass: rgba(255, 255, 255, 0.64);
+  --blip-glass: rgba(255, 255, 255, 0.5);
   --blip-chat-incoming: rgba(255, 255, 255, 0.9);
   --blip-toast-bg: rgba(255, 255, 255, 0.94);
   --blip-input-bg: rgba(255, 255, 255, 0.62);
-  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
-  --nest-shadow-md: 0 10px 28px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.05);
-  --nest-shadow-lg: 0 18px 54px rgba(0, 0, 0, 0.16), 0 6px 18px rgba(0, 0, 0, 0.08);
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(0, 0, 0, 0.06);
+  --nest-shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.18), 0 8px 22px rgba(0, 0, 0, 0.08);
 }
 
 html[data-ui-skin='nest'][data-theme='dark'] {
   --blip-bg: #000000;
   --blip-text: #f5f5f7;
   --blip-muted: #98989d;
-  --blip-glass: rgba(24, 24, 28, 0.62);
+  --blip-glass: rgba(22, 22, 26, 0.5);
   --blip-chat-incoming: rgba(44, 44, 46, 0.92);
   --blip-toast-bg: rgba(28, 28, 30, 0.94);
   --blip-input-bg: rgba(44, 44, 46, 0.7);
-  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --nest-shadow-md: 0 12px 30px rgba(0, 0, 0, 0.52);
-  --nest-shadow-lg: 0 20px 64px rgba(0, 0, 0, 0.62);
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --nest-shadow-md: 0 14px 36px rgba(0, 0, 0, 0.55);
+  --nest-shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.68);
 }
 
 html[data-ui-skin='nest'],
@@ -175,8 +180,9 @@ html[data-ui-skin='nest'] .pixel-toggle-input:focus-visible + .pixel-toggle {
 html[data-ui-skin='nest'] .glass {
   border-width: 0.5px;
   border-color: color-mix(in srgb, var(--floke-border-light) 55%, transparent);
-  backdrop-filter: blur(32px) saturate(1.55);
-  -webkit-backdrop-filter: blur(32px) saturate(1.55);
+  background: color-mix(in srgb, var(--blip-glass) 88%, transparent);
+  backdrop-filter: blur(var(--nest-blur-strong, 40px)) saturate(var(--nest-sat, 1.5));
+  -webkit-backdrop-filter: blur(var(--nest-blur-strong, 40px)) saturate(var(--nest-sat, 1.5));
   box-shadow: var(--nest-shadow-md);
 }
 
@@ -184,8 +190,9 @@ html[data-ui-skin='nest'] .titlebar,
 html[data-ui-skin='nest'] .side-nav {
   border-width: 0.5px;
   border-color: color-mix(in srgb, var(--floke-border-light) 65%, transparent);
-  backdrop-filter: blur(24px) saturate(1.35);
-  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+  background: color-mix(in srgb, var(--blip-glass) 78%, transparent);
+  backdrop-filter: blur(var(--nest-blur, 28px)) saturate(var(--nest-sat, 1.4));
+  -webkit-backdrop-filter: blur(var(--nest-blur, 28px)) saturate(var(--nest-sat, 1.4));
 }
 
 html[data-ui-skin='nest'] .settings-panel,
@@ -262,21 +269,44 @@ html[data-ui-skin='nest'] .settings-field-label {
 }
 
 html[data-ui-skin='nest'] .settings-panel-title {
-  font-size: 1.15em;
+  font-size: calc(15px * var(--ui-font-scale, 1));
   font-weight: 700;
   letter-spacing: -0.015em;
+}
+
+html[data-ui-skin='nest'] .settings-nav-group-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+html[data-ui-skin='nest'] .settings-nav-btn {
+  font-size: calc(12.5px * var(--ui-font-scale, 1));
+  font-weight: 500;
+  padding: 8px 10px;
+}
+
+html[data-ui-skin='nest'] .nav-btn {
+  font-size: calc(12px * var(--ui-font-scale, 1));
+  font-weight: 550;
+  letter-spacing: 0.02em;
 }
 
 html[data-ui-skin='nest'] .settings-nav-group-label,
 html[data-ui-skin='nest'] .settings-field-label,
 html[data-ui-skin='nest'] .section-subtitle {
   letter-spacing: -0.01em;
+  font-size: calc(11px * var(--ui-font-scale, 1));
 }
 
 html[data-ui-skin='nest'] .hint,
 html[data-ui-skin='nest'] .settings-release-date {
   color: var(--floke-text-tertiary);
   letter-spacing: -0.01em;
+  font-size: calc(11px * var(--ui-font-scale, 1));
+  line-height: 1.45;
+  opacity: 0.85;
 }
 
 html[data-ui-skin='nest'] .pixel-glyph--file,
