@@ -39,7 +39,7 @@ function createTrayIconFallback() {
 
 function paintCallBadge(baseImage, mode) {
   try {
-    const size = 16;
+    const size = process.platform === 'darwin' ? 18 : 16;
     const img = baseImage?.isEmpty?.() ? createTrayIconFallback() : baseImage;
     const resized = img.resize({ width: size, height: size });
     const { buffer } = resized.toBitmap();
@@ -69,8 +69,8 @@ function paintCallBadge(baseImage, mode) {
       g = 255;
       b = 160;
     }
-    for (let y = 11; y < 16; y++) {
-      for (let x = 11; x < 16; x++) put(x, y, r, g, b);
+    for (let y = size - 7; y < size; y++) {
+      for (let x = size - 7; x < size; x++) put(x, y, r, g, b);
     }
     return nativeImage.createFromBitmap(out, { width: size, height: size });
   } catch {
@@ -94,6 +94,9 @@ export function setTrayCallActivity(state) {
       lastCallTrayKey = '';
       try {
         tray.setImage(createTrayIconFromPath(trayIconPath) || createTrayIconFallback());
+        if (process.platform === 'darwin' && typeof tray.setTitle === 'function') {
+          tray.setTitle('');
+        }
         tray.setToolTip(baseTrayTooltip);
       } catch {
         /* ignore */
@@ -119,6 +122,9 @@ export function setTrayCallActivity(state) {
   try {
     const base = createTrayIconFromPath(trayIconPath) || createTrayIconFallback();
     tray.setImage(paintCallBadge(base, mode));
+    if (process.platform === 'darwin' && typeof tray.setTitle === 'function') {
+      tray.setTitle(mode === 'muted' ? '◼' : mode === 'speaking' ? '●' : mode === 'ptt' ? '◉' : '◎');
+    }
     tray.setToolTip(`${baseTrayTooltip} — ${tip}`);
   } catch {
     /* ignore */

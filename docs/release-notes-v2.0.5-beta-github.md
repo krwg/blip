@@ -13,6 +13,19 @@ Patch line after **2.0.3 Morse**. Version in app: **2.0.5**.
 - **Error toasts** — actionable EN/RU hints for common BLIP error codes.
 - **Call overlay quality** — RTT / jitter tier on in-call HUD (beta).
 
+## Beta patch addendum (2.0.5 refresh)
+
+- **Call window UX** — tighter controls and compact peer volume slider; less visual noise while preserving BLIP style.
+- **Video calls from UI** — direct `VIDEO` action in dial + peer context menu.
+- **Screen/window picker** — better source enumeration; now includes unnamed windows with fallback labels.
+- **Capture permission diagnostics** — new code **305** for OS-level screen recording denial (EN/RU hints).
+- **Echo guard while sharing system audio** — remote playback is suppressed during mixed desktop+mic share to avoid voice feedback loops.
+- **Updates while in call** — check/install are blocked during active call with explicit status text.
+- **macOS updater install path** — safer `quitAndInstall` path + fallback invocation.
+- **Window controls style (Developer)** — switch between **Auto / Windows / macOS** glyph style for titlebar buttons.
+- **Tray call indicator** — stronger call-state visibility; macOS tray title marker added.
+- **Settings layout** — reduced hidden empty area at bottom of settings page.
+
 ## Included since 2.0.3 (summary)
 
 - Overlay i18n, PTT, click-through, speaking ring, connection quality hints.

@@ -6,6 +6,7 @@ import {
 } from '../settings-ui.js';
 import { releaseMarkdownToHtml, bindReleaseMarkdownLinks } from '../release-markdown.js';
 import { openReleaseNotesOverlay } from '../release-overlay.js';
+import { openConfirmDialog } from '../confirm-dialog.js';
 import {
   filterReleasesForChannel,
   githubRepoBase,
@@ -55,6 +56,15 @@ export function buildSettingsUpdatesPanel({
       },
     }).el
   );
+  frag.appendChild(
+    createPixelToggle({
+      checked: state.config.autoCheckUpdates !== false,
+      labelKey: 'settings.updates_auto_check',
+      onChange: async (checked) => {
+        state.config = await saveConfig({ autoCheckUpdates: checked });
+      },
+    }).el
+  );
 
   const verLine = document.createElement('p');
   verLine.className = 'settings-about-version';
@@ -86,6 +96,9 @@ export function buildSettingsUpdatesPanel({
         statusLine.textContent = t('settings.updates_portable_only');
         const meta = await window.blip.getAppMetadata?.().catch(() => null);
         if (meta?.version) void checkUpdatesViaGithub?.(meta.version);
+      } else if (r.reason === 'call_active') {
+        delete statusLine.dataset.i18n;
+        statusLine.textContent = t('settings.updates_status_call_active');
       } else {
         statusLine.dataset.i18n = 'settings.updates_dev_only';
         statusLine.textContent = t('settings.updates_dev_only');
@@ -111,8 +124,26 @@ export function buildSettingsUpdatesPanel({
   installBtn.dataset.i18n = 'settings.updates_install';
   installBtn.textContent = t('settings.updates_install');
   installBtn.disabled = getLastUpdateStatus()?.state !== 'downloaded';
-  installBtn.addEventListener('click', () => {
-    window.blip.quitAndInstall?.();
+  installBtn.addEventListener('click', async () => {
+    if (latestRelease) {
+      openReleaseNotesOverlay({
+        tag: latestRelease.tag,
+        name: latestRelease.name,
+        body: latestRelease.body,
+        url: latestRelease.url,
+      });
+      const ok = await openConfirmDialog({
+        title: t('settings.updates_install'),
+        body: t('settings.updates_install_after_notes'),
+        confirmLabel: t('settings.updates_install'),
+      });
+      if (!ok) return;
+    }
+    const res = await window.blip.quitAndInstall?.();
+    if (res?.skipped && res.reason === 'call_active') {
+      delete statusLine.dataset.i18n;
+      statusLine.textContent = t('settings.updates_status_call_active');
+    }
   });
 
   actions.appendChild(checkBtn);
@@ -130,6 +161,7 @@ export function buildSettingsUpdatesPanel({
   releasesFeed.className = 'settings-releases-feed settings-list-panel settings-list-panel--tall';
   releasesFeed.textContent = '…';
   frag.appendChild(releasesFeed);
+  let latestRelease = null;
 
   function formatReleaseDate(iso) {
     if (!iso) return '';
@@ -154,6 +186,7 @@ export function buildSettingsUpdatesPanel({
       result.releases,
       !!getState().config?.receiveBetaUpdates
     );
+    latestRelease = feed[0] || null;
     for (const r of feed) {
       const card = document.createElement('article');
       card.className = 'settings-release-card';

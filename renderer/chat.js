@@ -35,6 +35,7 @@ import { getBeaconCatalog, isSeedLocalComplete, buildBeaconSeedLink, buildBeacon
 const STORAGE_KEY = 'blip_chat_v1';
 const MAX_PER_PEER = 500;
 const DEFAULT_REACTION = '❤️';
+let chatPersistenceEnabled = true;
 
 export function getDefaultReactionEmoji(config) {
   const e = config?.defaultReactionEmoji;
@@ -43,7 +44,49 @@ export function getDefaultReactionEmoji(config) {
 
 const messagesByPeer = new Map();
 
+function normalizeStoredMessage(m) {
+  if (!m || typeof m !== 'object') return null;
+  const out = {
+    id: m.id || createMessageId(),
+    from: m.from,
+    to: m.to,
+    text: typeof m.text === 'string' ? m.text : '',
+    timestamp: Number.isFinite(Number(m.timestamp || m.ts)) ? Number(m.timestamp || m.ts) : Date.now(),
+    outgoing: !!m.outgoing,
+    kind: m.kind,
+    missedReason: m.missedReason,
+    video: !!m.video,
+    editedAt: m.editedAt,
+    replyTo: m.replyTo && typeof m.replyTo === 'object' ? { ...m.replyTo } : undefined,
+    forwardFrom: m.forwardFrom && typeof m.forwardFrom === 'object' ? { ...m.forwardFrom } : undefined,
+    reactions: m.reactions && typeof m.reactions === 'object' ? { ...m.reactions } : undefined,
+  };
+  if (m.attachment && typeof m.attachment === 'object') {
+    const a = m.attachment;
+    out.attachment = {
+      kind: a.kind,
+      name: a.name,
+      mime: a.mime,
+      size: Number(a.size) || 0,
+      dataUrl: typeof a.dataUrl === 'string' ? a.dataUrl : undefined,
+      pending: !!a.pending,
+      cancelled: !!a.cancelled,
+      progress: Number.isFinite(Number(a.progress)) ? Number(a.progress) : undefined,
+      speedBps: Number.isFinite(Number(a.speedBps)) ? Number(a.speedBps) : undefined,
+      transferId: a.transferId,
+      seedId: a.seedId,
+      chunked: !!a.chunked,
+    };
+  }
+  return out;
+}
+
+function toStoredMessage(m) {
+  return normalizeStoredMessage(m);
+}
+
 function loadFromStorage() {
+  if (!chatPersistenceEnabled) return;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
@@ -51,7 +94,13 @@ function loadFromStorage() {
     for (const [k, arr] of Object.entries(o)) {
       const id = Number(k);
       if (Number.isFinite(id) && Array.isArray(arr)) {
-        messagesByPeer.set(id, arr.slice(-MAX_PER_PEER));
+        messagesByPeer.set(
+          id,
+          arr
+            .slice(-MAX_PER_PEER)
+            .map((m) => normalizeStoredMessage(m))
+            .filter(Boolean)
+        );
       }
     }
   } catch (e) {
@@ -60,10 +109,11 @@ function loadFromStorage() {
 }
 
 function persist() {
+  if (!chatPersistenceEnabled) return;
   try {
     const o = {};
     for (const [k, msgs] of messagesByPeer) {
-      o[k] = msgs.slice(-MAX_PER_PEER);
+      o[k] = msgs.slice(-MAX_PER_PEER).map((m) => toStoredMessage(m));
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(o));
   } catch (e) {
@@ -85,6 +135,17 @@ export function resetChatStore() {
   messagesByPeer.clear();
 }
 
+export function getStoredChatPeerIds() {
+  return [...messagesByPeer.keys()];
+}
+
+export function setChatPersistenceEnabled(enabled) {
+  chatPersistenceEnabled = enabled !== false;
+  if (!chatPersistenceEnabled) return;
+  if (!messagesByPeer.size) loadFromStorage();
+  persist();
+}
+
 export function getMessages(peerId) {
   if (!messagesByPeer.has(peerId)) messagesByPeer.set(peerId, []);
   return messagesByPeer.get(peerId);
@@ -104,7 +165,7 @@ export function addMissedCallMessage(peerId, { reason = 'missed', video = false,
     id: createMessageId(),
     text: '',
     outgoing: false,
-    ts: at || Date.now(),
+    timestamp: at || Date.now(),
     kind: 'missed-call',
     missedReason: reason === 'busy' ? 'busy' : 'missed',
     video: !!video,

@@ -1393,7 +1393,11 @@ function setupIpc() {
     );
     config = saveConfig(safe);
     if (safe.appIconVariant !== undefined) refreshAppIcons();
-    if (updates?.receiveBetaUpdates !== undefined || updates?.autoDownloadUpdates !== undefined) {
+    if (
+      updates?.receiveBetaUpdates !== undefined ||
+      updates?.autoDownloadUpdates !== undefined ||
+      updates?.autoCheckUpdates !== undefined
+    ) {
       void configureAutoUpdater(config);
     }
     discovery?.updateConfig(config);
@@ -1459,6 +1463,7 @@ function setupIpc() {
     getConfig: () => config,
     loadAppMetadata,
     refreshAppIcons,
+    isVoiceCallActive: () => !!activeCallPeerId,
   });
 
   registerNetworkIpc({

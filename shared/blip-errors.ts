@@ -62,6 +62,7 @@ export const BlipErrorCode = Object.freeze({
   CAPTURE_SOURCE_NOT_FOUND: 302,
   CAPTURE_LIST_SOURCES_FAILED: 303,
   CAPTURE_PICKER_EMPTY: 304,
+  CAPTURE_PERMISSION_DENIED: 305,
 
   OVERLAY_PUSH_FAILED: 310,
   PRESENCE_DETECT_FAILED: 311,
@@ -283,6 +284,11 @@ export const BLIP_ERROR_CATALOG = Object.freeze({
     summary: 'No shareable screens or windows',
     detail: 'desktopCapturer returned no usable sources for the picker.',
   },
+  305: {
+    id: 'CAPTURE_PERMISSION_DENIED',
+    summary: 'Screen capture permission denied',
+    detail: 'OS denied display capture permission (privacy settings / prompt rejected).',
+  },
   310: {
     id: 'OVERLAY_PUSH_FAILED',
     summary: 'Overlay update failed',
@@ -420,6 +426,9 @@ export function classifyBlipError(err) {
   }
   if (/timeout/i.test(msg)) {
     return createBlipError(BlipErrorCode.CONNECT_TIMEOUT, msg, err);
+  }
+  if (/notallowederror|permission denied|permission dismissed|system permission/i.test(msg)) {
+    return createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, msg, err);
   }
   return createBlipError(BlipErrorCode.UNKNOWN, msg, err);
 }

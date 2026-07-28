@@ -198,12 +198,12 @@ export function createCallUI(config, api, options = {}) {
   controls.appendChild(deafenBtn);
 
   const volWrap = document.createElement('label');
-  volWrap.className = 'call-volume-wrap hidden';
+  volWrap.className = 'call-volume-wrap call-volume-wrap--compact hidden';
   volWrap.title = t('call.volume');
   const volLabel = document.createElement('span');
   volLabel.className = 'call-volume-label';
   volLabel.dataset.i18n = 'call.volume';
-  volLabel.textContent = t('call.volume');
+  volLabel.textContent = `${t('call.volume')} ·`;
   const volRange = document.createElement('input');
   volRange.type = 'range';
   volRange.className = 'call-volume-range';
@@ -246,6 +246,7 @@ export function createCallUI(config, api, options = {}) {
   let savedCameraTrack = null;
   let remotePlayback = null;
   let outgoingAudioCtx = null;
+  let suppressRemotePlayback = false;
   let remoteMuted = false;
   let remoteDeafened = false;
   let renegotiateAnswerResolve = null;
@@ -683,6 +684,7 @@ export function createCallUI(config, api, options = {}) {
     shareBtn.classList.add('hidden');
     sharingScreen = false;
     screenStream = null;
+    suppressRemotePlayback = false;
     savedCameraTrack = null;
     remoteMuted = false;
     remoteDeafened = false;
@@ -776,6 +778,9 @@ export function createCallUI(config, api, options = {}) {
     const mixed = dest.stream.getAudioTracks()[0];
     const sender = pc?.getSenders().find((s) => s.track?.kind === 'audio');
     if (sender && mixed) await sender.replaceTrack(mixed);
+    // Prevent feedback loops when desktop capture includes BLIP playback.
+    suppressRemotePlayback = true;
+    applyPeerOutputGain();
   }
 
   function setShareButton(active) {
@@ -856,6 +861,8 @@ export function createCallUI(config, api, options = {}) {
     if (!sharingScreen) return;
     sharingScreen = false;
     setShareButton(false);
+    suppressRemotePlayback = false;
+    applyPeerOutputGain();
 
     if (screenStream) {
       screenStream.getTracks().forEach((tr) => tr.stop());
@@ -1006,7 +1013,7 @@ export function createCallUI(config, api, options = {}) {
   }
 
   function applyPeerOutputGain() {
-    const linear = deafened ? 0 : peerOutputVolumePct / 100;
+    const linear = deafened || suppressRemotePlayback ? 0 : peerOutputVolumePct / 100;
     if (remoteGainNode) {
       remoteGainNode.gain.value = linear;
       remoteAudio.muted = true;
@@ -1014,7 +1021,7 @@ export function createCallUI(config, api, options = {}) {
       remoteAudio.volume = Math.min(1, Math.max(0, linear));
       remoteAudio.muted = deafened;
     }
-    volValue.textContent = t('call.volume_pct').replace('{pct}', String(peerOutputVolumePct));
+    volValue.textContent = `${peerOutputVolumePct}%`;
     volRange.value = String(peerOutputVolumePct);
   }
 

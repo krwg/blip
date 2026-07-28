@@ -85,7 +85,12 @@ export function createUpdateChecker(deps) {
         state.settingsSection = 'updates';
         renderView('settings');
       },
-      onQuitAndInstall: () => window.blip.quitAndInstall?.(),
+      onQuitAndInstall: async () => {
+        const res = await window.blip.quitAndInstall?.();
+        if (res?.skipped && res.reason === 'call_active') {
+          showUpdateStatusToast({ state: 'error', message: t('settings.updates_status_call_active') });
+        }
+      },
     });
     if (!options) return;
 
@@ -114,6 +119,8 @@ export function createUpdateChecker(deps) {
   }
 
   async function runStartupUpdateCheck() {
+    const state = getState();
+    if (state?.config?.autoCheckUpdates === false) return;
     if (!window.blip?.getAppMetadata) return;
     const meta = await window.blip.getAppMetadata();
     const current = meta?.version || '0.0.0';

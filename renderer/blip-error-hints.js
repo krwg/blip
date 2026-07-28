@@ -21,6 +21,7 @@ const HINT_KEYS = Object.freeze({
   302: 'error.hint.302',
   303: 'error.hint.303',
   304: 'error.hint.304',
+  305: 'error.hint.305',
   320: 'error.hint.320',
   321: 'error.hint.321',
   999: 'error.hint.999',
