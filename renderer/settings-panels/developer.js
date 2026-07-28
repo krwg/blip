@@ -108,6 +108,11 @@ export function buildSettingsDeveloperPanel({
     const value = winStyleSel.value === 'mac' || winStyleSel.value === 'windows' ? winStyleSel.value : 'auto';
     const next = await saveConfig({ windowControlStyle: value });
     getState().config = next;
+    showAppToast({
+      title: t('settings.dev_window_controls_applied'),
+      body: t('settings.dev_window_controls_restart'),
+      durationMs: 5200,
+    });
     renderSettingsIfOpen?.();
   });
   winStyleField.append(winStyleLabel, winStyleSel);

@@ -45,6 +45,10 @@ export function buildAppearanceSection({ getState, saveConfig }) {
   const curBg = normalizeBgId(state.config.animatedBgId);
   const curSkin = normalizeUiSkin(state.config.uiSkin);
 
+  const nestTune = document.createElement('div');
+  nestTune.className = 'settings-nest-tune';
+  nestTune.hidden = curSkin !== 'nest';
+
   const nestToggle = createPixelToggle({
     checked: curSkin === 'nest',
     labelKey: 'settings.nest_ui',
@@ -52,6 +56,7 @@ export function buildAppearanceSection({ getState, saveConfig }) {
       const next = await saveConfig({ uiSkin: checked ? 'nest' : 'pixel' });
       state.config = next;
       applyAppearance(state.config);
+      nestTune.hidden = !checked;
     },
   });
   const nestRow = document.createElement('div');
@@ -59,6 +64,36 @@ export function buildAppearanceSection({ getState, saveConfig }) {
   nestRow.appendChild(nestToggle.el);
   nestRow.appendChild(createPixelHintIcon('settings.nest_ui_hint'));
   block.appendChild(nestRow);
+
+  function buildNestRange(labelKey, hintKey, key, min, max, step) {
+    nestTune.appendChild(buildSectionSubtitleRow(labelKey, hintKey));
+    const row = document.createElement('div');
+    row.className = 'settings-sound-volume-row';
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = String(min);
+    range.max = String(max);
+    range.step = String(step);
+    range.className = 'settings-sound-range';
+    const cur = Math.round((Number(state.config[key]) || 1) * 100);
+    range.value = String(Math.min(max, Math.max(min, cur)));
+    const val = document.createElement('span');
+    val.className = 'settings-sound-volume-val';
+    val.textContent = `${range.value}%`;
+    range.addEventListener('input', () => {
+      val.textContent = `${range.value}%`;
+      applyUiPreferences({ ...state.config, [key]: Number(range.value) / 100 });
+    });
+    range.addEventListener('change', async () => {
+      state.config = await saveConfig({ [key]: Number(range.value) / 100 });
+      applyAppearance(state.config);
+    });
+    row.append(range, val);
+    appendAppearanceControl(nestTune, row);
+  }
+  buildNestRange('settings.nest_glass', 'settings.nest_glass_hint', 'nestGlassStrength', 60, 140, 5);
+  buildNestRange('settings.nest_radius', 'settings.nest_radius_hint', 'nestRadiusScale', 75, 135, 5);
+  block.appendChild(nestTune);
 
   block.appendChild(buildSectionSubtitleRow('settings.appearance_theme'));
   const modeOpts = THEME_MODES.map((id) => ({ value: id, label: labelThemeMode(id) }));

@@ -158,6 +158,12 @@ const DEFAULT_CONFIG = {
 
   uiSkin: 'pixel',
 
+  /** NestUI liquid-glass strength (0.6–1.4). */
+  nestGlassStrength: 1,
+
+  /** NestUI corner radius scale (0.75–1.35). */
+  nestRadiusScale: 1,
+
   typingSoundEnabled: false,
   chatHistoryEnabled: true,
 

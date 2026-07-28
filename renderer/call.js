@@ -195,16 +195,13 @@ export function createCallUI(config, api, options = {}) {
   rejectBtn.dataset.i18n = 'call.reject';
   rejectBtn.textContent = t('call.reject');
 
-  controls.appendChild(muteBtn);
-  controls.appendChild(deafenBtn);
-
   const toolsWrap = document.createElement('div');
   toolsWrap.className = 'call-tools-wrap hidden';
   const toolsBtn = document.createElement('button');
   toolsBtn.type = 'button';
   toolsBtn.className = 'btn btn-accent';
-  toolsBtn.dataset.i18n = 'call.tools';
-  toolsBtn.textContent = t('call.tools');
+  toolsBtn.dataset.i18n = 'call.more';
+  toolsBtn.textContent = t('call.more');
   const toolsMenu = document.createElement('div');
   toolsMenu.className = 'call-tools-menu hidden';
 
@@ -227,13 +224,26 @@ export function createCallUI(config, api, options = {}) {
   volValue.textContent = t('call.volume_pct').replace('{pct}', '100');
   volWrap.append(volLabel, volRange, volValue);
 
+  const camBtn = document.createElement('button');
+  camBtn.type = 'button';
+  camBtn.className = 'btn btn-accent';
+  camBtn.dataset.i18n = 'call.camera';
+  camBtn.textContent = t('call.camera');
+
   toolsMenu.appendChild(shareBtn);
+  toolsMenu.appendChild(camBtn);
   toolsMenu.appendChild(volWrap);
   toolsWrap.appendChild(toolsBtn);
   toolsWrap.appendChild(toolsMenu);
+
+  const ringControls = document.createElement('div');
+  ringControls.className = 'call-controls call-controls--ring hidden';
+  ringControls.appendChild(acceptBtn);
+  ringControls.appendChild(rejectBtn);
+
+  controls.appendChild(muteBtn);
+  controls.appendChild(deafenBtn);
   controls.appendChild(toolsWrap);
-  controls.appendChild(acceptBtn);
-  controls.appendChild(rejectBtn);
   controls.appendChild(endBtn);
 
   inner.appendChild(statusEl);
@@ -242,6 +252,7 @@ export function createCallUI(config, api, options = {}) {
   inner.appendChild(peerStatus);
   inner.appendChild(timerEl);
   inner.appendChild(controls);
+  inner.appendChild(ringControls);
   overlay.appendChild(inner);
   overlay.appendChild(remoteAudio);
 
@@ -693,12 +704,15 @@ export function createCallUI(config, api, options = {}) {
     inner.style.borderColor = '';
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
+    ringControls.classList.add('hidden');
+    controls.classList.remove('hidden');
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
     shareBtn.classList.add('hidden');
     sharingScreen = false;
     screenStream = null;
+    screenAudioSender = null;
     suppressRemotePlayback = false;
     savedCameraTrack = null;
     remoteMuted = false;
@@ -824,17 +838,29 @@ export function createCallUI(config, api, options = {}) {
   }
 
   function showInCallControls() {
+    ringControls.classList.add('hidden');
+    controls.classList.remove('hidden');
     toolsWrap.classList.remove('hidden');
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
     volWrap.classList.remove('hidden');
+    camBtn.classList.remove('hidden');
+    shareBtn.classList.remove('hidden');
     peerOutputVolumePct = getPeerCallVolumePct(peerId);
     applyPeerOutputGain();
+    updateCamButton();
     updateRemoteBadges();
     broadcastCallState();
     startStateHeartbeat();
     startOverlayMediaReports();
+  }
+
+  function updateCamButton() {
+    const on = withVideo && !sharingScreen && !!localStream?.getVideoTracks?.()?.[0];
+    camBtn.classList.toggle('active', on);
+    camBtn.dataset.i18n = on ? 'call.camera_off' : 'call.camera';
+    camBtn.textContent = t(on ? 'call.camera_off' : 'call.camera');
   }
 
   async function waitRenegotiateAnswer() {
@@ -899,7 +925,13 @@ export function createCallUI(config, api, options = {}) {
     applyPeerOutputGain();
 
     if (screenStream) {
-      screenStream.getTracks().forEach((tr) => tr.stop());
+      screenStream.getTracks().forEach((tr) => {
+        try {
+          tr.stop();
+        } catch {
+          /* ignore */
+        }
+      });
       screenStream = null;
     }
 
@@ -907,11 +939,17 @@ export function createCallUI(config, api, options = {}) {
     savedCameraTrack = null;
 
     try {
-      if (withVideo && restore) {
+      await removeScreenShareAudioSender();
+      await restoreMicAudioSender();
+      if (withVideo && restore && restore.readyState !== 'ended') {
         await applyOutgoingVideoTrack(restore, { screenShare: false });
         localVideo.srcObject = new MediaStream([restore]);
-        refreshStageLayout();
+        videoWrap.classList.remove('hidden');
+        voiceWrap.classList.add('hidden');
+        videoWrap.classList.add('call-video-wrap--camera');
+        videoWrap.classList.remove('call-video-wrap--stage');
         localVideo.classList.remove('hidden');
+        refreshStageLayout();
       } else if (!withVideo) {
         await removeOutgoingVideo();
         videoWrap.classList.add('hidden');
@@ -921,15 +959,16 @@ export function createCallUI(config, api, options = {}) {
         void exitPseudoFullscreen();
       } else {
         localVideo.srcObject = null;
+        videoWrap.classList.toggle('hidden', !withVideo);
+        voiceWrap.classList.toggle('hidden', withVideo);
         refreshStageLayout();
       }
-      await restoreMicAudioSender();
-      await removeScreenShareAudioSender();
+      updateCamButton();
     } catch (err) {
       console.warn('[call] stop share:', err.message);
       try {
-        await restoreMicAudioSender();
         await removeScreenShareAudioSender();
+        await restoreMicAudioSender();
       } catch {
         /* ignore */
       }
@@ -1156,28 +1195,39 @@ export function createCallUI(config, api, options = {}) {
     }
   }
 
-  async function getMedia(video) {
-    if (!video) {
-      return getVoiceMediaStream(config);
+  async function getMedia(wantVideo) {
+    if (!wantVideo) {
+      return { stream: await getVoiceMediaStream(config), video: false };
     }
     try {
-      return await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: getVoiceAudioConstraints(config),
         video: getCameraVideoConstraints(config),
       });
+      return { stream, video: true };
     } catch (err) {
       if (err?.name === 'NotAllowedError' || /permission/i.test(String(err?.message || ''))) {
-        throw createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, err?.message || 'camera permission denied', err);
+        console.warn('[call] camera denied, falling back to voice:', err?.message || err);
+      } else if (err?.name === 'NotReadableError' || err?.name === 'NotFoundError') {
+        console.warn('[call] camera unavailable, falling back to voice:', err?.message || err);
+      } else {
+        console.warn('[call] getUserMedia video failed, falling back to voice:', err?.message || err);
       }
-      if (err?.name === 'NotReadableError' || err?.name === 'NotFoundError') {
-        throw createBlipError(
-          BlipErrorCode.CAPTURE_PERMISSION_DENIED,
-          err?.message || 'camera unavailable',
-          err
-        );
+      try {
+        return { stream: await getVoiceMediaStream(config), video: false, cameraError: err };
+      } catch (audioErr) {
+        if (
+          audioErr?.name === 'NotAllowedError' ||
+          /permission/i.test(String(audioErr?.message || ''))
+        ) {
+          throw createBlipError(
+            BlipErrorCode.CAPTURE_PERMISSION_DENIED,
+            audioErr?.message || 'media permission denied',
+            audioErr
+          );
+        }
+        throw audioErr;
       }
-      console.warn('[call] getUserMedia:', err.message);
-      throw err;
     }
   }
 
@@ -1245,18 +1295,31 @@ export function createCallUI(config, api, options = {}) {
 
   async function startOutgoing(targetId, video) {
     peerId = targetId;
-    withVideo = video;
+    withVideo = !!video;
     show();
     statusEl.dataset.i18n = 'call.outgoing';
     statusEl.textContent = t('call.outgoing');
-    videoWrap.classList.toggle('hidden', !video);
-    voiceWrap.classList.toggle('hidden', !video);
+    videoWrap.classList.toggle('hidden', !withVideo);
+    voiceWrap.classList.toggle('hidden', withVideo);
     mountCallAvatar(targetId);
     sounds.outgoingCall();
 
     try {
-      localStream = await getMedia(video);
-      if (video) {
+      const media = await getMedia(withVideo);
+      localStream = media.stream;
+      withVideo = media.video;
+      if (media.cameraError && window.__blipShowToast) {
+        const toast = formatBlipErrorToast(media.cameraError, { titleKey: 'call.camera_unavailable' });
+        window.__blipShowToast({
+          title: `${toast.title} (${toast.code})`,
+          body: toast.hint,
+          variant: 'danger',
+          durationMs: 4500,
+        });
+      }
+      videoWrap.classList.toggle('hidden', !withVideo);
+      voiceWrap.classList.toggle('hidden', withVideo);
+      if (withVideo) {
         localVideo.srcObject = localStream;
         videoWrap.classList.add('call-video-wrap--camera');
         remoteVideo.classList.add('call-video--camera');
@@ -1269,8 +1332,17 @@ export function createCallUI(config, api, options = {}) {
       }, iceCfg);
 
       localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
-      const camSender = getVideoSender();
-      if (camSender) void tuneVideoSender(camSender, { screenShare: false, config: iceCfg });
+      if (withVideo) {
+        const camSender = getVideoSender();
+        if (camSender) void tuneVideoSender(camSender, { screenShare: false, config: iceCfg });
+      } else if (video) {
+        // Keep a recvonly video m-line so peer camera still arrives when local cam failed.
+        try {
+          pc.addTransceiver('video', { direction: 'recvonly' });
+        } catch {
+          /* ignore */
+        }
+      }
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -1283,7 +1355,7 @@ export function createCallUI(config, api, options = {}) {
       let result = await api.initiateCall({
         to: targetId,
         sdp: offerWire,
-        video,
+        video: withVideo || !!video,
       });
       if (!result?.ok) {
         const errMsg = result?.error || '';
@@ -1292,7 +1364,7 @@ export function createCallUI(config, api, options = {}) {
           result = await api.initiateCall({
             to: targetId,
             sdp: offerWire,
-            video,
+            video: withVideo || !!video,
           });
         }
       }
@@ -1304,6 +1376,15 @@ export function createCallUI(config, api, options = {}) {
       void micWaveform.start(localStream);
     } catch (err) {
       console.error('[call] outgoing:', err);
+      if (window.__blipShowToast) {
+        const toast = formatBlipErrorToast(err, { titleKey: 'call.failed' });
+        window.__blipShowToast({
+          title: `${toast.title} (${toast.code})`,
+          body: toast.hint,
+          variant: 'danger',
+          durationMs: 5000,
+        });
+      }
       hide();
     }
 
@@ -1340,12 +1421,19 @@ export function createCallUI(config, api, options = {}) {
 
     acceptBtn.classList.add('hidden');
     rejectBtn.classList.add('hidden');
+    ringControls.classList.add('hidden');
+    controls.classList.remove('hidden');
     endBtn.classList.remove('hidden');
     muteBtn.classList.remove('hidden');
     deafenBtn.classList.remove('hidden');
 
     try {
-      localStream = await getMedia(withVideo);
+      const wantVideo = withVideo;
+      const media = await getMedia(wantVideo);
+      localStream = media.stream;
+      withVideo = media.video;
+      videoWrap.classList.toggle('hidden', !withVideo);
+      voiceWrap.classList.toggle('hidden', withVideo);
       if (withVideo) {
         localVideo.srcObject = localStream;
         videoWrap.classList.add('call-video-wrap--camera');
@@ -1359,8 +1447,10 @@ export function createCallUI(config, api, options = {}) {
       }, iceCfg);
 
       localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
-      const camSender = getVideoSender();
-      if (camSender) void tuneVideoSender(camSender, { screenShare: false, config: iceCfg });
+      if (withVideo) {
+        const camSender = getVideoSender();
+        if (camSender) void tuneVideoSender(camSender, { screenShare: false, config: iceCfg });
+      }
 
       await setRemoteDescription(offer);
       const answer = await pc.createAnswer();
@@ -1389,6 +1479,17 @@ export function createCallUI(config, api, options = {}) {
       incomingOffer = offer;
       statusEl.textContent = err?.message || t('call.signal_lost');
       statusEl.dataset.i18n = '';
+      if (window.__blipShowToast) {
+        const toast = formatBlipErrorToast(err, { titleKey: 'call.failed' });
+        window.__blipShowToast({
+          title: `${toast.title} (${toast.code})`,
+          body: toast.hint,
+          variant: 'danger',
+          durationMs: 5000,
+        });
+      }
+      ringControls.classList.remove('hidden');
+      controls.classList.add('hidden');
       acceptBtn.classList.remove('hidden');
       rejectBtn.classList.remove('hidden');
       endBtn.classList.add('hidden');
@@ -1427,6 +1528,8 @@ export function createCallUI(config, api, options = {}) {
     statusEl.dataset.i18n = 'call.incoming';
     statusEl.textContent = t('call.incoming');
     startIncomingPulse();
+    controls.classList.add('hidden');
+    ringControls.classList.remove('hidden');
     acceptBtn.classList.remove('hidden');
     rejectBtn.classList.remove('hidden');
     endBtn.classList.add('hidden');
@@ -1434,6 +1537,7 @@ export function createCallUI(config, api, options = {}) {
     deafenBtn.classList.add('hidden');
     volWrap.classList.add('hidden');
     toolsWrap.classList.add('hidden');
+    toolsMenu.classList.add('hidden');
     shareBtn.classList.add('hidden');
     videoWrap.classList.toggle('hidden', !withVideo);
     voiceWrap.classList.toggle('hidden', withVideo);
@@ -1562,6 +1666,9 @@ export function createCallUI(config, api, options = {}) {
   shareBtn.addEventListener('click', () => {
     void toggleScreenShare();
   });
+  camBtn.addEventListener('click', () => {
+    void toggleCamera();
+  });
   toolsBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toolsMenu.classList.toggle('hidden');
@@ -1577,6 +1684,72 @@ export function createCallUI(config, api, options = {}) {
   streamPip.addEventListener('click', () => {
     enterRemoteStreamView();
   });
+
+  async function toggleCamera() {
+    if (!pc || sharingScreen) return;
+    try {
+      if (withVideo) {
+        const track = localStream?.getVideoTracks?.()?.[0];
+        if (track) {
+          track.stop();
+          localStream?.removeTrack?.(track);
+        }
+        await removeOutgoingVideo();
+        withVideo = false;
+        localVideo.srcObject = null;
+        videoWrap.classList.add('hidden');
+        voiceWrap.classList.remove('hidden');
+        setStageView('off');
+      } else {
+        const media = await getMedia(true);
+        if (!media.video) {
+          if (window.__blipShowToast) {
+            const toast = formatBlipErrorToast(media.cameraError || BlipErrorCode.CAPTURE_PERMISSION_DENIED, {
+              titleKey: 'call.camera_unavailable',
+            });
+            window.__blipShowToast({
+              title: `${toast.title} (${toast.code})`,
+              body: toast.hint,
+              variant: 'danger',
+              durationMs: 4500,
+            });
+          }
+          return;
+        }
+        const camTrack = media.stream.getVideoTracks()[0];
+        if (!camTrack) return;
+        if (localStream) {
+          localStream.addTrack(camTrack);
+        } else {
+          localStream = media.stream;
+        }
+        // Stop extra audio from the temporary getUserMedia if we already have mic.
+        media.stream.getAudioTracks().forEach((tr) => {
+          if (localStream && tr !== localStream.getAudioTracks()[0]) tr.stop();
+        });
+        withVideo = true;
+        await applyOutgoingVideoTrack(camTrack, { screenShare: false });
+        localVideo.srcObject = new MediaStream([camTrack]);
+        videoWrap.classList.remove('hidden');
+        voiceWrap.classList.add('hidden');
+        videoWrap.classList.add('call-video-wrap--camera');
+        refreshStageLayout();
+      }
+      updateCamButton();
+      broadcastCallState();
+    } catch (err) {
+      console.warn('[call] toggle camera:', err);
+      if (window.__blipShowToast) {
+        const toast = formatBlipErrorToast(err, { titleKey: 'call.camera_unavailable' });
+        window.__blipShowToast({
+          title: `${toast.title} (${toast.code})`,
+          body: toast.hint,
+          variant: 'danger',
+          durationMs: 4500,
+        });
+      }
+    }
+  }
 
   async function hangupCall() {
     if (peerId) await api.callHangup({ to: peerId });
