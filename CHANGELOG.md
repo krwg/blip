@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [2.0.5-beta] — Morse — 2026-07-28
+
+**Pre-release (beta).** Installers: GitHub tag `v2.0.5-beta.1`. Notes: [`docs/release-notes-v2.0.5-beta-github.md`](docs/release-notes-v2.0.5-beta-github.md).
+
+### Fixed
+
+- **Peers/chats flicker** — stable LAN presence text (no timer churn in sublines); quiet presence patch without renderer `config-updated` storms; reuse authenticated TCP sockets for mesh sends; debounced peers/chat hub re-render.
+- **Presence (Windows)** — BLIP foreground no longer reported as Explorer; overlay keeps live elapsed timer.
+- **Console** — removed per-send `reuse inbound authenticated socket` dial spam.
+
+### Added (beta bundle)
+
+- Error toast hints (EN/RU); screen share troubleshooting docs; overlay call quality (RTT/jitter); capture error codes **300–321**; prior 2.0.4–2.0.5 PR items (overlay i18n, peer volume, discovery emit reasons, etc.).
+
 ## [2.0.5] — Morse — Unreleased
 
-Patch.
+Patch (superseded by beta tag above for testing).
 
 ### Fixed
 
