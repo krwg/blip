@@ -13,14 +13,30 @@ export function takePendingDisplaySource() {
   return id;
 }
 
+async function fetchAllCaptureSources(thumbnailSize) {
+  const byId = new Map();
+  const opts = { thumbnailSize, fetchWindowIcons: true };
+  for (const types of [
+    ['screen', 'window'],
+    ['window'],
+    ['screen'],
+  ]) {
+    try {
+      const batch = await desktopCapturer.getSources({ ...opts, types });
+      for (const s of batch) {
+        if (s?.id && !byId.has(s.id)) byId.set(s.id, s);
+      }
+    } catch {
+      /* try next query shape */
+    }
+  }
+  return [...byId.values()];
+}
+
 export async function listDisplaySources() {
   let sources;
   try {
-    sources = await desktopCapturer.getSources({
-      types: ['screen', 'window'],
-      thumbnailSize: { width: 320, height: 180 },
-      fetchWindowIcons: true,
-    });
+    sources = await fetchAllCaptureSources({ width: 320, height: 180 });
   } catch (err) {
     throw createBlipError(BlipErrorCode.CAPTURE_LIST_SOURCES_FAILED, err?.message || '', err);
   }
@@ -42,11 +58,7 @@ export async function resolveDisplaySourceForCallback() {
   const pendingId = takePendingDisplaySource();
   let sources;
   try {
-    sources = await desktopCapturer.getSources({
-      types: ['screen', 'window'],
-      thumbnailSize: { width: 1920, height: 1080 },
-      fetchWindowIcons: true,
-    });
+    sources = await fetchAllCaptureSources({ width: 1920, height: 1080 });
   } catch (err) {
     throw createBlipError(BlipErrorCode.CAPTURE_LIST_SOURCES_FAILED, err?.message || '', err);
   }

@@ -2787,13 +2787,16 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 }
 
 .settings-error-catalog {
-  max-height: 220px;
   overflow-y: auto;
   margin: 8px 0 16px;
   border: 1px solid var(--blip-border);
   padding: 6px 8px;
   font-size: 11px;
   font-family: ui-monospace, Consolas, monospace;
+}
+
+.settings-panel:not(.settings-panel--developer) .settings-error-catalog {
+  max-height: 220px;
 }
 
 .settings-error-catalog-row {
@@ -3240,7 +3243,13 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
 .settings-panel--shortcuts .settings-shortcuts-panel {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: min(34vh, 360px);
+  max-height: none;
+  overflow-y: auto;
+}
+
+.settings-panel--call {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 

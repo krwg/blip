@@ -23,6 +23,9 @@ export async function captureDisplayStream(sourceId, config, { withAudio = false
     : false;
 
   try {
+    if (window.blip?.prepareDisplayCapture) {
+      await window.blip.prepareDisplayCapture(sourceId);
+    }
     return await navigator.mediaDevices.getUserMedia({
       audio: audioConstraint,
       video: { mandatory: videoMandatory },
