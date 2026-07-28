@@ -76,7 +76,7 @@ import {
 } from './updater.js';
 import { resolveBuildAsset } from './paths.js';
 import { resolvePorts } from './ports.js';
-import { serializeSdp, sendCallPayload } from './call-wire.js';
+import { serializeSdp, sendCallPayload, resolveMeshSendSocket } from './call-wire.js';
 import {
   clearActiveProfileGif,
   getProfileGifPublicState,
@@ -676,6 +676,17 @@ function patchConfig(updates) {
   return config;
 }
 
+/** Share activity to LAN peers without waking the renderer (prevents list flicker). */
+function patchSharedPresenceText(presenceText) {
+  const line = String(presenceText || '')
+    .trim()
+    .slice(0, 48);
+  if (!line || config?.presenceText === line) return;
+  config = saveConfig({ presenceText: line });
+  discovery?.updateConfig(config);
+  discovery?.announce();
+}
+
 function overlayWindowDeps() {
   return {
     rootDir,
@@ -692,6 +703,7 @@ function syncOverlayFeature() {
   refreshPresenceLoop({
     getConfig: () => config,
     patchConfig,
+    patchSharedPresenceText,
     getPeersOnline: () =>
       (discovery?.getPeers?.() || []).filter((p) => p?.online).length,
     getUnreadTotal: () => lastOverlayUnread,
@@ -915,9 +927,6 @@ async function ensurePeerSocket(blipId) {
   try {
     const inbound = tcpServer?.getConnection?.(blipId);
     if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
-      if (config?.devMeshTrace) {
-        console.info(`[BLIP dial] reuse inbound authenticated socket for #${blipId}`);
-      }
       return inbound;
     }
 
@@ -939,9 +948,6 @@ async function ensurePeerSocket(blipId) {
 
     const hit = findCached();
     if (hit) {
-      if (config?.devMeshTrace) {
-        console.info(`[BLIP dial] reuse cached outbound socket for #${blipId}`);
-      }
       return hit.socket;
     }
 
@@ -1459,7 +1465,8 @@ function setupIpc() {
     getConfig: () => config,
     getDiscovery: () => discovery,
     findPeer,
-    ensurePeerSocket,
+    resolveMeshSendSocket: (peerId) =>
+      resolveMeshSendSocket(tcpServer, peerSockets, ensurePeerSocket, peerId),
   });
 
   registerBeaconIpc({

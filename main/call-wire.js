@@ -1,4 +1,22 @@
 import { sendOnSocket } from './tcp-client.js';
+import { isSocketAuthenticated } from './mesh-handshake.js';
+
+/** Reuse inbound/outbound mesh socket when already authenticated (avoid dial noise). */
+export async function resolveMeshSendSocket(tcpServer, peerSockets, ensurePeerSocket, peerBlipId) {
+  const id = Number(peerBlipId);
+  const inbound = tcpServer?.getConnection?.(id);
+  if (inbound && !inbound.destroyed && isSocketAuthenticated(inbound)) {
+    return inbound;
+  }
+  if (peerSockets?.size) {
+    const needle = `:${id}:`;
+    for (const [key, socket] of peerSockets) {
+      if (!key.includes(needle) || !socket || socket.destroyed) continue;
+      if (isSocketAuthenticated(socket)) return socket;
+    }
+  }
+  return ensurePeerSocket(id);
+}
 
 export function serializeSdp(sdp) {
   if (!sdp) return null;

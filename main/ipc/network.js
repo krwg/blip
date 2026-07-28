@@ -16,10 +16,10 @@ import { blipErrorIpcPayload, createBlipError, BlipErrorCode } from '../../share
  * @param {() => object|null} deps.getConfig
  * @param {() => import('../discovery.js').Discovery|null} deps.getDiscovery
  * @param {(peerId: number) => object|null} deps.findPeer
- * @param {(peerId: number) => Promise<import('net').Socket>} deps.ensurePeerSocket
+ * @param {(peerId: number) => Promise<import('net').Socket>} deps.resolveMeshSendSocket
  */
 export function registerNetworkIpc(deps) {
-  const { getConfig, getDiscovery, findPeer, ensurePeerSocket } = deps;
+  const { getConfig, getDiscovery, findPeer, resolveMeshSendSocket } = deps;
 
   ipcMain.handle('get-peers', () => ({
     peers: getDiscovery()?.getPeers() || [],
@@ -46,7 +46,7 @@ export function registerNetworkIpc(deps) {
   ipcMain.handle('send-tcp-message', async (_, payload) => {
     try {
       const config = getConfig();
-      const socket = await ensurePeerSocket(payload.to);
+      const socket = await resolveMeshSendSocket(payload.to);
       const type = payload.type || 'message';
       const packet = {
         type,
