@@ -19,9 +19,10 @@ import { fetchGithubReleases } from '../github-releases.js';
  * @param {() => object|null} deps.getConfig
  * @param {() => object} deps.loadAppMetadata
  * @param {() => { iconUrl?: string }} deps.refreshAppIcons
+ * @param {() => boolean} [deps.isVoiceCallActive]
  */
 export function registerAppMetaIpc(deps) {
-  const { getConfig, loadAppMetadata, refreshAppIcons } = deps;
+  const { getConfig, loadAppMetadata, refreshAppIcons, isVoiceCallActive } = deps;
 
   ipcMain.handle('get-github-releases', async (_, limit) => fetchGithubReleases(limit ?? 8));
 
@@ -47,8 +48,16 @@ export function registerAppMetaIpc(deps) {
     });
   });
 
-  ipcMain.handle('check-for-updates', () => checkForUpdatesNow(() => getConfig()));
+  ipcMain.handle('check-for-updates', () => {
+    if (isVoiceCallActive?.()) {
+      return { ok: false, skipped: true, reason: 'call_active' };
+    }
+    return checkForUpdatesNow(() => getConfig());
+  });
   ipcMain.handle('quit-and-install', () => {
+    if (isVoiceCallActive?.()) {
+      return { ok: false, skipped: true, reason: 'call_active' };
+    }
     quitAndInstallUpdater();
     return { ok: true };
   });

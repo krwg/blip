@@ -185,6 +185,8 @@ export function setupAutoUpdater(getWindow, getConfig) {
     await sanitizeUpdaterCacheOnStartup();
     await configureAutoUpdater(typeof getConfig === 'function' ? getConfig() : null);
     setTimeout(() => {
+      const cfg = typeof getConfig === 'function' ? getConfig() : null;
+      if (cfg?.autoCheckUpdates === false) return;
       void autoUpdater.checkForUpdates().catch((err) => {
         console.warn('[BLIP] checkForUpdates', err);
       });
@@ -209,5 +211,19 @@ export async function checkForUpdatesNow(getConfig) {
 
 export function quitAndInstallUpdater() {
   if (!app.isPackaged || isPortableInstall()) return;
-  autoUpdater.quitAndInstall(false, true);
+  try {
+    // macOS is more reliable with default invocation; explicit flags are mainly for NSIS.
+    if (process.platform === 'darwin') {
+      autoUpdater.quitAndInstall();
+      return;
+    }
+    autoUpdater.quitAndInstall(false, true);
+  } catch (e) {
+    console.warn('[BLIP] quitAndInstall', e);
+    try {
+      autoUpdater.quitAndInstall();
+    } catch {
+      /* ignore */
+    }
+  }
 }

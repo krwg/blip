@@ -14,10 +14,10 @@ export const MESH_PLUS_FEATURES = {
 
 export const PREMIUM_ANIMATED_BG_IDS = ['ember', 'rift'];
 
-export const FREE_SOUND_PACK_IDS = ['signal', 'pulse'];
+export const FREE_SOUND_PACK_IDS = ['signal', 'pulse', 'nest'];
 export const PREMIUM_SOUND_PACK_IDS = ['wire', 'static'];
 
-export const FREE_MELODY_PACK_IDS = ['mesh', 'grid'];
+export const FREE_MELODY_PACK_IDS = ['mesh', 'grid', 'nest'];
 export const PREMIUM_MELODY_PACK_IDS = ['beacon', 'chime'];
 
 const DEFAULTS = {
