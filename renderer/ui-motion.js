@@ -60,6 +60,8 @@ export function swapPanelContent(hostEl, nextPanel, { enabled } = {}) {
   const motionOn = enabled !== false && document.documentElement.dataset.uiMotion !== '0';
   if (!motionOn) {
     hostEl.replaceChildren(nextPanel);
+    nextPanel.style.opacity = '';
+    nextPanel.style.transform = '';
     return Promise.resolve();
   }
   const current = hostEl.firstElementChild;
@@ -72,6 +74,8 @@ export function swapPanelContent(hostEl, nextPanel, { enabled } = {}) {
   return settleClass(current, 'ui-motion-panel-exit', EXIT_MS).then(() => {
     hostEl.replaceChildren(nextPanel);
     nextPanel.classList.add('ui-motion-panel-enter');
+    nextPanel.style.opacity = '';
+    nextPanel.style.transform = '';
     return settleClass(nextPanel, 'ui-motion-panel-enter', ENTER_MS);
   });
 }

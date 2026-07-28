@@ -197,10 +197,11 @@ export function registerCallIpc(deps) {
         );
       }
       await ensurePeerSocket(peerId);
-      setActiveCallPeer(peerId, { video: payload.video ?? false });
+      const withVideo = payload?.video !== false;
+      setActiveCallPeer(peerId, { video: withVideo });
       await sendToCallWindow(
         'call-outgoing',
-        { peerId, video: payload.video ?? false },
+        { peerId, video: withVideo },
         { focus: true }
       );
       return { ok: true };

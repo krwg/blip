@@ -260,6 +260,7 @@ export function createCallUI(config, api, options = {}) {
   let savedCameraTrack = null;
   let remotePlayback = null;
   let outgoingAudioCtx = null;
+  let screenAudioSender = null;
   let suppressRemotePlayback = false;
   let remoteMuted = false;
   let remoteDeafened = false;
@@ -782,21 +783,38 @@ export function createCallUI(config, api, options = {}) {
     if (mic && sender) await sender.replaceTrack(mic);
   }
 
-  async function applyScreenShareAudioMix() {
+  async function removeScreenShareAudioSender() {
+    if (!screenAudioSender || !pc) return;
+    try {
+      if (typeof pc.removeTrack === 'function') {
+        pc.removeTrack(screenAudioSender);
+      } else {
+        await screenAudioSender.replaceTrack(null);
+      }
+    } catch (err) {
+      console.warn('[call] remove screen audio sender:', err.message);
+    }
+    screenAudioSender = null;
+    try {
+      await renegotiateAsOffer();
+    } catch (err) {
+      console.warn('[call] renegotiate after screen audio remove:', err.message);
+    }
+  }
+
+  async function applyScreenShareAudioTrack() {
     const screenAudio = screenStream?.getAudioTracks()[0];
-    const mic = localStream?.getAudioTracks()[0];
-    if (!screenAudio || !mic) return;
-    await restoreMicAudioSender();
-    outgoingAudioCtx = new AudioContext();
-    const dest = outgoingAudioCtx.createMediaStreamDestination();
-    outgoingAudioCtx.createMediaStreamSource(new MediaStream([mic])).connect(dest);
-    outgoingAudioCtx.createMediaStreamSource(new MediaStream([screenAudio])).connect(dest);
-    const mixed = dest.stream.getAudioTracks()[0];
-    const sender = pc?.getSenders().find((s) => s.track?.kind === 'audio');
-    if (sender && mixed) await sender.replaceTrack(mixed);
-    // Prevent feedback loops when desktop capture includes BLIP playback.
+    if (!screenAudio || !pc) return;
+    await removeScreenShareAudioSender();
+    const stream = new MediaStream([screenAudio]);
+    screenAudioSender = pc.addTrack(screenAudio, stream);
+    await renegotiateAsOffer();
     suppressRemotePlayback = true;
     applyPeerOutputGain();
+  }
+
+  async function applyScreenShareAudioMix() {
+    await applyScreenShareAudioTrack();
   }
 
   function setShareButton(active) {
@@ -906,10 +924,12 @@ export function createCallUI(config, api, options = {}) {
         refreshStageLayout();
       }
       await restoreMicAudioSender();
+      await removeScreenShareAudioSender();
     } catch (err) {
       console.warn('[call] stop share:', err.message);
       try {
         await restoreMicAudioSender();
+        await removeScreenShareAudioSender();
       } catch {
         /* ignore */
       }
@@ -1149,6 +1169,13 @@ export function createCallUI(config, api, options = {}) {
       if (err?.name === 'NotAllowedError' || /permission/i.test(String(err?.message || ''))) {
         throw createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, err?.message || 'camera permission denied', err);
       }
+      if (err?.name === 'NotReadableError' || err?.name === 'NotFoundError') {
+        throw createBlipError(
+          BlipErrorCode.CAPTURE_PERMISSION_DENIED,
+          err?.message || 'camera unavailable',
+          err
+        );
+      }
       console.warn('[call] getUserMedia:', err.message);
       throw err;
     }
@@ -1386,7 +1413,7 @@ export function createCallUI(config, api, options = {}) {
     }
 
     peerId = from;
-    withVideo = data.video ?? false;
+    withVideo = data.video !== false;
     const offer = normalizeSdp(data.sdp);
     if (!offer) {
       console.error('[BLIP call] incoming: invalid offer SDP', data.sdp);

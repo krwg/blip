@@ -26,6 +26,15 @@ Patch line after **2.0.3 Morse**. Version in app: **2.0.5**.
 - **Tray call indicator** — stronger call-state visibility; macOS tray title marker added.
 - **Settings layout** — reduced hidden empty area at bottom of settings page.
 
+## Beta patch addendum (call/capture pass)
+
+- **Video calls default on** — outgoing and incoming calls use camera unless explicitly disabled in signaling.
+- **Screen picker** — merges multiple `desktopCapturer` queries so more windows appear on Windows; `prepare-display-capture` runs before capture.
+- **System audio while sharing** — desktop audio is a **second WebRTC track** (mic stays separate) to reduce echo vs mixing into one track.
+- **Screen share audio default off** — enable in picker when you need system sound.
+- **macOS / device errors** — `NotReadableError` / device failures map to **305** instead of generic **999**.
+- **Settings** — Call panel scroll/layout; shortcuts list uses full panel height; developer error catalog no longer capped at 220px globally.
+
 ## Beta patch addendum (UI/Audio pass)
 
 - **Nest sound set** — new soft warm pack for notifications + call melodies (`NEST`).

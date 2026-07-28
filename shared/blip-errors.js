@@ -416,6 +416,10 @@ export function classifyBlipError(err) {
     if (/notallowederror|permission denied|permission dismissed|system permission/i.test(msg)) {
         return createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, msg, err);
     }
+    const errName = String(err?.name || '');
+    if (/NotAllowedError|NotReadableError|NotFoundError|SecurityError/i.test(errName)) {
+        return createBlipError(BlipErrorCode.CAPTURE_PERMISSION_DENIED, msg || errName, err);
+    }
     return createBlipError(BlipErrorCode.UNKNOWN, msg, err);
 }
 /**
