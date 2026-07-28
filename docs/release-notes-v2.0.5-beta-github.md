@@ -26,6 +26,15 @@ Patch line after **2.0.3 Morse**. Version in app: **2.0.5**.
 - **Tray call indicator** — stronger call-state visibility; macOS tray title marker added.
 - **Settings layout** — reduced hidden empty area at bottom of settings page.
 
+## Beta patch addendum (UI/Audio pass)
+
+- **Nest sound set** — new soft warm pack for notifications + call melodies (`NEST`).
+- **Call controls UX** — switched to cleaner 2x2 layout with `ПАНЕЛЬ / TOOLS` dropdown for screen share + peer volume.
+- **Video entry flow** — removed duplicate `VIDEO` buttons from app navigation; regular call entry now starts with camera path.
+- **Settings UX fixes** — call/shortcuts panel scrolling fixed; developer error catalog viewport expanded.
+- **Window button style** — runtime apply in main window after style change (no restart needed for most cases).
+- **NestUI 1.2 polish** — more liquid glass transparency, richer shadows, tighter typography spacing.
+
 ## Included since 2.0.3 (summary)
 
 - Overlay i18n, PTT, click-through, speaking ring, connection quality hints.

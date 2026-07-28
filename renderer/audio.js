@@ -7,8 +7,8 @@ let melodyPackId = 'mesh';
 let incomingRingTimer = null;
 let outgoingRingTimer = null;
 
-export const SOUND_PACK_IDS = ['signal', 'pulse', 'wire', 'static'];
-export const MELODY_PACK_IDS = ['mesh', 'grid', 'beacon', 'chime'];
+export const SOUND_PACK_IDS = ['signal', 'pulse', 'wire', 'static', 'nest'];
+export const MELODY_PACK_IDS = ['mesh', 'grid', 'beacon', 'chime', 'nest'];
 
 export const SOUND_PREVIEW_KEYS = [
   'messageReceived',
@@ -133,6 +133,24 @@ const MELODIES = {
     ],
     endSweep: { from: N.C6, to: N.G3, dur: 210 },
     endTail: { f: N.C4, d: 130, t: 'triangle' },
+  },
+  nest: {
+    ring: [
+      { f: N.C5, d: 90, g: 0.07, t: 'sine' },
+      { f: N.E5, d: 110, g: 0.075, t: 'sine', gap: 30 },
+      { f: N.G5, d: 150, g: 0.08, t: 'sine', gap: 260 },
+    ],
+    dial: [
+      { f: N.G4, d: 90, g: 0.06, t: 'sine' },
+      { f: N.C5, d: 110, g: 0.065, t: 'sine', gap: 420 },
+    ],
+    connected: [
+      { f: N.E5, d: 60, g: 0.07, t: 'sine' },
+      { f: N.G5, d: 70, g: 0.07, t: 'sine', gap: 12 },
+      { f: N.C6, d: 170, g: 0.08, t: 'sine', gap: 20 },
+    ],
+    endSweep: { from: N.C6, to: N.C4, dur: 260 },
+    endTail: { f: N.G3, d: 140, t: 'sine' },
   },
 };
 
@@ -298,6 +316,45 @@ const FX = {
       { f: N.C4, d: 100, g: 0.08, gap: 20 },
     ],
     uiClick: { f: N.C5, d: 22, t: 'square', g: 0.06 },
+  },
+  nest: {
+    messageSent: [
+      { f: N.E5, d: 40, g: 0.06, t: 'sine' },
+      { f: N.G5, d: 52, g: 0.065, t: 'sine', gap: 14 },
+    ],
+    messageReceived: [
+      { f: N.C5, d: 45, g: 0.065, t: 'sine' },
+      { f: N.E5, d: 62, g: 0.07, t: 'sine', gap: 20 },
+    ],
+    notify: [
+      { f: N.A4, d: 48, g: 0.06, t: 'sine' },
+      { f: N.C5, d: 70, g: 0.07, t: 'sine', gap: 20 },
+    ],
+    peerOnlineSweep: { from: N.G3, to: N.G5, dur: 260, type: 'sine' },
+    peerOnlineTail: [{ f: N.C5, d: 85, g: 0.07, t: 'sine', gap: 24 }],
+    peerOffline: [
+      { f: N.E5, d: 65, g: 0.055, t: 'sine' },
+      { f: N.C4, d: 120, g: 0.05, t: 'sine', gap: 22 },
+    ],
+    groupInvite: [
+      { f: N.C5, d: 60, g: 0.07, t: 'sine' },
+      { f: N.G5, d: 80, g: 0.075, t: 'sine', gap: 28 },
+    ],
+    groupCallInvite: [
+      { f: N.E5, d: 72, g: 0.075, t: 'sine' },
+      { f: N.G5, d: 82, g: 0.08, t: 'sine', gap: 32 },
+      { f: N.C6, d: 120, g: 0.085, t: 'sine', gap: 45 },
+    ],
+    groupCallNoise: false,
+    meshPing: [
+      { f: N.C6, d: 24, g: 0.06, t: 'sine' },
+      { f: N.G5, d: 32, g: 0.055, t: 'sine', gap: 12 },
+    ],
+    error: [
+      { f: N.A3, d: 90, g: 0.075, t: 'triangle' },
+      { f: N.E3, d: 130, g: 0.06, t: 'triangle', gap: 18 },
+    ],
+    uiClick: { f: N.E5, d: 24, t: 'sine', g: 0.035 },
   },
 };
 
