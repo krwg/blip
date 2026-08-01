@@ -50,7 +50,7 @@
     "concurrently": "^9.1.2",
     "electron": "^35.1.2",
     "electron-builder": "^25.1.8",
-    "javascript-obfuscator": "^4.1.1",
+    "javascript-obfuscator": "^5.5.0",
     "jsdom": "^29.1.1",
     "png2icons": "^2.0.1",
     "sharp": "^0.34.1",
