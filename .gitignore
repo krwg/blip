@@ -35,3 +35,7 @@ keys/
 *.private.b64
 *-private.b64
 *-public.b64
+
+# Local toolchain and editor rules
+.tools/
+.cursor/
