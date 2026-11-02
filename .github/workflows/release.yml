@@ -87,7 +87,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   macos:
-    runs-on: macos-latest
+    # macos-13 (Intel) usually has shorter queues than arm64 macos-latest under capacity pressure.
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
         with:
