@@ -600,6 +600,7 @@ async function ensureGroupCallWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   groupCallWindow.setMenuBarVisibility(false);
