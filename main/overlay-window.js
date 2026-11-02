@@ -117,7 +117,7 @@ export function createOverlayWindow({ rootDir, useViteDev, preloadPath, icon }) 
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });

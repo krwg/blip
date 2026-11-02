@@ -5,8 +5,9 @@
 
 import { mkdir, open, unlink, rename } from 'fs/promises';
 import { join } from 'path';
+import { FILE_CHUNK_RAW_BYTES } from '../shared/file-transfer-constants.js';
 
-export const FILE_RECEIVE_CHUNK_BYTES = 1024 * 1024;
+export const FILE_RECEIVE_CHUNK_BYTES = FILE_CHUNK_RAW_BYTES;
 
 /**
  * @param {{ getIncomingDir: () => string }} deps

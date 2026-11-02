@@ -1,9 +1,10 @@
 import { open, stat } from 'fs/promises';
 import { sendOnSocketQueued } from './tcp-write-queue.js';
 import { MAX_TCP_LINE_BYTES } from './tcp-framing.js';
-
-const CHUNK_RAW_BYTES = 1024 * 1024;
-const CHUNKS_PER_BATCH = 2;
+import {
+  FILE_CHUNK_RAW_BYTES as CHUNK_RAW_BYTES,
+  FILE_CHUNKS_PER_TCP_BATCH as CHUNKS_PER_BATCH,
+} from '../shared/file-transfer-constants.js';
 
 export async function sendFileFromPathOnSocket(socket, fromBlipId, opts) {
   const {

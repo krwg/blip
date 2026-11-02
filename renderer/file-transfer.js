@@ -8,10 +8,10 @@ import {
 import { getMaxFileBytes } from './file-transfer-limits.js';
 import { getChunkDelayMs } from './file-transfer-speed.js';
 import { recordBandwidthSample } from './bandwidth-monitor.js';
-
-const CHUNK_RAW_BYTES = 1024 * 1024;
-
-const CHUNKS_PER_TCP_BATCH = 2;
+import {
+  FILE_CHUNK_RAW_BYTES as CHUNK_RAW_BYTES,
+  FILE_CHUNKS_PER_TCP_BATCH as CHUNKS_PER_TCP_BATCH,
+} from '../shared/file-transfer-constants.js';
 
 const SEND_PIPELINE_DEPTH = 12;
 

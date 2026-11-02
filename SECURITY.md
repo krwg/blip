@@ -38,7 +38,8 @@ We aim to acknowledge within a few days; timelines depend on maintainer availabi
 ## Scope (in scope)
 
 - Remote code execution, unsafe IPC, or unsafe `shell.openExternal` usage
-- WebRTC / preload bridge weaknesses that break `contextIsolation` assumptions
+- WebRTC / preload bridge weaknesses that break `contextIsolation` / `sandbox` assumptions
+- Renderer windows run with `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`
 - Unauthenticated or oversized `clipboard-push` payloads on the LAN mesh
 - Packaging / auto-update integrity (when implemented)
 

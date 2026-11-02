@@ -55,6 +55,15 @@ Patch line after **2.0.3 Morse**. Version in app: **2.0.5**.
 - **Window button style** — runtime apply in main window after style change (no restart needed for most cases).
 - **NestUI 1.2 polish** — more liquid glass transparency, richer shadows, tighter typography spacing.
 
+## Beta patch addendum (SteamLAN + harden)
+
+- **SteamLAN** — Settings → Network On/Off; friends appear in Peers; advanced lobbies under Developer.
+- **Mesh allowlist** — pin/edit and project TCP types forwarded; outbound type filter.
+- **Chat** — DM dedupe; no steal-nav outside chat; incremental message append.
+- **Files** — large inbound transfers assemble on disk under `userData/incoming`.
+- **Discovery** — mDNS timer cleanup; occupied ID TTL; announce freshness window.
+- **IPC** — Giphy host allowlist; stricter path checks; `sandbox: true` on app windows.
+
 ## Included since 2.0.3 (summary)
 
 - Overlay i18n, PTT, click-through, speaking ring, connection quality hints.

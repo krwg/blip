@@ -19,17 +19,13 @@ import {
 } from './groups.js';
 import {
   createGroupAvatarElement,
-  setGroupAvatarDataUrl,
-  broadcastGroupAvatarToMembers,
   requestGroupAvatarsFromMembers,
 } from './group-avatar.js';
 import { createProjectsView } from './projects-view.js';
-import { handleMeshProjectTcp } from './projects-mesh-wire.js';
-import { handleGroupProjectTcp, respondClipboardPull } from './group-projects-wire.js';
 import { createGroupCommunityView } from './group-community-view.js';
+import { createTcpInboundRouter } from './tcp-inbound.js';
 import {
   createGroupFromUi,
-  handleGroupTcpMessage,
   migrateGroupsHostOnPeerOffline,
   sendGroupChatMessage,
   sendGroupPin,
@@ -51,7 +47,6 @@ import {
   regenerateAvatar,
   loadSelfAvatarFromMain,
   setSelfAvatarCache,
-  setPeerAvatarDataUrl,
   getSelfAvatarCache,
 } from './avatar.js';
 import { createTrustedAvatarElement } from './trust-ui.js';
@@ -66,12 +61,10 @@ import {
 import {
   sendChatFile,
   fileToDataUrl,
-  handleFileTransferTcp,
   abortFileTransfer,
 } from './file-transfer.js';
 import {
   sendGroupChatFile,
-  completeIncomingGroupFile,
   applyStashedGroupFile,
 } from './group-file-transfer.js';
 import {
@@ -112,8 +105,6 @@ import { buildSettingsUpdatesPanel as buildUpdatesPanelView } from './settings-p
 import {
   startClipboardSync,
   stopClipboardSync,
-  handleClipboardPush,
-  formatClipboardToast,
 } from './clipboard-sync.js';
 import { formatPeerDisplayName } from './peer-labels.js';
 import { openMeshLabelDialog } from './mesh-label-dialog.js';
@@ -122,7 +113,7 @@ import { formatBlipErrorToast } from './blip-error-hints.js';
 import { swapMainView, swapPanelContent, isUiMotionEnabled } from './ui-motion.js';
 import { createContextMenus } from './context-menus.js';
 import { createUpdateChecker } from './update-checker.js';
-import { initBeaconMesh, refreshBeaconMesh, handleBeaconTcp } from './beacon-mesh.js';
+import { initBeaconMesh, refreshBeaconMesh } from './beacon-mesh.js';
 import { initIdleAway } from './idle-away.js';
 import { renderBeaconView } from './beacon-ui.js';
 import { setDefaultToastDurationMs } from './toast-config.js';
@@ -134,7 +125,6 @@ import { createPeerProfileView } from './peer-profile-view.js';
 import { buildSettingsProfilePanel as buildSettingsProfilePanelView } from './settings-profile-panel.js';
 import { renderSettingsNavAside as renderSettingsNavGroups } from './settings-nav.js';
 import {
-  ingestPeerProfileGifDataUrl,
   getPeerProfileGifDisplayUrl,
   isPeerProfileGifIngesting,
   peerHasCachedProfileGif,
@@ -2299,289 +2289,41 @@ export function handleMissedCall(payload) {
   }
 }
 
+const tcpInbound = createTcpInboundRouter({
+  getState: () => state,
+  getApi: () => api,
+  getMainContent: () => mainContent,
+  isBlocked,
+  normalizeBlipId,
+  peerBlipIdEquals,
+  findPeerByBlipId,
+  ensureChatView,
+  ensureGroupChatView,
+  openGroupChat,
+  closeGroupChatUi,
+  bumpUnread,
+  clearUnread,
+  bumpInviteUnread,
+  bumpGroupUnread: (groupId) => {
+    if (state.view === 'chat' && state.activeGroup === groupId) return;
+    unreadByGroup.set(groupId, (unreadByGroup.get(groupId) || 0) + 1);
+    updateNavUnreadBadge();
+    if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
+      renderView('chat');
+    }
+  },
+  updateNavUnreadBadge,
+  getUnreadByGroup: () => unreadByGroup,
+  refreshLiveChat,
+  handleTypingTcp,
+  broadcastProfileGif,
+  notifyProfilePeerUpdated,
+  renderView,
+  showMessageToast,
+});
+
 export function handleTcpMessage(msg) {
-  if (state.config?.devMeshTrace && msg.type) {
-    const peerId = Number(msg.from === state.config.blipId ? msg.to : msg.from);
-    if (Number.isFinite(peerId)) logPeerEvent(peerId, `tcp:${msg.type}`);
-  }
-  if (handleBeaconTcp(msg, { api, config: state.config })) return;
-  if (msg.type === 'profile-gif-request') {
-    const from = Number(msg.from);
-    if (!Number.isFinite(from) || isBlocked(from)) return;
-    void (async () => {
-      const dataUrl = await window.blip?.getProfileGifShareUrl?.();
-      if (!dataUrl) return;
-      await api.sendTcpMessage({
-        type: 'profile-gif-share',
-        to: from,
-        from: state.config.blipId,
-        dataUrl,
-      });
-    })();
-    return;
-  }
-
-  if (msg.type === 'profile-gif-share') {
-    const from = Number(msg.from);
-    if (!Number.isFinite(from) || isBlocked(from)) return;
-    const raw = msg.dataUrl ? String(msg.dataUrl) : '';
-    if (raw.length > 4_500_000) {
-      console.warn('[BLIP] profile-gif-share too large, ignored');
-      return;
-    }
-    void (async () => {
-      const ok = await ingestPeerProfileGifDataUrl(from, raw || null);
-      const peer = findPeerByBlipId(from);
-      if (peer) peer.hasProfileGif = true;
-      if (!ok) {
-        console.warn('[BLIP] profile GIF not cached for peer', from);
-      }
-      if (state.view === 'profile' && peerBlipIdEquals(state.profilePeerId, from)) {
-        notifyProfilePeerUpdated(from);
-      }
-    })();
-    return;
-  }
-
-  if (msg.type === 'avatar-share') {
-    const from = Number(msg.from);
-    if (!Number.isFinite(from) || isBlocked(from)) return;
-    if (msg.dataUrl) setPeerAvatarDataUrl(from, String(msg.dataUrl));
-    else setPeerAvatarDataUrl(from, null);
-    const mine = getSelfAvatarCache();
-    if (mine) {
-      void api.sendTcpMessage({
-        type: 'avatar-share',
-        to: from,
-        from: state.config.blipId,
-        dataUrl: mine,
-      });
-    }
-    void broadcastProfileGif();
-    window.dispatchEvent(new CustomEvent('blip-avatar-changed'));
-    if (state.view === 'peers') {
-      renderView('peers');
-    } else if (state.view === 'profile') {
-      renderView('profile', { force: true });
-    } else if (state.view === 'chat') {
-      if (state.activePeer != null) {
-        state.chatViews.get(state.activePeer)?.refreshHeaderAvatar?.();
-      } else if (state.activeGroup != null) {
-        state.groupChatViews.get(state.activeGroup)?.refreshHeaderAvatar?.();
-      } else {
-        renderView('chat');
-      }
-    }
-    return;
-  }
-
-  if (handleMeshProjectTcp(msg, state.config, api)) return;
-
-  if (msg.type === 'group-proj-clipboard-pull') {
-    const from = Number(msg.from);
-    const group = getGroup(msg.groupId);
-    if (group && Number.isFinite(from) && from !== Number(state.config.blipId)) {
-      void respondClipboardPull(api, state.config, group, from);
-    }
-    return;
-  }
-  if (handleGroupProjectTcp(msg, state.config)) return;
-
-  if (msg.type === 'clipboard-push') {
-    if (isBlocked(Number(msg.from))) return;
-    void handleClipboardPush(msg, {
-      getConfig: () => state.config,
-      getActivePeer: () => state.activePeer,
-      onApplied: (from) => {
-        showAppToast({
-          title: formatClipboardToast(from),
-          durationMs: 3200,
-        });
-      },
-    });
-    return;
-  }
-
-  if (msg.type?.startsWith?.('file-')) {
-    if (isBlocked(Number(msg.from))) return;
-    if (msg.type === 'file-offer') {
-      trackTransferStart(Number(msg.from), msg.transferId, {
-        name: msg.name,
-        size: msg.size,
-        direction: 'in',
-      });
-    }
-    handleFileTransferTcp(msg, {
-      config: state.config,
-      onProgress: (peerId, transferId, pct) => {
-        trackTransferProgress(peerId, transferId, pct, { direction: 'in' });
-      },
-      onComplete: (peerId, payload) => {
-        if (payload?.transferId) trackTransferEnd(peerId, payload.transferId);
-        if (payload.groupId && payload.msgId) {
-          completeIncomingGroupFile(payload.groupId, payload.msgId, payload.attachment);
-          state.groupChatViews.get(payload.groupId)?.renderMessages?.();
-          if (state.view === 'chat' && state.activeGroup !== payload.groupId) {
-            unreadByGroup.set(
-              payload.groupId,
-              (unreadByGroup.get(payload.groupId) || 0) + 1
-            );
-            if (!state.activePeer && !state.activeGroup) renderView('chat');
-          }
-          return;
-        }
-        const incoming = {
-          type: 'message',
-          from: peerId,
-          to: state.config.blipId,
-          id: createMessageId(),
-          text: t('chat.file_received'),
-          timestamp: Date.now(),
-          attachment: payload.attachment,
-        };
-        routePeerMessage(incoming);
-      },
-      onAbort: (peerId, transferId) => trackTransferEnd(peerId, transferId),
-    });
-    return;
-  }
-
-  if (msg.type === 'group-avatar-share') {
-    const groupId = msg.groupId;
-    if (!groupId) return;
-    if (msg.dataUrl) setGroupAvatarDataUrl(groupId, String(msg.dataUrl));
-    window.dispatchEvent(
-      new CustomEvent('blip-group-avatar-changed', { detail: { groupId } })
-    );
-    if (state.view === 'chat') renderView('chat');
-    return;
-  }
-
-  if (msg.type === 'group-avatar-request') {
-    const groupId = msg.groupId;
-    const from = Number(msg.from);
-    if (!groupId || !Number.isFinite(from)) return;
-    void broadcastGroupAvatarToMembers(groupId, api, state.config.blipId);
-    return;
-  }
-
-  if (
-    msg.type === 'voice-ch-roster' ||
-    msg.type === 'voice-ch-signal' ||
-    msg.type?.startsWith?.('group-')
-  ) {
-    void handleGroupTcpMessage(msg, {
-      api,
-      config: state.config,
-      statePeers: state.peers,
-      getGroupChatView: (id) => state.groupChatViews.get(id),
-      openGroupChat,
-      bumpGroupUnread: (groupId) => {
-        if (state.view === 'chat' && state.activeGroup === groupId) return;
-        unreadByGroup.set(groupId, (unreadByGroup.get(groupId) || 0) + 1);
-        updateNavUnreadBadge();
-        if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
-          renderView('chat');
-        }
-      },
-      bumpInviteUnread,
-      onGroupRemoved: (groupId) => {
-        closeGroupChatUi(groupId);
-        unreadByGroup.delete(groupId);
-        if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
-          renderView('chat');
-        }
-      },
-      onMemberLeft: (groupId) => {
-        if (state.view === 'chat' && state.activeGroup === groupId) {
-          ensureGroupChatView(groupId)?.updateGroup?.(getGroup(groupId));
-        } else if (state.view === 'chat' && !state.activePeer && !state.activeGroup) {
-          renderView('chat');
-        }
-      },
-    });
-    return;
-  }
-
-  if (msg.type === 'typing') {
-    handleTypingTcp(msg);
-    return;
-  }
-
-  const peerId = Number(msg.from === state.config.blipId ? msg.to : msg.from);
-  if (!Number.isFinite(peerId) || isBlocked(peerId)) return;
-
-  if (msg.type === 'reaction') {
-    state.chatViews.get(peerId)?.handleReaction?.(msg);
-    return;
-  }
-
-  if (msg.type === 'message-pin') {
-    const pinPeer = Number(msg.from === state.config.blipId ? msg.to : msg.from);
-    if (Number.isFinite(pinPeer) && !isBlocked(pinPeer)) {
-      ensureChatView(pinPeer);
-      state.chatViews.get(pinPeer)?.handlePin?.(msg);
-    }
-    return;
-  }
-
-  if (msg.type === 'message-edit') {
-    const editPeer = Number(msg.from === state.config.blipId ? msg.to : msg.from);
-    if (Number.isFinite(editPeer) && !isBlocked(editPeer)) {
-      ensureChatView(editPeer);
-      state.chatViews.get(editPeer)?.handleEdit?.(msg);
-    }
-    return;
-  }
-
-  if (msg.type !== 'message') return;
-
-  routePeerMessage(msg);
-}
-
-function routePeerMessage(msg) {
-  const peerId = Number(msg.from === state.config.blipId ? msg.to : msg.from);
-  if (!Number.isFinite(peerId) || isBlocked(peerId)) return;
-
-  const id = normalizeBlipId(peerId);
-  if (id == null) return;
-
-  ensureChatView(id);
-  const chat = state.chatViews.get(id);
-  chat?.handleIncoming(msg);
-  refreshLiveChat(id);
-
-  if (state.view === 'chat' && state.activePeer === id) {
-    return;
-  }
-
-  bumpUnread(id);
-
-  let preview = typeof msg.text === 'string' ? msg.text.slice(0, 120) : '';
-  if (msg.attachment?.kind === 'file') {
-    preview = t('chat.file_preview').replace('{name}', msg.attachment.name || 'file');
-  } else if (msg.attachment?.kind === 'image') {
-    preview = t('chat.image_preview');
-  }
-  showMessageToast(id, preview);
-
-  // Stay on the current surface; only jump into the DM when already in chat hub/peer view.
-  if (state.view !== 'chat') {
-    return;
-  }
-
-  const typingOther =
-    state.activePeer &&
-    state.activePeer !== id &&
-    document.activeElement?.closest?.('.chat-input-row');
-
-  if (typingOther) {
-    return;
-  }
-
-  state.activePeer = id;
-  clearUnread(id);
-  if (mainContent?.isConnected) renderView('chat');
+  return tcpInbound.handleTcpMessage(msg);
 }
 
 export function getCallUI() {

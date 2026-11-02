@@ -337,7 +337,7 @@ function createWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });
@@ -430,7 +430,7 @@ async function ensureCallWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });
@@ -572,7 +572,7 @@ async function ensureGroupCallWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
   groupCallWindow.setMenuBarVisibility(false);
