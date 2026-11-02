@@ -478,6 +478,41 @@ function registerLobbyCallbacks() {
   } catch {
 
   }
+  try {
+    client.callback.register(
+      steamworksMod.SteamCallback.GameLobbyJoinRequested,
+      (value) => {
+        const lobbyId =
+          value?.lobbySteamId ?? value?.lobbyID ?? value?.lobbyId ?? value?.steamIdLobby;
+        if (lobbyId == null) return;
+        void (async () => {
+          const cfg = getLocalConfig() || {};
+          if (!cfg.steamLanEnabled) return;
+          try {
+            clearSessionState();
+            const lobby = await client.matchmaking.joinLobby(BigInt(String(lobbyId)));
+            activeLobby = lobby;
+            activeMode = 'invite';
+            hosting = false;
+            helloAllMembers();
+            try {
+              const owner = lobby.getOwner?.();
+              const sid = owner?.steamId64 != null ? String(owner.steamId64) : '';
+              if (sid && sid !== localSteamId64()) sendHello(sid);
+            } catch {
+
+            }
+            startPolling();
+            startMeshMaintenance(cfg);
+          } catch {
+
+          }
+        })();
+      }
+    );
+  } catch {
+
+  }
 }
 
 function helloAllMembers() {

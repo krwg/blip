@@ -2,9 +2,14 @@ import { app } from 'electron';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import os from 'os';
-import { ipv4Broadcast, normalizePeerIp as normalizePeerIpPure, peerDialIps } from './lan-ipv4.js';
+import {
+  ipv4Broadcast,
+  normalizePeerIp as normalizePeerIpPure,
+  peerDialIps,
+  isSteamLanEndpoint,
+} from './lan-ipv4.js';
 
-export { ipv4Broadcast, peerDialIps };
+export { ipv4Broadcast, peerDialIps, isSteamLanEndpoint };
 
 const DEFAULT_CONFIG = {
   blipId: null,

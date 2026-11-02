@@ -22,10 +22,19 @@ export function createMeshPulse({
     return t('peers.pulse_offline');
   }
 
+  function peerIsSteamLanOnly(peer) {
+    if (!peer?.steamLan && !peer?.steamId64) return false;
+    const ip = String(peer?.ip || '');
+    if (ip && !/^steam:/i.test(ip)) return false;
+    const ips = Array.isArray(peer?.ips) ? peer.ips : [];
+    const lan = ips.some((v) => v && !/^steam:/i.test(String(v)));
+    return !lan;
+  }
+
   function formatPeerSubline(peer) {
     const custom = (peer?.presenceText || '').trim();
     if (peer?.online && custom) return custom;
-    if (peer?.online && peer?.steamLan) return t('peers.steam_lan');
+    if (peer?.online && peerIsSteamLanOnly(peer)) return t('peers.steam_lan');
     return formatPeerPulseLine(peer);
   }
 

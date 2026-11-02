@@ -5,6 +5,11 @@ export function normalizePeerIp(ip) {
   return ip.replace(/^::ffff:/i, '');
 }
 
+/** SteamLAN synthetic endpoint (`steam:<id64>`), not a TCP dial target. */
+export function isSteamLanEndpoint(ip) {
+  return /^steam:/i.test(String(ip || ''));
+}
+
 /** Directed broadcast for an IPv4 address + netmask (e.g. 192.168.1.255). */
 export function ipv4Broadcast(address, netmask) {
   const ip = String(address || '')
@@ -19,13 +24,14 @@ export function ipv4Broadcast(address, netmask) {
   return ip.map((octet, i) => (octet & mask[i]) | (~mask[i] & 255)).join('.');
 }
 
-/** Ordered dial candidates for a discovered peer (primary first). */
+/** Ordered LAN dial candidates for a discovered peer (primary first). Skips SteamLAN endpoints. */
 export function peerDialIps(peer) {
   const out = [];
   const seen = new Set();
   const push = (raw) => {
     const ip = normalizePeerIp(raw);
     if (!ip || seen.has(ip) || ip === '0.0.0.0') return;
+    if (isSteamLanEndpoint(ip)) return;
     seen.add(ip);
     out.push(ip);
   };

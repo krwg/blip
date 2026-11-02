@@ -407,6 +407,9 @@ export class Discovery {
       buildIssuer: String(data.buildIssuer || ''),
       buildVerified: !!data.buildVerified,
       meshPlusTrust: peerMeshPlusTrustFromAnnounce(data),
+      // Keep SteamLAN mapping when the same BLIP id also announces on LAN.
+      steamLan: !!existing?.steamLan,
+      steamId64: existing?.steamId64 ? String(existing.steamId64) : '',
     };
 
     const structuralChanged =
@@ -438,7 +441,12 @@ export class Discovery {
 
     if (structuralChanged) {
       if (existing.ip && ips.includes(existing.ip)) peer.ip = existing.ip;
-      this.peers.set(data.blipId, { ...peer, meshCompat: existing.meshCompat });
+      this.peers.set(data.blipId, {
+        ...peer,
+        meshCompat: existing.meshCompat,
+        steamLan: !!existing.steamLan || !!peer.steamLan,
+        steamId64: existing.steamId64 || peer.steamId64 || '',
+      });
       this.emitPeers({ reason: 'structural', peerId: data.blipId });
       return;
     }
@@ -448,8 +456,12 @@ export class Discovery {
     existing.online = true;
     existing.tcpPort = peerTcp;
     existing.udpPort = peerUdp;
-    existing.ips = ips;
-    if (!ips.includes(existing.ip)) existing.ip = primaryIp;
+    existing.ips = uniqueIps(...ips, existing.steamId64 ? `steam:${existing.steamId64}` : '');
+    if (!ips.includes(existing.ip) && !String(existing.ip || '').startsWith('steam:')) {
+      existing.ip = primaryIp;
+    } else if (!existing.ip || String(existing.ip).startsWith('steam:')) {
+      existing.ip = primaryIp;
+    }
     if (presenceTextChanged) {
       existing.presenceText = peer.presenceText;
       this.emitPeers({ reason: 'presence_text', peerId: data.blipId, sublineOnly: true });
@@ -484,13 +496,24 @@ export class Discovery {
     const id = Number(peer?.blipId);
     if (!Number.isFinite(id)) return;
     const existing = this.peers.get(id);
+    const steamId64 = String(peer?.steamId64 || existing?.steamId64 || '');
+    const steamEndpoint = steamId64 ? `steam:${steamId64}` : '';
+    const lanIps = peerDialIps(existing || peer);
+    const ips = uniqueIps(...lanIps, steamEndpoint, peer?.ips, existing?.ips);
+    const primaryIp = lanIps[0] || (existing?.ip && !String(existing.ip).startsWith('steam:')
+      ? existing.ip
+      : steamEndpoint || peer?.ip || '');
     const next = {
       ...(existing || {}),
       ...peer,
       blipId: id,
+      displayName: String(peer?.displayName || existing?.displayName || `BLIP-${id}`),
+      steamId64,
+      steamLan: true,
+      ip: primaryIp,
+      ips,
       online: true,
       lastSeen: Date.now(),
-      steamLan: true,
     };
     this.occupiedIds.add(id);
     this.peers.set(id, next);

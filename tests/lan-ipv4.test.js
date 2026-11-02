@@ -20,4 +20,13 @@ describe('lan-ipv4', () => {
       })
     ).toEqual(['192.168.1.10', '10.0.0.2', '10.0.0.3']);
   });
+
+  it('ignores SteamLAN synthetic endpoints when dialing', () => {
+    expect(
+      peerDialIps({
+        ip: 'steam:76561198000000000',
+        ips: ['steam:76561198000000000', '192.168.0.5'],
+      })
+    ).toEqual(['192.168.0.5']);
+  });
 });

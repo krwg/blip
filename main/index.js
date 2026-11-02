@@ -80,6 +80,7 @@ import {
   getSteamLanSocketForBlip,
   isSteamLanPeer,
 } from './steam-lan.js';
+import { chooseMeshTransport } from './steam-lan-path.js';
 
 import {
   setupAutoUpdater,
@@ -921,6 +922,18 @@ function blipIdFromSocketKey(socketKey) {
   return Number.isFinite(id) ? id : null;
 }
 
+function openSteamLanPeerSocket(blipId, peer) {
+  const sock = getSteamLanSocketForBlip(blipId);
+  if (!sock || sock.destroyed) {
+    throw createBlipError(BlipErrorCode.PEER_OFFLINE, `SteamLAN peer #${blipId} offline`);
+  }
+  const socketKey = `steam:${peer.steamId64 || blipId}:${blipId}:0`;
+  wirePeerSocket(sock, socketKey, sock.remoteAddress);
+  peerSockets.set(socketKey, sock);
+  tcpServer?.registerConnection?.(blipId, sock);
+  return sock;
+}
+
 async function ensurePeerSocket(blipId) {
   const peer = findPeer(blipId);
   if (!peer) {
@@ -930,16 +943,10 @@ async function ensurePeerSocket(blipId) {
     throw createBlipError(BlipErrorCode.PEER_OFFLINE, `Peer #${blipId} offline`);
   }
 
-  if (peer.steamLan || isSteamLanPeer(blipId)) {
-    const sock = getSteamLanSocketForBlip(blipId);
-    if (!sock || sock.destroyed) {
-      throw createBlipError(BlipErrorCode.PEER_OFFLINE, `SteamLAN peer #${blipId} offline`);
-    }
-    const socketKey = `steam:${peer.steamId64 || blipId}:${blipId}:0`;
-    wirePeerSocket(sock, socketKey, sock.remoteAddress);
-    peerSockets.set(socketKey, sock);
-    tcpServer?.registerConnection?.(blipId, sock);
-    return sock;
+  const mappedSteam = isSteamLanPeer(blipId);
+  const transport = chooseMeshTransport(peer, { mappedSteam, preferLan: true });
+  if (transport === 'steam') {
+    return openSteamLanPeerSocket(blipId, peer);
   }
 
   const gate = assertMayUseUnencryptedPeer(config, peer);
@@ -1074,6 +1081,17 @@ async function ensurePeerSocket(blipId) {
     peerSocketConnectInflight.set(socketKey, connectPromise);
     return connectPromise;
   } catch (err) {
+    if (mappedSteam || peer.steamLan || peer.steamId64) {
+      try {
+        if (config?.devMeshTrace) {
+          console.info(`[BLIP dial] LAN failed for #${blipId}; falling back to SteamLAN`);
+        }
+        return openSteamLanPeerSocket(blipId, peer);
+      } catch (steamErr) {
+        const classified = classifyBlipError(steamErr);
+        logBlipError(classified, `ensurePeerSocket #${blipId} steam fallback`);
+      }
+    }
     const classified = classifyBlipError(err);
     logBlipError(classified, `ensurePeerSocket #${blipId} outer`);
     throw classified;

@@ -2809,6 +2809,23 @@ html[data-ui-skin='nest'] .call-video-stream-exit-btn {
   line-height: 1.35;
 }
 
+.settings-steam-lan-session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-steam-lan-session .settings-input {
+  width: 100%;
+  max-width: 100%;
+}
+
+.settings-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-subheading {
   margin: 16px 0 4px;
   font-size: 12px;
