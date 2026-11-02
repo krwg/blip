@@ -25,7 +25,6 @@ import {
   markPremiumGatedOptions,
   MESH_PLUS_FEATURES,
 } from '../mesh-plus.js';
-import { appendAppIconPickerSections } from '../app-icon-picker.js';
 import { appendThemeEditorSection } from '../theme-editor.js';
 import { applyReactiveWallpaperConfig } from '../reactive-wallpaper.js';
 
@@ -260,8 +259,6 @@ export function buildAppearanceSection({ getState, saveConfig }) {
   chatFontRow.appendChild(chatFontRange);
   chatFontRow.appendChild(chatFontVal);
   appendAppearanceControl(block, chatFontRow);
-
-  appendAppIconPickerSections(block, state, saveConfig);
 
   return block;
 }

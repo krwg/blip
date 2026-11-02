@@ -46,6 +46,7 @@ win:
   icon: icon.ico
   publisherName: krwg
   legalTrademarks: BLIP
+  # Electron 35 targets Windows 10+ (no Win7/8.1).
   target:
     - nsis
     - portable
@@ -100,6 +101,9 @@ mac:
     NSMicrophoneUsageDescription: BLIP needs the microphone for voice and video calls on the LAN mesh.
     NSCameraUsageDescription: BLIP needs the camera for video calls on the LAN mesh.
     NSLocalNetworkUsageDescription: BLIP discovers peers and transfers files on your local network only.
+    NSBonjourServices:
+      - _blip._udp
+    LSMinimumSystemVersion: '12.0'
 
 dmg:
   # No spaces in the volume name — hdiutil detach flakes on "/Volumes/BLIP 2.0.0" in CI.

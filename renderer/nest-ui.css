@@ -264,14 +264,14 @@ html[data-ui-skin='nest'] .section-subtitle,
 html[data-ui-skin='nest'] .settings-panel-title,
 html[data-ui-skin='nest'] .settings-field-label {
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   text-transform: none;
 }
 
 html[data-ui-skin='nest'] .settings-panel-title {
-  font-size: calc(15px * var(--ui-font-scale, 1));
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-size: calc(17px * var(--ui-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
 html[data-ui-skin='nest'] .settings-nav-group-label {
@@ -555,6 +555,28 @@ html[data-ui-skin='nest'] .settings-release-card {
   border: 0.5px solid var(--nest-hairline) !important;
 }
 
+/* Scrolling settings body: radius + overflow clipped the first glyph of titles */
+html[data-ui-skin='nest'] .settings-shell__main > .settings-panel {
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: 2px;
+  padding-right: 4px;
+}
+
+html[data-ui-skin='nest'] .settings-shell {
+  border-radius: var(--nest-radius-xl) !important;
+  border: 0.5px solid var(--nest-hairline) !important;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--blip-bg) 88%, var(--blip-glass)) !important;
+}
+
+html[data-ui-skin='nest'] .settings-shell__nav {
+  border-right: 0.5px solid var(--nest-hairline) !important;
+  background: color-mix(in srgb, var(--blip-glass) 55%, transparent) !important;
+}
+
 /* Soft list rows — grouped inset style */
 html[data-ui-skin='nest'] .peer-row {
   border: none !important;
@@ -650,14 +672,14 @@ html[data-ui-skin='nest'] h1,
 html[data-ui-skin='nest'] .page-title,
 html[data-ui-skin='nest'] .settings-section-title {
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
 html[data-ui-skin='nest'] h2,
 html[data-ui-skin='nest'] .section-title {
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
 }
 
 html[data-ui-skin='nest'] .muted,
@@ -715,4 +737,188 @@ html[data-ui-skin='nest'] ::-webkit-scrollbar-track {
       box-shadow 200ms var(--nest-ease-out),
       opacity 160ms var(--nest-ease-out);
   }
+}
+
+/* ── NestUI 1.3.1 — density / anti-squash ──────────────────────────────────
+   Pixel theme used 2px borders + uppercase tracking. Nest removed borders and
+   applied negative letter-spacing globally, which crushed nav/buttons and
+   clipped Cyrillic titles against the settings rail. */
+
+html[data-ui-skin='nest'] {
+  letter-spacing: -0.011em;
+}
+
+html[data-ui-skin='nest'] .btn,
+html[data-ui-skin='nest'] .nav-btn,
+html[data-ui-skin='nest'] .settings-nav-btn,
+html[data-ui-skin='nest'] .pixel-hint-btn {
+  box-sizing: border-box;
+  min-height: 38px;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  transform: none;
+}
+
+html[data-ui-skin='nest'] .btn {
+  padding: 11px 14px !important;
+}
+
+html[data-ui-skin='nest'] .btn:active {
+  transform: scale(0.985);
+}
+
+html[data-ui-skin='nest'] .nav-btn {
+  min-height: 46px !important;
+  padding: 12px 12px !important;
+  letter-spacing: 0.01em !important;
+}
+
+html[data-ui-skin='nest'] .settings-nav-btn {
+  min-height: 36px !important;
+  padding: 10px 12px !important;
+  text-transform: none !important;
+  font-weight: 510;
+  display: flex !important;
+  align-items: center !important;
+}
+
+html[data-ui-skin='nest'] .settings-nav-group {
+  gap: 6px;
+}
+
+html[data-ui-skin='nest'] .settings-nav-group-label {
+  letter-spacing: 0.06em !important;
+  padding: 6px 4px 4px;
+  text-transform: uppercase;
+}
+
+html[data-ui-skin='nest'] .settings-panel-title,
+html[data-ui-skin='nest'] .section-title {
+  letter-spacing: 0.02em !important;
+  line-height: 1.35 !important;
+  padding-left: 1px;
+  overflow: visible;
+  text-transform: none !important;
+  font-weight: 650;
+}
+
+html[data-ui-skin='nest'] .settings-panel-title-row {
+  overflow: visible;
+  margin-bottom: 14px;
+}
+
+/* Achievements + profile cards under Nest */
+html[data-ui-skin='nest'] .ach-card {
+  border-radius: var(--nest-radius-md) !important;
+  border: 0.5px solid var(--nest-hairline) !important;
+  padding: 12px !important;
+  gap: 10px;
+  background: color-mix(in srgb, var(--blip-text) 4%, transparent) !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-skin='nest'] .ach-card--legendary {
+  border-color: color-mix(in srgb, #ffd60a 45%, var(--nest-hairline)) !important;
+  background: color-mix(in srgb, #ffd60a 6%, transparent) !important;
+}
+
+html[data-ui-skin='nest'] .ach-card__title {
+  letter-spacing: 0.02em !important;
+  line-height: 1.3;
+}
+
+html[data-ui-skin='nest'] .ach-card__desc {
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+html[data-ui-skin='nest'] .peer-profile-card,
+html[data-ui-skin='nest'] .settings-profile-preview-mount .peer-profile-card {
+  border-radius: var(--nest-radius-xl) !important;
+  border: 0.5px solid var(--nest-hairline) !important;
+  box-shadow: var(--nest-shadow-md) !important;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--blip-bg) 90%, var(--blip-glass)) !important;
+}
+
+html[data-ui-skin='nest'] .peer-profile-id {
+  letter-spacing: 0.04em !important;
+}
+
+html[data-ui-skin='nest'] .settings-shell__main {
+  padding: 16px 20px 16px 18px;
+}
+
+html[data-ui-skin='nest'] .settings-shell__nav {
+  padding: 14px 12px;
+  gap: 12px;
+}
+
+html[data-ui-skin='nest'] .settings-text-input,
+html[data-ui-skin='nest'] .input,
+html[data-ui-skin='nest'] .blip-select,
+html[data-ui-skin='nest'] .settings-dropdown,
+html[data-ui-skin='nest'] .chat-input-row input,
+html[data-ui-skin='nest'] .chat-input-row textarea {
+  min-height: 40px;
+  padding: 10px 12px !important;
+  line-height: 1.35 !important;
+  box-sizing: border-box;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-row {
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  margin: 10px 0;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle {
+  flex: 0 0 22px !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle::after {
+  inset: 4px;
+  border-radius: 4px;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-label {
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  padding-left: 2px;
+}
+
+html[data-ui-skin='nest'] .pixel-hint-btn {
+  flex: 0 0 24px !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 !important;
+}
+
+html[data-ui-skin='nest'] .side-nav {
+  margin: 10px 0 10px 10px;
+  padding: 12px 10px !important;
+  gap: 6px;
+  align-self: stretch;
+}
+
+html[data-ui-skin='nest'] .peer-profile-id,
+html[data-ui-skin='nest'] .settings-about-version {
+  letter-spacing: 0.02em !important;
+}
+
+html[data-ui-skin='nest'] .settings-about-line {
+  letter-spacing: 0.04em !important;
+}
+
+html[data-ui-skin='nest'] .settings-about-icon {
+  image-rendering: auto !important;
+  border-radius: 22px !important;
 }

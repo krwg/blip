@@ -14,23 +14,37 @@ let callTrayLabels = {
 };
 
 function createTrayIconFromPath(trayPath) {
+  let image = null;
   if (trayPath && existsSync(trayPath)) {
-    return nativeImage.createFromPath(trayPath);
+    image = nativeImage.createFromPath(trayPath);
+  } else {
+    const size = 16;
+    const canvas = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        const accent = (x + y) % 3 === 0;
+        canvas[i] = accent ? 0 : 10;
+        canvas[i + 1] = accent ? 255 : 10;
+        canvas[i + 2] = accent ? 200 : 10;
+        canvas[i + 3] = 255;
+      }
+    }
+    image = nativeImage.createFromBuffer(canvas, { width: size, height: size });
   }
 
-  const size = 16;
-  const canvas = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const accent = (x + y) % 3 === 0;
-      canvas[i] = accent ? 0 : 10;
-      canvas[i + 1] = accent ? 255 : 10;
-      canvas[i + 2] = accent ? 200 : 10;
-      canvas[i + 3] = 255;
+  // macOS menu bar: template image follows light/dark appearance.
+  if (process.platform === 'darwin' && image && !image.isEmpty?.()) {
+    const size = 18;
+    const resized = image.resize({ width: size, height: size });
+    try {
+      resized.setTemplateImage(true);
+    } catch {
+      /* ignore */
     }
+    return resized;
   }
-  return nativeImage.createFromBuffer(canvas, { width: size, height: size });
+  return image;
 }
 
 function createTrayIconFallback() {
