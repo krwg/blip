@@ -1,87 +1,52 @@
 import sharp from 'sharp';
 import toIco from 'to-ico';
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const buildDir = join(root, 'build');
+const buildDir = join(buildDirPath());
 const iconsDir = join(buildDir, 'icons');
+const svgPath = join(root, 'icon-main.svg');
+const kernel = sharp.kernel.lanczos3;
 
-const VARIANTS = [
-  { id: 'main', file: 'icon-main.svg' },
-  { id: 'dop-1', file: 'icon-dop-1.svg' },
-  { id: 'dop-2', file: 'icon-dop-2.svg' },
-  { id: 'dop-3', file: 'icon-dop-3.svg' },
-  { id: 'dop-4', file: 'icon-dop-4.svg' },
-  { id: 'mesh-1', file: 'icon-mesh1.svg' },
-  { id: 'mesh-2', file: 'icon-mesh2.svg' },
-  { id: 'mesh-3', file: 'icon-mesh3.svg' },
-  { id: 'mesh-4', file: 'icon-mesh4.svg' },
-  { id: 'mesh-5', file: 'icon-mesh5.svg' },
-  { id: 'mesh-6', file: 'icon-mesh6.svg' },
-];
-
-const DEFAULT_ID = 'main';
-const defaultVariant = VARIANTS.find((v) => v.id === DEFAULT_ID);
-if (!defaultVariant) {
-  console.error('[build-icons] main variant missing');
-  process.exit(1);
+function buildDirPath() {
+  return join(root, 'build');
 }
 
-const defaultSvgPath = join(root, defaultVariant.file);
-if (!existsSync(defaultSvgPath)) {
+if (!existsSync(svgPath)) {
   console.error('[build-icons] icon-main.svg not found at project root');
   process.exit(1);
 }
 
 mkdirSync(buildDir, { recursive: true });
+if (existsSync(iconsDir)) {
+  rmSync(iconsDir, { recursive: true, force: true });
+}
 mkdirSync(iconsDir, { recursive: true });
 
-async function rasterizeVariant(variant) {
-  const svgPath = join(root, variant.file);
-  if (!existsSync(svgPath)) {
-    console.warn(`[build-icons] skip ${variant.id}: ${variant.file} missing`);
-    return null;
-  }
-  const svg = readFileSync(svgPath);
-  const png256 = join(iconsDir, `${variant.id}.png`);
-  const tray16 = join(iconsDir, `${variant.id}-tray.png`);
-  await sharp(svg, { density: 288 })
-    .resize(256, 256, { kernel: sharp.kernel.nearest })
-    .png()
-    .toFile(png256);
-  await sharp(svg, { density: 288 })
-    .resize(16, 16, { kernel: sharp.kernel.nearest })
-    .png()
-    .toFile(tray16);
-  return { svg, png256, tray16 };
-}
+const svg = readFileSync(svgPath);
+console.log('[build-icons] Rasterizing Apple-style signal icon…');
 
-console.log('[build-icons] Rasterizing variants…');
-const rasterized = new Map();
-for (const variant of VARIANTS) {
-  const out = await rasterizeVariant(variant);
-  if (out) {
-    rasterized.set(variant.id, out);
-    console.log('[build-icons]', variant.id, '→', out.png256, out.tray16);
-  }
-}
+const png256 = join(iconsDir, 'main.png');
+const tray16 = join(iconsDir, 'main-tray.png');
+await sharp(svg, { density: 384 })
+  .resize(256, 256, { kernel, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  .png()
+  .toFile(png256);
+await sharp(svg, { density: 384 })
+  .resize(16, 16, { kernel, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  .png()
+  .toFile(tray16);
 
-const main = rasterized.get(DEFAULT_ID);
-if (!main) {
-  console.error('[build-icons] failed to build main icon');
-  process.exit(1);
-}
-
-copyFileSync(defaultSvgPath, join(buildDir, 'icon.svg'));
-copyFileSync(defaultSvgPath, join(root, 'icon.svg'));
+copyFileSync(svgPath, join(buildDir, 'icon.svg'));
+copyFileSync(svgPath, join(root, 'icon.svg'));
 
 const sizes = [256, 128, 64, 48, 32, 16];
 const pngBuffers = await Promise.all(
   sizes.map((size) =>
-    sharp(main.svg, { density: 288 })
-      .resize(size, size, { kernel: sharp.kernel.nearest })
+    sharp(svg, { density: 384 })
+      .resize(size, size, { kernel })
       .png()
       .toBuffer()
   )
@@ -91,13 +56,15 @@ const icoPath = join(buildDir, 'icon.ico');
 writeFileSync(icoPath, await toIco(pngBuffers));
 console.log('[build-icons] Wrote', icoPath);
 
-// macOS electron-builder requires icon.png ≥ 512×512 (prefer 1024 for Retina ICNS).
 const iconPngPath = join(buildDir, 'icon.png');
-await sharp(main.svg, { density: 576 })
-  .resize(1024, 1024, { kernel: sharp.kernel.nearest })
-  .png()
-  .toFile(iconPngPath);
+await sharp(svg, { density: 576 }).resize(1024, 1024, { kernel }).png().toFile(iconPngPath);
 console.log('[build-icons] Wrote', iconPngPath);
+
+// Marketing / README master
+await sharp(svg, { density: 576 })
+  .resize(1024, 1024, { kernel })
+  .png()
+  .toFile(join(root, 'icon.png'));
 
 const png2icons = (await import('png2icons')).default;
 const icnsBuf = png2icons.createICNS(readFileSync(iconPngPath), png2icons.BILINEAR, 0);
@@ -110,11 +77,12 @@ writeFileSync(icnsPath, icnsBuf);
 console.log('[build-icons] Wrote', icnsPath);
 
 for (const size of [512, 256, 128, 64, 48, 32, 16]) {
-  await sharp(main.svg, { density: 576 })
-    .resize(size, size, { kernel: sharp.kernel.nearest })
+  await sharp(svg, { density: 576 })
+    .resize(size, size, { kernel })
     .png()
     .toFile(join(iconsDir, `${size}x${size}.png`));
 }
 
-copyFileSync(main.tray16, join(buildDir, 'tray-16.png'));
+copyFileSync(tray16, join(buildDir, 'tray-16.png'));
 console.log('[build-icons] Wrote', join(buildDir, 'tray-16.png'));
+console.log('[build-icons] Done (main only)');

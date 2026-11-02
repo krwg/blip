@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release **version numbers** track [`app-metadata.json`](app-metadata.json) (synced into `package.json` on build).
 
+## [3.0.0-beta] — Spark — Unreleased
+
+**Pre-release (beta).** Codename **Spark**. Notes: [`docs/release-notes-v3.0.0-beta-github.md`](docs/release-notes-v3.0.0-beta-github.md).
+
+### Added
+
+- **SteamLAN** — Steam Networking (App 480) discovery + peer path alongside LAN/VPN; Settings Network On/Off; advanced lobbies in Developer.
+- **NestUI 1.3** — macOS Liquid Glass restyle (glass on chrome only, soft separators, continuous corners, SF Pro hierarchy).
+
+### Improved
+
+- **Hardening** — TCP message allowlist, DM dedupe, sandbox, disk file receive, discovery freshness, incremental chat DOM.
+- **Identity** — new Apple-style signal logo + tray/setup/portable icon set.
+
 ## [2.0.5-beta] — Morse — 2026-07-28
 
 **Pre-release (beta).** Installers: GitHub tag `v2.0.5-beta.1`. Notes: [`docs/release-notes-v2.0.5-beta-github.md`](docs/release-notes-v2.0.5-beta-github.md).

@@ -10,7 +10,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-2.0.0_Morse-00ffc8?style=for-the-badge&labelColor=0a0a0a)](https://github.com/krwg/blip/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0_Spark-00ffc8?style=for-the-badge&labelColor=0a0a0a)](https://github.com/krwg/blip/releases)
 [![Electron](https://img.shields.io/badge/Electron-35-47848F?style=for-the-badge&logo=electron&logoColor=white&labelColor=0a0a0a)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-00ffc8?style=for-the-badge&labelColor=0a0a0a)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows%20%7C%20macOS%2012%2B%20%7C%20Linux-0078D6?style=for-the-badge&logo=windows&logoColor=white&labelColor=0a0a0a)]()
@@ -82,7 +82,7 @@ Quick VM flow: host runs BLIP (ID **1**), VM runs BLIP (ID **2**), same subnet v
 | | |
 |---|---|
 | **What** | Desktop app: text, voice, and video over LAN / Hamachi / Radmin VPN |
-| **Release** | **2.0.0 — Morse** (in development; see [`CHANGELOG.md`](CHANGELOG.md); last published: [1.1.1 Beacon](https://github.com/krwg/blip/releases/tag/1.1.1)) |
+| **Release** | **3.0.0 — Spark** (beta prep; see [`CHANGELOG.md`](CHANGELOG.md); prior line: 2.0.5 Morse) |
 | **Identity** | BLIP ID **1–64** (8×8 grid, Minecraft-style chunk metaphor) |
 | **Servers** | None — UDP broadcast, TCP, and WebRTC peer-to-peer only |
 | **Sign-up** | None |
@@ -338,7 +338,7 @@ blip/
 │   └── assets/fonts/  # Minecraft woff2/ttf
 ├── docs/              # ARCHITECTURE.md + GitHub Pages landing
 ├── build/             # icon.ico, icon.png (generated)
-├── app-metadata.json  # version 2.0.0, codename Morse
+├── app-metadata.json  # version 3.0.0, codename Spark
 ├── docs/MESH-PLUS.md  # MESH+ feature list
 ├── ach-icons/         # achievement SVGs (bundled in renderer)
 ├── preload.cjs        # IPC bridge
@@ -489,7 +489,7 @@ The **Minecraft** font is licensed separately under [MIT](https://github.com/bs-
 | | |
 |---|---|
 | **Что это** | Desktop-приложение: текст, голос и видео по LAN / Hamachi / Radmin VPN |
-| **Релиз** | **2.0.0 — Morse** (в разработке; см. [`CHANGELOG.md`](CHANGELOG.md); последний опубликованный: [1.1.1 Beacon](https://github.com/krwg/blip/releases/tag/1.1.1)) |
+| **Релиз** | **3.0.0 — Spark** (подготовка beta; см. [`CHANGELOG.md`](CHANGELOG.md); предыдущая линия: 2.0.5 Morse) |
 | **Идентификация** | BLIP ID **1–64** (сетка 8×8) |
 | **Серверы** | Нет — только UDP broadcast, TCP и WebRTC между пирами |
 | **Регистрация** | Нет |
@@ -714,7 +714,7 @@ blip/
 │   ├── group-call-roster.js · group-call-client.js
 │   └── assets/fonts/
 ├── docs/              # ARCHITECTURE.md + лендинг Pages
-├── app-metadata.json  # version 2.0.0, codename Morse
+├── app-metadata.json  # version 3.0.0, codename Spark
 ├── build/ · preload.cjs · scripts/ · icon.svg · dist/
 ```
 

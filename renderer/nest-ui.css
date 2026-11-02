@@ -457,3 +457,262 @@ html[data-ui-skin='nest'][data-theme='dark'] .btn-accent,
 html[data-ui-skin='nest'][data-theme='dark'] .btn.btn-accent {
   background: color-mix(in srgb, var(--blip-accent) 18%, rgba(44, 44, 46, 0.85));
 }
+
+/* ── NestUI 1.3 — macOS Liquid Glass (Apple HIG) ───────────────────────────
+   Glass only on floating chrome; content stays solid. Soft edges over hairlines.
+   Continuous corners, SF Pro hierarchy, system-blue accents. */
+
+html[data-ui-skin='nest'] {
+  --nest-radius-sm: calc(8px * var(--nest-radius-scale));
+  --nest-radius-md: calc(12px * var(--nest-radius-scale));
+  --nest-radius-lg: calc(16px * var(--nest-radius-scale));
+  --nest-radius-xl: calc(22px * var(--nest-radius-scale));
+  --nest-radius-continuous: calc(28px * var(--nest-radius-scale));
+  --nest-hairline: color-mix(in srgb, var(--blip-text) 8%, transparent);
+  --nest-separator: color-mix(in srgb, var(--blip-text) 12%, transparent);
+  --nest-fill-primary: color-mix(in srgb, var(--blip-glass) 88%, transparent);
+  --nest-fill-secondary: color-mix(in srgb, var(--blip-glass) 72%, transparent);
+  --nest-material: saturate(var(--nest-sat)) blur(var(--nest-blur));
+  --nest-material-chrome: saturate(calc(var(--nest-sat) + 0.15)) blur(var(--nest-blur-strong));
+  --nest-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --nest-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: -0.022em;
+}
+
+html[data-ui-skin='nest'][data-theme='light'] {
+  --blip-bg: #f5f5f7;
+  --blip-glass: rgba(255, 255, 255, 0.72);
+  --nest-shadow-sm: 0 0.5px 0 rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --nest-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] {
+  --blip-bg: #000000;
+  --blip-glass: rgba(28, 28, 30, 0.72);
+  --nest-shadow-sm: 0 0.5px 0 rgba(255, 255, 255, 0.04), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --nest-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --nest-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* Titlebar — floating toolbar chrome */
+html[data-ui-skin='nest'] .titlebar {
+  background: var(--nest-fill-primary) !important;
+  -webkit-backdrop-filter: var(--nest-material-chrome);
+  backdrop-filter: var(--nest-material-chrome);
+  border-bottom: 0.5px solid var(--nest-hairline) !important;
+  box-shadow: none !important;
+}
+
+/* Side nav — capsule rail over content */
+html[data-ui-skin='nest'] .side-nav {
+  background: var(--nest-fill-secondary) !important;
+  -webkit-backdrop-filter: var(--nest-material);
+  backdrop-filter: var(--nest-material);
+  border: 0.5px solid var(--nest-hairline) !important;
+  border-radius: var(--nest-radius-continuous) !important;
+  box-shadow: var(--nest-shadow-md) !important;
+  margin: 8px 0 8px 8px;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: var(--nest-radius-md) !important;
+  font-weight: 510;
+  letter-spacing: -0.02em;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn:hover {
+  background: color-mix(in srgb, var(--blip-text) 6%, transparent) !important;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn.is-active,
+html[data-ui-skin='nest'] .side-nav .nav-btn[aria-current='page'],
+html[data-ui-skin='nest'] .side-nav .nav-btn.active {
+  background: color-mix(in srgb, var(--blip-accent) 18%, transparent) !important;
+  color: var(--blip-accent) !important;
+}
+
+/* Content panels stay solid — glass is chrome only */
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel,
+html[data-ui-skin='nest'] .chat-block,
+html[data-ui-skin='nest'] .peers-panel,
+html[data-ui-skin='nest'] .main-content {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: var(--nest-separator) !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel,
+html[data-ui-skin='nest'] .settings-release-card {
+  background: color-mix(in srgb, var(--blip-bg) 92%, var(--blip-glass)) !important;
+  border-radius: var(--nest-radius-xl) !important;
+  border: 0.5px solid var(--nest-hairline) !important;
+}
+
+/* Soft list rows — grouped inset style */
+html[data-ui-skin='nest'] .peer-row {
+  border: none !important;
+  border-radius: var(--nest-radius-md) !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+html[data-ui-skin='nest'] .peer-row:hover {
+  background: color-mix(in srgb, var(--blip-text) 5%, transparent) !important;
+}
+
+html[data-ui-skin='nest'] .peer-row.is-selected,
+html[data-ui-skin='nest'] .peer-row.selected,
+html[data-ui-skin='nest'] .peer-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--blip-accent) 14%, transparent) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Buttons — filled / tinted, not bordered chrome */
+html[data-ui-skin='nest'] .btn {
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 590;
+  letter-spacing: -0.02em;
+  border-radius: var(--nest-radius-md) !important;
+  background: color-mix(in srgb, var(--blip-text) 6%, transparent);
+}
+
+html[data-ui-skin='nest'] .btn:hover {
+  background: color-mix(in srgb, var(--blip-text) 10%, transparent);
+}
+
+html[data-ui-skin='nest'] .btn:active {
+  transform: scale(0.98);
+  transition-timing-function: var(--nest-ease-spring);
+}
+
+html[data-ui-skin='nest'] .btn-accent,
+html[data-ui-skin='nest'] .btn.btn-accent {
+  background: var(--blip-accent) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+html[data-ui-skin='nest'] .btn-accent:hover,
+html[data-ui-skin='nest'] .btn.btn-accent:hover {
+  filter: brightness(1.06);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .btn-accent,
+html[data-ui-skin='nest'][data-theme='dark'] .btn.btn-accent {
+  background: var(--blip-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Inputs — inset fields */
+html[data-ui-skin='nest'] .input,
+html[data-ui-skin='nest'] .blip-select,
+html[data-ui-skin='nest'] .settings-dropdown,
+html[data-ui-skin='nest'] .chat-input-row input,
+html[data-ui-skin='nest'] .chat-input-row textarea {
+  border: none !important;
+  box-shadow: inset 0 0 0 0.5px var(--nest-hairline) !important;
+  background: color-mix(in srgb, var(--blip-text) 4%, var(--blip-input-bg)) !important;
+  border-radius: var(--nest-radius-md) !important;
+}
+
+html[data-ui-skin='nest'] .input:focus,
+html[data-ui-skin='nest'] .blip-select:focus,
+html[data-ui-skin='nest'] .settings-dropdown:focus,
+html[data-ui-skin='nest'] .chat-input-row input:focus,
+html[data-ui-skin='nest'] .chat-input-row textarea:focus {
+  box-shadow:
+    inset 0 0 0 0.5px color-mix(in srgb, var(--blip-accent) 55%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--blip-accent) 22%, transparent) !important;
+}
+
+/* Modals & toasts — elevated glass sheets */
+html[data-ui-skin='nest'] .blip-modal,
+html[data-ui-skin='nest'] .toast {
+  background: var(--nest-fill-primary) !important;
+  -webkit-backdrop-filter: var(--nest-material-chrome);
+  backdrop-filter: var(--nest-material-chrome);
+  border: 0.5px solid var(--nest-hairline) !important;
+  border-radius: var(--nest-radius-xl) !important;
+  box-shadow: var(--nest-shadow-lg) !important;
+}
+
+/* Type hierarchy — SF Pro Display weights */
+html[data-ui-skin='nest'] h1,
+html[data-ui-skin='nest'] .page-title,
+html[data-ui-skin='nest'] .settings-section-title {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+html[data-ui-skin='nest'] h2,
+html[data-ui-skin='nest'] .section-title {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+html[data-ui-skin='nest'] .muted,
+html[data-ui-skin='nest'] .hint,
+html[data-ui-skin='nest'] .settings-hint {
+  color: var(--blip-muted);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Chips / badges — soft fill */
+html[data-ui-skin='nest'] .chip,
+html[data-ui-skin='nest'] .badge,
+html[data-ui-skin='nest'] .tag {
+  border: none !important;
+  background: color-mix(in srgb, var(--blip-text) 7%, transparent);
+  border-radius: var(--nest-radius-sm) !important;
+  font-weight: 510;
+}
+
+/* Focus rings — system blue halo */
+html[data-ui-skin='nest'] .side-nav .nav-btn:focus-visible,
+html[data-ui-skin='nest'] .btn:focus-visible,
+html[data-ui-skin='nest'] .pixel-hint-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 28%, transparent);
+}
+
+/* Scrollbars — thin macOS track */
+html[data-ui-skin='nest'] ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+html[data-ui-skin='nest'] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--blip-text) 22%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+html[data-ui-skin='nest'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Motion — deliberate, short */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui-skin='nest'] .side-nav .nav-btn,
+  html[data-ui-skin='nest'] .btn,
+  html[data-ui-skin='nest'] .peer-row {
+    transition:
+      background 160ms var(--nest-ease-out),
+      color 160ms var(--nest-ease-out),
+      transform 160ms var(--nest-ease-spring),
+      box-shadow 200ms var(--nest-ease-out),
+      opacity 160ms var(--nest-ease-out);
+  }
+}

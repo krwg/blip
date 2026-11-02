@@ -322,9 +322,9 @@ const locales = {
     'settings.appearance': 'Look & background',
     'settings.appearance_theme': 'Theme',
     'settings.appearance_accent': 'Color accent',
-    'settings.nest_ui': 'NestUI 1.2',
+    'settings.nest_ui': 'NestUI 1.3',
     'settings.nest_ui_hint':
-      'Liquid-glass UI: softer translucency, richer shadows, clearer type hierarchy. NestUI 1.2 adds glass strength and corner radius controls.',
+      'macOS Liquid Glass: glass on chrome only, soft separators, continuous corners, SF Pro hierarchy. NestUI 1.3 adds glass strength and corner radius controls.',
     'settings.nest_glass': 'Nest glass strength',
     'settings.nest_glass_hint': 'How translucent liquid glass feels on panels and chrome.',
     'settings.nest_radius': 'Nest corner radius',
@@ -1539,9 +1539,9 @@ const locales = {
     'settings.appearance': 'Внешний вид и фон',
     'settings.appearance_theme': 'Тема',
     'settings.appearance_accent': 'Цветовой акцент',
-    'settings.nest_ui': 'NestUI 1.2',
+    'settings.nest_ui': 'NestUI 1.3',
     'settings.nest_ui_hint':
-      'Жидкое стекло: больше прозрачности, сочнее тени, яснее иерархия шрифтов. NestUI 1.2 добавляет силу стекла и радиус скругления.',
+      'macOS Liquid Glass: стекло только на хроме, мягкие разделители, continuous corners, иерархия SF Pro. NestUI 1.3 — сила стекла и радиус скругления.',
     'settings.nest_glass': 'Сила стекла Nest',
     'settings.nest_glass_hint': 'Насколько прозрачны панели и хром в NestUI.',
     'settings.nest_radius': 'Скругление Nest',
