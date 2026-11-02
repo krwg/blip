@@ -14,7 +14,7 @@ publish:
 directories:
   output: dist-electron
   buildResources: build
-afterPack: scripts/obfuscate-after-pack.cjs
+afterPack: scripts/after-pack.cjs
 files:
   - main/**/*
   - shared/**/*
