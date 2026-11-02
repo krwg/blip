@@ -47,6 +47,8 @@ win:
   publisherName: krwg
   legalTrademarks: BLIP
   # Electron 35 targets Windows 10+ (no Win7/8.1).
+  # Avoid winCodeSign symlink extract (needs admin/Developer Mode on some Windows hosts).
+  signAndEditExecutable: false
   target:
     - nsis
     - portable
