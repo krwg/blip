@@ -85,6 +85,28 @@ function toStoredMessage(m) {
   return normalizeStoredMessage(m);
 }
 
+function messageFingerprint(msg) {
+  return `${Number(msg?.from)}:${Number(msg?.timestamp) || 0}:${String(msg?.text || '').slice(0, 80)}`;
+}
+
+function dedupeDmMessages(messages) {
+  const seenIds = new Set();
+  const seenFp = new Set();
+  const out = [];
+  for (const m of messages || []) {
+    if (!m) continue;
+    if (m.id) {
+      if (seenIds.has(m.id)) continue;
+      seenIds.add(m.id);
+    }
+    const fp = messageFingerprint(m);
+    if (seenFp.has(fp)) continue;
+    seenFp.add(fp);
+    out.push(m);
+  }
+  return out;
+}
+
 function loadFromStorage() {
   if (!chatPersistenceEnabled) return;
   try {
@@ -96,10 +118,12 @@ function loadFromStorage() {
       if (Number.isFinite(id) && Array.isArray(arr)) {
         messagesByPeer.set(
           id,
-          arr
-            .slice(-MAX_PER_PEER)
-            .map((m) => normalizeStoredMessage(m))
-            .filter(Boolean)
+          dedupeDmMessages(
+            arr
+              .slice(-MAX_PER_PEER)
+              .map((m) => normalizeStoredMessage(m))
+              .filter(Boolean)
+          )
         );
       }
     }
@@ -153,7 +177,13 @@ export function getMessages(peerId) {
 
 export function addMessage(peerId, msg) {
   const list = getMessages(peerId);
+  if (msg?.id && list.some((m) => m.id === msg.id)) return list;
+  const fp = messageFingerprint(msg);
+  if (list.some((m) => messageFingerprint(m) === fp)) return list;
   list.push(msg);
+  if (list.length > MAX_PER_PEER) {
+    list.splice(0, list.length - MAX_PER_PEER);
+  }
   persist();
   return list;
 }

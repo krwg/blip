@@ -5,6 +5,7 @@
 
 import { ipcMain } from 'electron';
 import { readFileSync } from 'fs';
+import path from 'path';
 import { saveConfig } from '../config.js';
 import { resolveEntitlementState } from '../mesh-plus-license.js';
 import {
@@ -115,8 +116,10 @@ export function registerProfileIpc(deps) {
     }
     try {
       const p = String(filePath || '').trim();
-      if (!p) return { ok: false, error: 'invalid_gif' };
-      const buf = readFileSync(p);
+      if (!p || p.includes('\0')) return { ok: false, error: 'invalid_gif' };
+      const resolved = path.resolve(p);
+      if (!path.isAbsolute(resolved)) return { ok: false, error: 'invalid_gif' };
+      const buf = readFileSync(resolved);
       const id = saveProfileGifFromBuffer(buf);
       persistGifPublic();
       return { ok: true, id, dataUrl: getProfileGifDataUrl(id) };

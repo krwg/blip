@@ -75,8 +75,35 @@ export async function trendingGiphy(opts = {}) {
   return { ok: true, items, pagination: data?.pagination };
 }
 
+function isAllowedGiphyMediaUrl(raw) {
+  try {
+    const u = new URL(String(raw || ''));
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    return (
+      host === 'giphy.com' ||
+      host === 'media.giphy.com' ||
+      host === 'i.giphy.com' ||
+      host === 'media0.giphy.com' ||
+      host === 'media1.giphy.com' ||
+      host === 'media2.giphy.com' ||
+      host === 'media3.giphy.com' ||
+      host === 'media4.giphy.com' ||
+      host.endsWith('.giphy.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadGifUrl(gifUrl) {
-  const res = await fetch(gifUrl);
+  if (!isAllowedGiphyMediaUrl(gifUrl)) throw new Error('giphy_host_not_allowed');
+  const res = await fetch(String(gifUrl), { redirect: 'manual' });
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get('location');
+    if (!isAllowedGiphyMediaUrl(loc)) throw new Error('giphy_redirect_blocked');
+    return downloadGifUrl(loc);
+  }
   if (!res.ok) throw new Error('download_failed');
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length > MAX_PROFILE_GIF_BYTES) throw new Error('gif_too_large');

@@ -18,6 +18,7 @@ import {
   leaveSteamLanSession,
   openSteamLanInviteDialog,
 } from '../steam-lan.js';
+import { isTcpOutboundAllowed } from '../../shared/tcp-message-types.js';
 
 /**
  * @param {object} deps
@@ -72,8 +73,11 @@ export function registerNetworkIpc(deps) {
   ipcMain.handle('send-tcp-message', async (_, payload) => {
     try {
       const config = getConfig();
-      const socket = await resolveMeshSendSocket(payload.to);
       const type = payload.type || 'message';
+      if (!isTcpOutboundAllowed(type)) {
+        return { ok: false, error: 'tcp_type_not_allowed' };
+      }
+      const socket = await resolveMeshSendSocket(payload.to);
       const packet = {
         type,
         from: config.blipId,

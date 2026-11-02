@@ -97,4 +97,14 @@ describe('UDP announce (mesh-identity)', () => {
       const { packet } = buildSignedAnnounce(config, { blipId: 4 });
       expect(shouldAcceptAnnounce(packet)).toBe(true);
     });
+
+    it('rejects stale signed announces outside freshness window', () => {
+      const config = ensureMeshIdentity({});
+      const { packet } = buildSignedAnnounce(config, {
+        blipId: 5,
+        meshAnnounceTs: Date.now() - 10 * 60 * 1000,
+      });
+      expect(verifyAnnouncePayload(packet).ok).toBe(false);
+      expect(verifyAnnouncePayload(packet).reason).toBe('stale');
+    });
 });

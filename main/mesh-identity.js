@@ -218,7 +218,10 @@ export function signAnnouncePayload(payload) {
   return { canonical, sig: null };
 }
 
-export function verifyAnnouncePayload(data) {
+/** Reject signed announces older/newer than this window (replay / clock skew). */
+export const ANNOUNCE_FRESHNESS_MS = 5 * 60 * 1000;
+
+export function verifyAnnouncePayload(data, nowMs = Date.now()) {
   const proto = Number(data?.meshProto);
   if (!Number.isFinite(proto) || proto < MESH_PROTO_MIN || proto > MESH_PROTO) {
     return { ok: false, reason: 'proto' };
@@ -227,6 +230,9 @@ export function verifyAnnouncePayload(data) {
   const sig = String(data?.meshAnnounceSig || '');
   const ts = Number(data?.meshAnnounceTs);
   if (!meshPubkey || !sig || !Number.isFinite(ts)) return { ok: false, reason: 'fields' };
+  if (Math.abs(Number(nowMs) - ts) > ANNOUNCE_FRESHNESS_MS) {
+    return { ok: false, reason: 'stale' };
+  }
   const canonical = announceCanonical({
     blipId: data.blipId,
     displayName: data.displayName || '',

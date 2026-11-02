@@ -244,7 +244,8 @@ export class Discovery {
       });
     });
 
-    setInterval(() => this.announceMdns(), ANNOUNCE_INTERVAL);
+    if (this.mdnsAnnounceTimer) clearInterval(this.mdnsAnnounceTimer);
+    this.mdnsAnnounceTimer = setInterval(() => this.announceMdns(), ANNOUNCE_INTERVAL);
   }
 
   announceMdns() {
@@ -473,10 +474,17 @@ export class Discovery {
   cleanupStale() {
     const now = Date.now();
     let changed = false;
+    /** Keep ID reserved a bit after offline so dialer grids stay stable, then free it. */
+    const OCCUPIED_TTL = PEER_TIMEOUT * 20;
     for (const [id, peer] of this.peers) {
-      if (now - peer.lastSeen > PEER_TIMEOUT) {
+      const age = now - (peer.lastSeen || 0);
+      if (age > PEER_TIMEOUT) {
         if (peer.online) {
           peer.online = false;
+          changed = true;
+        }
+        if (age > OCCUPIED_TTL && this.occupiedIds.has(id)) {
+          this.occupiedIds.delete(id);
           changed = true;
         }
       }
@@ -586,6 +594,10 @@ export class Discovery {
   stop() {
     clearInterval(this.announceTimer);
     clearInterval(this.cleanupTimer);
+    if (this.mdnsAnnounceTimer) {
+      clearInterval(this.mdnsAnnounceTimer);
+      this.mdnsAnnounceTimer = null;
+    }
     for (const t of this.announceBurstTimers || []) clearTimeout(t);
     this.announceBurstTimers = [];
     if (this.socket) {

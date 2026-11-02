@@ -4,6 +4,7 @@
  */
 
 import { ipcMain, shell } from 'electron';
+import path from 'path';
 import {
   listDisplaySources,
   setPendingDisplaySource,
@@ -46,8 +47,11 @@ export function registerShellIpc(deps) {
 
   ipcMain.handle('show-item-in-folder', async (_, filePath) => {
     if (typeof filePath !== 'string' || !filePath.trim()) return { ok: false };
+    if (filePath.includes('\0')) return { ok: false };
     try {
-      shell.showItemInFolder(filePath);
+      const resolved = path.resolve(filePath);
+      if (!path.isAbsolute(resolved)) return { ok: false };
+      shell.showItemInFolder(resolved);
       return { ok: true };
     } catch {
       return { ok: false };

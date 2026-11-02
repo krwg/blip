@@ -81,6 +81,7 @@ import {
   isSteamLanPeer,
 } from './steam-lan.js';
 import { chooseMeshTransport } from './steam-lan-path.js';
+import { isTcpForwardToRenderer } from '../shared/tcp-message-types.js';
 
 import {
   setupAutoUpdater,
@@ -1111,51 +1112,13 @@ function handleTcpPayload(msg, fromBlipId) {
     case 'mesh-handshake':
     case 'mesh-handshake-ack':
       return;
-    case 'message':
-    case 'typing':
-    case 'receipt':
-    case 'reaction':
-    case 'group-invite':
-    case 'group-invite-ack':
-    case 'group-msg':
-    case 'group-host':
-    case 'group-sync':
-    case 'group-leave':
-    case 'group-disband':
-      sendToRenderer('tcp-message', msg);
-      break;
     case 'group-call-signal':
       void sendToGroupCallWindow('group-call-tcp', msg, { focus: false });
       break;
-    case 'group-call-start':
-      sendToRenderer('tcp-message', msg);
-      break;
     case 'group-call-state':
     case 'group-call-end':
-      sendToRenderer('tcp-message', msg);
+      if (isTcpForwardToRenderer(msg.type)) sendToRenderer('tcp-message', msg);
       void sendToGroupCallWindow('group-call-tcp', msg, { focus: false });
-      break;
-    case 'voice-ch-roster':
-    case 'voice-ch-signal':
-      sendToRenderer('tcp-message', msg);
-      break;
-    case 'seed-request':
-    case 'seed-chunk':
-    case 'seed-chunks-batch':
-    case 'seed-have':
-    case 'seed-have-request':
-    case 'file-offer':
-    case 'file-chunk':
-    case 'file-chunks-batch':
-    case 'file-done':
-    case 'file-abort':
-    case 'clipboard-push':
-    case 'avatar-share':
-    case 'group-avatar-share':
-    case 'group-avatar-request':
-    case 'profile-gif-share':
-    case 'profile-gif-request':
-      sendToRenderer('tcp-message', msg);
       break;
     case 'call-offer': {
       const callerId = msg.from ?? fromBlipId;
@@ -1208,6 +1171,7 @@ function handleTcpPayload(msg, fromBlipId) {
       );
       break;
     default:
+      if (isTcpForwardToRenderer(msg.type)) sendToRenderer('tcp-message', msg);
       break;
   }
 }

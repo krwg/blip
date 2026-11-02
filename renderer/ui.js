@@ -25,6 +25,7 @@ import {
 } from './group-avatar.js';
 import { createProjectsView } from './projects-view.js';
 import { handleMeshProjectTcp } from './projects-mesh-wire.js';
+import { handleGroupProjectTcp, respondClipboardPull } from './group-projects-wire.js';
 import { createGroupCommunityView } from './group-community-view.js';
 import {
   createGroupFromUi,
@@ -2376,6 +2377,16 @@ export function handleTcpMessage(msg) {
 
   if (handleMeshProjectTcp(msg, state.config, api)) return;
 
+  if (msg.type === 'group-proj-clipboard-pull') {
+    const from = Number(msg.from);
+    const group = getGroup(msg.groupId);
+    if (group && Number.isFinite(from) && from !== Number(state.config.blipId)) {
+      void respondClipboardPull(api, state.config, group, from);
+    }
+    return;
+  }
+  if (handleGroupProjectTcp(msg, state.config)) return;
+
   if (msg.type === 'clipboard-push') {
     if (isBlocked(Number(msg.from))) return;
     void handleClipboardPush(msg, {
@@ -2554,8 +2565,12 @@ function routePeerMessage(msg) {
   }
   showMessageToast(id, preview);
 
+  // Stay on the current surface; only jump into the DM when already in chat hub/peer view.
+  if (state.view !== 'chat') {
+    return;
+  }
+
   const typingOther =
-    state.view === 'chat' &&
     state.activePeer &&
     state.activePeer !== id &&
     document.activeElement?.closest?.('.chat-input-row');
@@ -2564,7 +2579,6 @@ function routePeerMessage(msg) {
     return;
   }
 
-  state.view = 'chat';
   state.activePeer = id;
   clearUnread(id);
   if (mainContent?.isConnected) renderView('chat');
