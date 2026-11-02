@@ -25,6 +25,7 @@ export function createMeshPulse({
   function formatPeerSubline(peer) {
     const custom = (peer?.presenceText || '').trim();
     if (peer?.online && custom) return custom;
+    if (peer?.online && peer?.steamLan) return t('peers.steam_lan');
     return formatPeerPulseLine(peer);
   }
 

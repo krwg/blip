@@ -2,8 +2,15 @@
 
 SteamLAN is an optional BLIP network path that reaches peers through Steam
 when classic LAN or VPN broadcast is unavailable. Local UDP/TCP discovery
-stays the default; SteamLAN is enabled from Settings when Steam is running
-and the user is signed in.
+stays the default.
+
+## Product UX
+
+- **Settings → Network** exposes a single **On / Off** control (plus a short status line).
+- When SteamLAN is on, Steam friends who also run BLIP with SteamLAN enabled
+  appear in the existing **Peers** list — no separate Steam session screen,
+  address field, or invite chrome.
+- Chat and dial use the same UI as LAN peers.
 
 ## Behavior
 
@@ -15,16 +22,6 @@ and the user is signed in.
 | **What tunnels** | Existing BLIP discovery and framed TCP (chat, signalling). Media remains WebRTC peer-to-peer once signalling succeeds |
 | **What it is not** | A system VPN; it does not expose the whole host network |
 
-## Session modes
-
-- **Friends** — compatible BLIP peers who are Steam friends with the host
-- **Invite only** — peers invited to the current Steam session
-
-Hosts can invite through Steam or share a short session address
-(`b-….steam`) for the active share generation. Closing the session
-invalidates the address. Session controls live under **Settings → Network**
-when SteamLAN is enabled.
-
 ## Architecture
 
 ```
@@ -34,10 +31,9 @@ BLIP (Electron main)          Steam desktop
        └──────── mapped peer + framed packets ──────┘
 ```
 
-The SteamLAN runtime lives in the main process: initialize App ID 480,
-lobby/session lifecycle, reliable send/recv, and a transport adapter that
-maps Steam identities to BLIP peers while reusing the existing mesh
-handshake and message types.
+With SteamLAN enabled, the main process keeps a friends-visible mesh presence,
+exchanges BLIP hellos over Steam, and upserts those peers into the normal
+discovery list so the Peers view needs no special layout.
 
 ## Requirements
 

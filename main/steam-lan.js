@@ -43,12 +43,16 @@ let client = null;
 let lastError = '';
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
+/** @type {ReturnType<typeof setInterval> | null} */
+let meshTimer = null;
 /** @type {object | null} */
 let activeLobby = null;
 /** @type {SteamLanSessionMode | null} */
 let activeMode = null;
 /** @type {boolean} */
 let hosting = false;
+/** @type {Set<string>} */
+const greetedSteamIds = new Set();
 /** @type {Map<string, SteamLanSocket>} */
 const socketsBySteamId = new Map();
 /** @type {Map<string, Buffer>} */
@@ -238,7 +242,10 @@ function upsertPeerFromHello(steamId64, hello) {
 }
 
 function sendHello(steamId64) {
+  const sid = String(steamId64);
+  if (!sid) return;
   const cfg = getLocalConfig() || {};
+  if (!cfg.blipId) return;
   const hello = {
     type: 'steam-lan-hello',
     blipId: cfg.blipId,
@@ -246,8 +253,109 @@ function sendHello(steamId64) {
     meshPubkey: cfg.meshPublicKey || '',
   };
   const line = Buffer.from(`${JSON.stringify(hello)}\n`, 'utf8');
-  const sock = ensureSocket(steamId64);
+  const sock = ensureSocket(sid);
+  try {
+    client?.networking?.acceptP2PSession?.(BigInt(sid));
+  } catch {
+
+  }
   sock.write(line);
+  greetedSteamIds.add(sid);
+}
+
+function publishPresence(config) {
+  if (!client?.localplayer?.setRichPresence) return;
+  try {
+    client.localplayer.setRichPresence('status', 'BLIP SteamLAN');
+    client.localplayer.setRichPresence('blip', '1');
+    client.localplayer.setRichPresence('blipId', String(config?.blipId || ''));
+    client.localplayer.setRichPresence('steamlan', '1');
+  } catch {
+
+  }
+}
+
+function clearPresence() {
+  if (!client?.localplayer?.setRichPresence) return;
+  try {
+    client.localplayer.setRichPresence('status', '');
+    client.localplayer.setRichPresence('blip', '');
+    client.localplayer.setRichPresence('blipId', '');
+    client.localplayer.setRichPresence('steamlan', '');
+  } catch {
+
+  }
+}
+
+async function ensureAutoFriendsLobby(config) {
+  if (!client?.matchmaking || activeLobby) return;
+  try {
+    const lobby = await client.matchmaking.createLobby(
+      client.matchmaking.LobbyType.FriendsOnly,
+      8
+    );
+    activeLobby = lobby;
+    activeMode = 'friends';
+    hosting = true;
+    const self = localSteamId64();
+    lobby.mergeFullData?.({
+      blip: '1',
+      steamlan: '1',
+      blipId: String(config?.blipId || ''),
+      name: String(config?.displayName || ''),
+      steamId: self,
+    });
+    lobby.setJoinable?.(true);
+  } catch {
+
+  }
+}
+
+async function scanBlipLobbiesAndHello() {
+  if (!client?.matchmaking?.getLobbies) return;
+  const self = localSteamId64();
+  try {
+    const lobbies = await client.matchmaking.getLobbies();
+    for (const lobby of lobbies || []) {
+      try {
+        const data = lobby.getFullData?.() || {};
+        if (String(data.blip || '') !== '1' && String(data.steamlan || '') !== '1') {
+          continue;
+        }
+        let sid = String(data.steamId || '');
+        if (!sid) {
+          const owner = lobby.getOwner?.();
+          if (owner?.steamId64 != null) sid = String(owner.steamId64);
+        }
+        if (!sid || sid === self) continue;
+        if (greetedSteamIds.has(sid) && blipBySteamId.has(sid)) continue;
+        sendHello(sid);
+      } catch {
+
+      }
+    }
+  } catch {
+
+  }
+  helloAllMembers();
+}
+
+function startMeshMaintenance(config) {
+  stopMeshMaintenance();
+  publishPresence(config);
+  void ensureAutoFriendsLobby(config).then(() => scanBlipLobbiesAndHello());
+  meshTimer = setInterval(() => {
+    publishPresence(getLocalConfig() || config);
+    void scanBlipLobbiesAndHello();
+  }, 12_000);
+}
+
+function stopMeshMaintenance() {
+  if (meshTimer) {
+    clearInterval(meshTimer);
+    meshTimer = null;
+  }
+  clearPresence();
 }
 
 function handleStreamPayload(steamId64, payload) {
@@ -330,6 +438,7 @@ function stopPolling() {
 }
 
 function clearSessionState() {
+  stopMeshMaintenance();
   try {
     activeLobby?.leave?.();
   } catch {
@@ -338,6 +447,7 @@ function clearSessionState() {
   activeLobby = null;
   activeMode = null;
   hosting = false;
+  greetedSteamIds.clear();
   for (const sock of socketsBySteamId.values()) {
     try {
       sock.destroy();
@@ -403,6 +513,7 @@ export function syncSteamLanRuntime(config) {
 
   if (client) {
     startPolling();
+    startMeshMaintenance(config);
     return getSteamLanStatus(config);
   }
 
@@ -415,6 +526,7 @@ export function syncSteamLanRuntime(config) {
     client = steamworksMod.init(STEAM_LAN_APP_ID);
     registerLobbyCallbacks();
     startPolling();
+    startMeshMaintenance(config);
     return getSteamLanStatus(config);
   } catch (err) {
     client = null;
@@ -466,6 +578,7 @@ export async function hostSteamLanSession(mode, config) {
 
   }
   helloAllMembers();
+  startMeshMaintenance(config);
   return { ok: true, status: getSteamLanStatus(config) };
 }
 
@@ -496,6 +609,7 @@ export async function joinSteamLanSession(address, config) {
   } catch {
 
   }
+  startMeshMaintenance(config);
   return { ok: true, status: getSteamLanStatus(config) };
 }
 
@@ -504,6 +618,10 @@ export async function joinSteamLanSession(address, config) {
  */
 export function leaveSteamLanSession(config) {
   clearSessionState();
+  if (config?.steamLanEnabled) {
+    startPolling();
+    startMeshMaintenance(config);
+  }
   return { ok: true, status: getSteamLanStatus(config) };
 }
 
