@@ -5,14 +5,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const buildDir = join(buildDirPath());
+const buildDir = join(root, 'build');
 const iconsDir = join(buildDir, 'icons');
 const svgPath = join(root, 'icon-main.svg');
 const kernel = sharp.kernel.lanczos3;
-
-function buildDirPath() {
-  return join(root, 'build');
-}
 
 if (!existsSync(svgPath)) {
   console.error('[build-icons] icon-main.svg not found at project root');

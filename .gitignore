@@ -39,3 +39,4 @@ keys/
 # Local toolchain and editor rules
 .tools/
 .cursor/
+.vite/
