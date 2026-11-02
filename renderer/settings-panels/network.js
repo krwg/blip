@@ -38,6 +38,50 @@ export function buildSettingsNetworkPanel({
   frag.className = 'settings-panel';
   frag.appendChild(buildPanelTitleRow('settings.section_network'));
 
+  const steamLanRow = document.createElement('div');
+  steamLanRow.className = 'settings-toggle-with-hint';
+  const steamLanStatusEl = document.createElement('p');
+  steamLanStatusEl.className = 'settings-hint steam-lan-status';
+  steamLanStatusEl.setAttribute('aria-live', 'polite');
+
+  async function refreshSteamLanStatus() {
+    try {
+      const st = (await window.blip?.getSteamLanStatus?.()) || {};
+      const state = st.state || 'off';
+      if (state === 'ready') {
+        const name = st.personaName || 'Steam';
+        steamLanStatusEl.textContent = t('settings.steam_lan_ready').replace('{name}', name);
+      } else if (state === 'unavailable') {
+        steamLanStatusEl.textContent = t('settings.steam_lan_unavailable');
+      } else if (state === 'error') {
+        steamLanStatusEl.textContent = t('settings.steam_lan_error');
+      } else {
+        steamLanStatusEl.textContent = t('settings.steam_lan_off');
+      }
+    } catch {
+      steamLanStatusEl.textContent = t('settings.steam_lan_unavailable');
+    }
+  }
+
+  const steamLanToggle = createPixelToggle({
+    checked: !!state.config.steamLanEnabled,
+    labelKey: 'settings.steam_lan',
+    onChange: async (checked) => {
+      state.config = await saveConfig({ steamLanEnabled: checked });
+      try {
+        await window.blip?.syncSteamLan?.();
+      } catch {
+
+      }
+      await refreshSteamLanStatus();
+    },
+  });
+  steamLanRow.appendChild(steamLanToggle.el);
+  steamLanRow.appendChild(createPixelHintIcon('settings.steam_lan_hint'));
+  frag.appendChild(steamLanRow);
+  frag.appendChild(steamLanStatusEl);
+  void refreshSteamLanStatus();
+
   const clipOpts = CLIPBOARD_SYNC_MODES.map((id) => ({
     value: id,
     label: t(`clipboard.mode_${id}`),

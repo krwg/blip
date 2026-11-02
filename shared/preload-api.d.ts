@@ -35,6 +35,8 @@ export interface BlipInvokeChannels {
   'prepare-display-capture': readonly [sourceId: unknown];
   'get-peers': readonly [];
   'get-network-diagnostics': readonly [];
+  'get-steam-lan-status': readonly [];
+  'sync-steam-lan': readonly [];
   'get-github-releases': readonly [limit: unknown];
   'send-tcp-message': readonly [payload: unknown];
   'initiate-call': readonly [payload: unknown];

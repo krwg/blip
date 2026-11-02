@@ -666,6 +666,13 @@ const locales = {
     'settings.section_call': 'Call',
     'settings.section_transfer': 'Files',
     'settings.section_network': 'Network',
+    'settings.steam_lan': 'SteamLAN',
+    'settings.steam_lan_hint':
+      'Reach BLIP peers through Steam when you are not on the same LAN or VPN. Steam desktop must be running and signed in.',
+    'settings.steam_lan_off': 'SteamLAN is off.',
+    'settings.steam_lan_ready': 'SteamLAN ready as {name}.',
+    'settings.steam_lan_unavailable': 'SteamLAN unavailable — start Steam and sign in, then try again.',
+    'settings.steam_lan_error': 'SteamLAN could not start. Check Steam and try again.',
     'settings.network_stats_title': 'Session stats',
     'settings.network_stats_hint': 'Counters for this BLIP session (local).',
     'settings.network_stats_summary':
@@ -1854,6 +1861,13 @@ const locales = {
     'settings.section_call': 'Звонок',
     'settings.section_transfer': 'Файлы',
     'settings.section_network': 'Сеть',
+    'settings.steam_lan': 'SteamLAN',
+    'settings.steam_lan_hint':
+      'Связь с пирами BLIP через Steam, если нет общей LAN или VPN. Нужен запущенный Steam и вход в аккаунт.',
+    'settings.steam_lan_off': 'SteamLAN выключен.',
+    'settings.steam_lan_ready': 'SteamLAN готов: {name}.',
+    'settings.steam_lan_unavailable': 'SteamLAN недоступен — запусти Steam, войди в аккаунт и попробуй снова.',
+    'settings.steam_lan_error': 'Не удалось запустить SteamLAN. Проверь Steam и попробуй снова.',
     'settings.network_stats_title': 'Статистика сессии',
     'settings.network_stats_hint': 'Счётчики текущей сессии БЛИП (локально).',
     'settings.network_stats_summary':

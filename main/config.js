@@ -121,6 +121,9 @@ const DEFAULT_CONFIG = {
    */
   allowUnencryptedMesh: true,
 
+  /** Opt-in SteamLAN path (Steam desktop reachability). Off by default. */
+  steamLanEnabled: false,
+
   receiveBetaUpdates: false,
 
   noiseSuppression: true,

@@ -66,6 +66,7 @@
     "electron-updater": "^6.8.3",
     "jspdf": "^2.5.2",
     "marked": "^18.0.7",
-    "multicast-dns": "^7.2.5"
+    "multicast-dns": "^7.2.5",
+    "steamworks.js": "^0.4.0"
   }
 }

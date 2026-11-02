@@ -57,6 +57,7 @@ Raising the ceiling needs coordinated UI (grid), discovery, and handshake valida
 | UDP broadcast (+ optional multi-port fan-out) | 42069 (config/env) | `announce` payloads: `blipId`, display name, `presence`, IPs, advertised TCP/UDP. |
 | TCP | 42070 (config/env) | Framed `\n`-delimited JSON (see below). |
 | mDNS | — | Auxiliary discovery (`_blip._udp.local` TXT records). |
+| SteamLAN (opt-in) | Steam P2P / relays | Optional reachability via Steam desktop (App ID 480). See [`STEAM-LAN.md`](STEAM-LAN.md). |
 
 Environment overrides: `BLIP_UDP_PORT`, `BLIP_TCP_PORT`. Separate user data dirs support side-by-side dev instances (`BLIP_USER_DATA_DIR`).
 

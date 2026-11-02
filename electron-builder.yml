@@ -22,7 +22,12 @@ files:
   - dist/**/*
   - package.json
   - app-metadata.json
+  - steam_appid.txt
+asarUnpack:
+  - '**/node_modules/steamworks.js/**'
 extraResources:
+  - from: steam_appid.txt
+    to: steam_appid.txt
   - from: build/giphy-api-key.txt
     to: giphy-api-key.txt
   - from: build/mesh-plus-public-key.txt

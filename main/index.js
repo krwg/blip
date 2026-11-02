@@ -69,6 +69,7 @@ import { registerNetworkIpc } from './ipc/network.js';
 import { registerShellIpc } from './ipc/shell.js';
 import { registerAppMetaIpc } from './ipc/app-meta.js';
 import { registerWindowIpc } from './ipc/windows.js';
+import { syncSteamLanRuntime, shutdownSteamLan } from './steam-lan.js';
 
 import {
   setupAutoUpdater,
@@ -1400,6 +1401,9 @@ function setupIpc() {
     ) {
       void configureAutoUpdater(config);
     }
+    if (updates?.steamLanEnabled !== undefined) {
+      syncSteamLanRuntime(config);
+    }
     discovery?.updateConfig(config);
     discovery?.announce();
     if (typeof updates?.language === 'string' && updates.language !== prevLang) {
@@ -1644,6 +1648,7 @@ app.whenReady().then(async () => {
   applyLaunchAtLogin(!!config.launchAtLogin);
 
   setupIpc();
+  syncSteamLanRuntime(config);
   createWindow();
   broadcastTrustState();
   refreshAppIcons();
@@ -1691,6 +1696,7 @@ app.on('before-quit', () => {
   unregisterGlobalShortcuts();
   destroyTray();
   destroyOverlayWindow();
+  shutdownSteamLan();
 });
 
 app.on('window-all-closed', () => {

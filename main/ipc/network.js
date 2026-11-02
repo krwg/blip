@@ -10,6 +10,7 @@ import { resolvePorts } from '../ports.js';
 import { pingPeer } from '../tcp-client.js';
 import { sendOnSocket } from '../tcp-client.js';
 import { blipErrorIpcPayload, createBlipError, BlipErrorCode } from '../../shared/blip-errors.js';
+import { getSteamLanStatus, syncSteamLanRuntime } from '../steam-lan.js';
 
 /**
  * @param {object} deps
@@ -40,8 +41,13 @@ export function registerNetworkIpc(deps) {
       discoveryActive: !!getDiscovery()?.socket,
       onlinePeers: peers.filter((p) => p.online).length,
       totalPeers: peers.length,
+      steamLan: getSteamLanStatus(config),
     };
   });
+
+  ipcMain.handle('get-steam-lan-status', () => getSteamLanStatus(getConfig()));
+
+  ipcMain.handle('sync-steam-lan', () => syncSteamLanRuntime(getConfig()));
 
   ipcMain.handle('send-tcp-message', async (_, payload) => {
     try {
