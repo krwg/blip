@@ -7,52 +7,20 @@ function githubRepoBase(meta) {
   return String(raw).replace(/\/$/, '');
 }
 
-function showAboutIconContextMenu(e, { openAppearanceIcons }) {
-  const menu = document.createElement('div');
-  menu.className = 'context-menu glass';
-  menu.style.left = `${e.clientX}px`;
-  menu.style.top = `${e.clientY}px`;
-
-  const changeBtn = document.createElement('button');
-  changeBtn.type = 'button';
-  changeBtn.dataset.i18n = 'settings.about_icon_change';
-  changeBtn.textContent = t('settings.about_icon_change');
-  changeBtn.addEventListener('mousedown', (ev) => ev.stopPropagation());
-  changeBtn.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    menu.remove();
-    openAppearanceIcons?.();
-  });
-
-  menu.appendChild(changeBtn);
-  document.body.appendChild(menu);
-  const close = () => menu.remove();
-  setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
-}
-
 /**
  * @param {{
  *   getConfig: () => object,
  *   saveConfig: (patch: object) => Promise<object>,
- *   openAppearanceIcons: () => void,
  *   onDeveloperUnlocked?: (config: object) => void,
  * }} deps
  */
-export function buildSettingsAboutPanel({
-  getConfig,
-  saveConfig,
-  openAppearanceIcons,
-  onDeveloperUnlocked,
-}) {
+export function buildSettingsAboutPanel({ getConfig, saveConfig, onDeveloperUnlocked }) {
   const frag = document.createElement('div');
   frag.className = 'settings-panel settings-panel--about';
 
   const hero = document.createElement('div');
   hero.className = 'settings-about-hero';
-  const iconBtn = document.createElement('button');
-  iconBtn.type = 'button';
-  iconBtn.className = 'settings-about-icon-btn';
-  iconBtn.title = t('settings.about_icon_open_appearance');
+
   const icon = document.createElement('img');
   icon.className = 'settings-about-icon';
   icon.alt = 'BLIP';
@@ -65,15 +33,7 @@ export function buildSettingsAboutPanel({
       /* ignore */
     }
   })();
-  iconBtn.appendChild(icon);
-  iconBtn.addEventListener('click', () => {
-    openAppearanceIcons?.();
-  });
-  iconBtn.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showAboutIconContextMenu(e, { openAppearanceIcons });
-  });
-  hero.appendChild(iconBtn);
+  hero.appendChild(icon);
 
   const aboutLine = document.createElement('p');
   aboutLine.className = 'settings-about-line';

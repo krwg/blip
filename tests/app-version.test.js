@@ -17,7 +17,7 @@ describe('app-version labels', () => {
     expect(formatAppVersionBracket({ version: '2.0.0' })).toBe('[2.0.0]');
     expect(
       formatAppVersionBracket({ version: 'v2.0.0', codename: 'Morse' }, { withCodename: true }),
-    ).toBe('[2.0.0] · Morse');
+    ).toBe('[2.0.0 Morse]');
   });
 
   it('prefers displayVersion', () => {

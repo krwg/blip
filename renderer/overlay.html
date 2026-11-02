@@ -25,11 +25,23 @@
       --font: ui-monospace, "Cascadia Mono", Consolas, monospace;
     }
     html[data-ui-skin='nest'] {
-      --radius: 14px;
+      --radius: 18px;
       --pill-radius: 999px;
-      --bg: rgba(28, 28, 30, 0.82);
-      --border: rgba(72, 72, 74, 0.7);
-      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+      --bg: rgba(28, 28, 30, 0.72);
+      --border: rgba(255, 255, 255, 0.1);
+      --text: rgba(245, 245, 247, 0.96);
+      --muted: rgba(152, 152, 157, 0.95);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+      --nest-fill: rgba(44, 44, 46, 0.55);
+      --nest-hairline: rgba(255, 255, 255, 0.08);
+    }
+    html[data-ui-skin='nest'][data-theme='light'] {
+      --bg: rgba(245, 245, 247, 0.78);
+      --border: rgba(0, 0, 0, 0.08);
+      --text: rgba(29, 29, 31, 0.96);
+      --muted: rgba(110, 110, 115, 0.95);
+      --nest-fill: rgba(255, 255, 255, 0.55);
+      --nest-hairline: rgba(0, 0, 0, 0.08);
     }
     html, body {
       margin: 0;
@@ -60,8 +72,143 @@
       animation: in 200ms var(--ease) both;
     }
     html[data-ui-skin='nest'] .panel {
+      border-radius: 22px;
+      padding: 16px 16px 14px;
+      margin: 8px;
+      width: calc(100% - 16px);
+      min-height: calc(100% - 16px);
+      gap: 14px;
+      border: 0.5px solid var(--nest-hairline);
+      background: var(--bg);
+      backdrop-filter: saturate(1.45) blur(36px);
+      -webkit-backdrop-filter: saturate(1.45) blur(36px);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, 0.45),
+        0 1px 0 rgba(255, 255, 255, 0.06) inset;
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
+    }
+    html[data-ui-skin='nest'] .brand {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      opacity: 0.72;
+    }
+    html[data-ui-skin='nest'] .self-line {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      max-width: 200px;
+    }
+    html[data-ui-skin='nest'] .self-id {
+      font-weight: 500;
+      opacity: 0.72;
+    }
+    html[data-ui-skin='nest'] .clock-time {
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    html[data-ui-skin='nest'] .clock-date {
+      font-size: 11px;
+      margin-top: 3px;
+      letter-spacing: -0.01em;
+    }
+    html[data-ui-skin='nest'] .stats {
+      gap: 8px;
+    }
+    html[data-ui-skin='nest'] .stat {
+      border: none;
+      border-radius: 14px;
+      background: var(--nest-fill);
+      box-shadow: inset 0 0 0 0.5px var(--nest-hairline);
+      padding: 10px 12px;
+    }
+    html[data-ui-skin='nest'] .stat-label {
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      font-weight: 510;
+      opacity: 0.8;
+    }
+    html[data-ui-skin='nest'] .stat-value {
+      margin-top: 5px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    html[data-ui-skin='nest'] .kind {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      font-weight: 510;
+    }
+    html[data-ui-skin='nest'] .title {
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+    html[data-ui-skin='nest'] .sub {
+      font-size: 12px;
+      letter-spacing: -0.01em;
+      line-height: 1.45;
+    }
+    html[data-ui-skin='nest'] .chip {
+      border: none;
+      border-radius: 999px;
+      background: var(--nest-fill);
+      box-shadow: inset 0 0 0 0.5px var(--nest-hairline);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 510;
+    }
+    html[data-ui-skin='nest'] .call-box {
       border-radius: 18px;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      border: none;
+      box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--call) 35%, transparent);
+      background: color-mix(in srgb, var(--call) 12%, var(--nest-fill));
+      padding: 14px;
+      gap: 12px;
+    }
+    html[data-ui-skin='nest'] .call-btn {
+      border: none;
+      border-radius: 12px;
+      background: var(--nest-fill);
+      box-shadow: inset 0 0 0 0.5px var(--nest-hairline);
+      padding: 11px 12px;
+      font-weight: 590;
+      letter-spacing: -0.01em;
+    }
+    html[data-ui-skin='nest'] .call-btn:hover {
+      background: color-mix(in srgb, var(--text) 10%, var(--nest-fill));
+    }
+    html[data-ui-skin='nest'] .call-btn--end {
+      background: color-mix(in srgb, var(--danger) 18%, transparent);
+      box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--danger) 40%, transparent);
+    }
+    html[data-ui-skin='nest'] .call-foot,
+    html[data-ui-skin='nest'] .footer {
+      border-top: 0.5px solid var(--nest-hairline);
+      padding-top: 8px;
+    }
+    html[data-ui-skin='nest'] .badge,
+    html[data-ui-skin='nest'] .ptt-pill,
+    html[data-ui-skin='nest'] .legacy-pill,
+    html[data-ui-skin='nest'] .call-badge {
+      border: none;
+      border-radius: 999px;
+      background: var(--nest-fill);
+      box-shadow: inset 0 0 0 0.5px var(--nest-hairline);
+      font-weight: 510;
+      letter-spacing: 0.02em;
+    }
+    html[data-ui-skin='nest'] .transfer-box {
+      border: none;
+      border-radius: 14px;
+      background: var(--nest-fill);
+      box-shadow: inset 0 0 0 0.5px var(--nest-hairline);
+      padding: 10px 12px;
     }
     @keyframes in {
       from { opacity: 0; transform: translateY(4px); }
@@ -106,7 +253,6 @@
       background: rgba(15, 23, 42, 0.35);
       min-width: 0;
     }
-    html[data-ui-skin='nest'] .stat { border-radius: 12px; background: rgba(44, 44, 46, 0.55); }
     .stat.hidden { display: none; }
     .stat-label {
       font-size: 9px;
@@ -146,7 +292,6 @@
       color: var(--accent);
       background: rgba(15, 23, 42, 0.4);
     }
-    html[data-ui-skin='nest'] .chip { border-radius: 999px; }
     .chip--warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
     .chip--ok { color: var(--call); border-color: color-mix(in srgb, var(--call) 40%, transparent); }
     .idle .activity-block .title { color: var(--muted); font-weight: 550; }
@@ -161,7 +306,6 @@
       flex-direction: column;
       gap: 10px;
     }
-    html[data-ui-skin='nest'] .call-box { border-radius: 16px; }
     .call-box.hidden { display: none; }
     .call-head {
       display: flex;
@@ -192,7 +336,12 @@
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--call) 55%, transparent),
         0 0 14px color-mix(in srgb, var(--call) 35%, transparent);
     }
-    html[data-ui-skin='nest'] .call-avatar { border-radius: 999px; }
+    html[data-ui-skin='nest'] .call-avatar {
+      border-radius: 999px;
+      border: none;
+      box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--call) 40%, transparent);
+      background: color-mix(in srgb, var(--call) 18%, #1c1c1e);
+    }
     .call-avatar canvas,
     .call-avatar img {
       width: 100%;
@@ -230,7 +379,6 @@
       text-transform: lowercase;
       letter-spacing: 0.02em;
     }
-    html[data-ui-skin='nest'] .call-badge { border-radius: 999px; }
     .call-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -249,7 +397,6 @@
       cursor: pointer;
       transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
     }
-    html[data-ui-skin='nest'] .call-btn { border-radius: 12px; }
     .call-btn:hover { background: rgba(45, 50, 68, 0.95); }
     .call-btn:active { transform: scale(0.98); }
     .call-btn--mute.is-muted {
@@ -345,7 +492,6 @@
       color: #93c5fd;
       background: color-mix(in srgb, #3b82f6 14%, transparent);
     }
-    html[data-ui-skin='nest'] .legacy-pill { border-radius: 999px; }
     .legacy-pill.hidden { display: none; }
 
     .transfer-box {
@@ -356,7 +502,6 @@
       font-size: 12px;
       color: var(--muted);
     }
-    html[data-ui-skin='nest'] .transfer-box { border-radius: 12px; }
     .transfer-box.hidden { display: none; }
     .transfer-box strong { color: var(--text); font-weight: 650; }
 
@@ -387,7 +532,6 @@
       border: 1px solid var(--border);
       color: var(--accent);
     }
-    html[data-ui-skin='nest'] .badge { border-radius: 999px; }
     .badge.hidden { display: none; }
   </style>
 </head>

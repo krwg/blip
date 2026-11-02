@@ -81,4 +81,13 @@ for (const size of [512, 256, 128, 64, 48, 32, 16]) {
 
 copyFileSync(tray16, join(buildDir, 'tray-16.png'));
 console.log('[build-icons] Wrote', join(buildDir, 'tray-16.png'));
+
+// Retina menu-bar tray (macOS template-friendly alpha)
+const tray32 = join(iconsDir, 'main-tray@2x.png');
+await sharp(svg, { density: 384 })
+  .resize(32, 32, { kernel, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  .png()
+  .toFile(tray32);
+copyFileSync(tray32, join(buildDir, 'tray-32.png'));
+console.log('[build-icons] Wrote', tray32);
 console.log('[build-icons] Done (main only)');

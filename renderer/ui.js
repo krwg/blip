@@ -1397,7 +1397,6 @@ function buildSettingsAboutPanel() {
       state.config = await api.saveConfig(patch);
       return state.config;
     },
-    openAppearanceIcons: () => openSettingsToSection('appearance', '.settings-app-icon-grid'),
     onDeveloperUnlocked: (cfg) => {
       state.config = cfg;
       refreshSettingsAfterDeveloperUnlock();

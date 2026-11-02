@@ -319,8 +319,37 @@ function getWindowIcon() {
   return undefined;
 }
 
+/** Frameless chrome shared opts — macOS rounded shadow + dark material base. */
+function windowChromeOpts() {
+  const base = {
+    frame: false,
+    backgroundColor: process.platform === 'darwin' ? '#000000' : '#0a0a0a',
+    show: false,
+  };
+  if (process.platform === 'darwin') {
+    return {
+      ...base,
+      roundedCorners: true,
+      hasShadow: true,
+      // Keep custom traffic-light buttons in the renderer; do not use native inset.
+      fullscreenable: true,
+      acceptFirstMouse: true,
+    };
+  }
+  return base;
+}
+
 function refreshAppIcons() {
-  return applyAppIcons(config, { mainWindow, callWindow, groupCallWindow });
+  const result = applyAppIcons(config, { mainWindow, callWindow, groupCallWindow });
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      const dockIcon = getWindowIcon();
+      if (dockIcon && !dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+    } catch {
+      /* ignore */
+    }
+  }
+  return result;
 }
 
 function createWindow() {
@@ -330,9 +359,8 @@ function createWindow() {
     height: 640,
     minWidth: 640,
     minHeight: 480,
-    frame: false,
+    ...windowChromeOpts(),
     icon,
-    backgroundColor: '#0a0a0a',
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -340,6 +368,9 @@ function createWindow() {
       sandbox: true,
       backgroundThrottling: false,
     },
+  });
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow.isDestroyed()) mainWindow.show();
   });
 
   const url = getRendererUrl();
@@ -420,11 +451,9 @@ async function ensureCallWindow() {
     height: 560,
     minWidth: 400,
     minHeight: 500,
-    frame: false,
-    show: false,
+    ...windowChromeOpts(),
     icon,
     title: 'BLIP — Call',
-    backgroundColor: '#0a0a0a',
     autoHideMenuBar: true,
     webPreferences: {
       preload: preloadPath,
@@ -562,11 +591,9 @@ async function ensureGroupCallWindow() {
     height: 520,
     minWidth: 560,
     minHeight: 420,
-    frame: false,
-    show: false,
+    ...windowChromeOpts(),
     icon,
     title: 'BLIP — Group call',
-    backgroundColor: '#0a0a0a',
     autoHideMenuBar: true,
     webPreferences: {
       preload: preloadPath,

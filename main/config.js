@@ -164,7 +164,8 @@ const DEFAULT_CONFIG = {
 
   chatFontScale: 1,
 
-  uiSkin: 'pixel',
+  /** NestUI by default on macOS; pixel art elsewhere. */
+  uiSkin: process.platform === 'darwin' ? 'nest' : 'pixel',
 
   /** NestUI liquid-glass strength (0.6–1.4). */
   nestGlassStrength: 1,

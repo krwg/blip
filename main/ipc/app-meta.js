@@ -4,9 +4,8 @@
  */
 
 import { app, ipcMain } from 'electron';
-import { existsSync } from 'fs';
-import { pathToFileURL } from 'url';
 import { APP_ICON_VARIANTS, resolveVariantWindowIconPath } from '../app-icons.js';
+import { filePathToDataUrl } from '../apply-app-icons.js';
 import {
   checkForUpdatesNow,
   quitAndInstallUpdater,
@@ -43,7 +42,7 @@ export function registerAppMetaIpc(deps) {
       return {
         id: v.id,
         tier: v.tier,
-        previewUrl: existsSync(p) ? pathToFileURL(p).href : '',
+        previewUrl: filePathToDataUrl(p),
       };
     });
   });

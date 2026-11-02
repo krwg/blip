@@ -12,17 +12,17 @@ export function formatAppVersion(meta) {
 }
 
 /**
- * Bracketed label for About / Updates: `[2.0.0]` or `[2.0.0] · Morse`.
+ * Bracketed label for About / Updates: `[2.0.0]` or `[2.0.0 Spark]`.
  * @param {object|null|undefined} meta
  * @param {{ withCodename?: boolean }} [opts]
  */
 export function formatAppVersionBracket(meta, opts = {}) {
   const bare = rawAppVersion(meta);
-  const label = bare ? `[${bare}]` : '—';
+  if (!bare) return '—';
   if (opts.withCodename && meta?.codename) {
-    return `${label} · ${meta.codename}`;
+    return `[${bare} ${meta.codename}]`;
   }
-  return label;
+  return `[${bare}]`;
 }
 
 /** Semver / release channel helpers (pure). */

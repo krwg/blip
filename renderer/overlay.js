@@ -192,7 +192,7 @@ function applyPayload(data) {
   }
 
   if (selfName || Number.isFinite(selfId)) {
-    const idBit = Number.isFinite(selfId) ? ` · #${selfId}` : '';
+    const idBit = Number.isFinite(selfId) ? ` #${selfId}` : '';
     selfLine.innerHTML = `${selfName || 'BLIP'}<span class="self-id">${idBit}</span>`;
   } else {
     selfLine.textContent = 'BLIP';
