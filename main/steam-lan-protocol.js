@@ -3,6 +3,9 @@
  * @see docs/STEAM-LAN.md
  */
 
+/** Steamworks Spacewar test App ID (shared namespace; BLIP frames filter foreign traffic). */
+export const STEAM_LAN_APP_ID = 480;
+
 export const STEAM_LAN_MAGIC = Buffer.from('BLIP1');
 export const STEAM_LAN_CHANNEL = 0;
 
