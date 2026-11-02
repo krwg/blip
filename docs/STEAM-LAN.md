@@ -20,8 +20,10 @@ and the user is signed in.
 - **Friends** — compatible BLIP peers who are Steam friends with the host
 - **Invite only** — peers invited to the current Steam session
 
-Hosts can invite through Steam or share a short session address for the
-active share generation. Closing the session invalidates the address.
+Hosts can invite through Steam or share a short session address
+(`b-….steam`) for the active share generation. Closing the session
+invalidates the address. Session controls live under **Settings → Network**
+when SteamLAN is enabled.
 
 ## Architecture
 

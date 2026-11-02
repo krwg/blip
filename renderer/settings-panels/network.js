@@ -80,7 +80,84 @@ export function buildSettingsNetworkPanel({
   steamLanRow.appendChild(createPixelHintIcon('settings.steam_lan_hint'));
   frag.appendChild(steamLanRow);
   frag.appendChild(steamLanStatusEl);
-  void refreshSteamLanStatus();
+
+  const steamSession = document.createElement('div');
+  steamSession.className = 'settings-steam-lan-session';
+  const steamAddrInput = document.createElement('input');
+  steamAddrInput.type = 'text';
+  steamAddrInput.className = 'settings-input';
+  steamAddrInput.placeholder = t('settings.steam_lan_address_ph');
+  steamAddrInput.spellcheck = false;
+
+  const steamBtnRow = document.createElement('div');
+  steamBtnRow.className = 'settings-row-actions';
+
+  function addSteamBtn(labelKey, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-lang';
+    btn.dataset.i18n = labelKey;
+    btn.textContent = t(labelKey);
+    btn.addEventListener('click', () => void onClick(btn));
+    steamBtnRow.appendChild(btn);
+    return btn;
+  }
+
+  addSteamBtn('settings.steam_lan_host_friends', async () => {
+    const res = await window.blip?.steamLanHost?.('friends');
+    if (res?.ok && res.status?.session?.address) {
+      steamAddrInput.value = res.status.session.address;
+      showAppToast({ title: t('settings.steam_lan_hosted'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_host_invite', async () => {
+    const res = await window.blip?.steamLanHost?.('invite');
+    if (res?.ok && res.status?.session?.address) {
+      steamAddrInput.value = res.status.session.address;
+      showAppToast({ title: t('settings.steam_lan_hosted'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_join', async () => {
+    const res = await window.blip?.steamLanJoin?.(steamAddrInput.value.trim());
+    if (res?.ok) {
+      showAppToast({ title: t('settings.steam_lan_joined'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_invite_overlay', async () => {
+    await window.blip?.steamLanInvite?.();
+  });
+  addSteamBtn('settings.steam_lan_leave', async () => {
+    await window.blip?.steamLanLeave?.();
+    showAppToast({ title: t('settings.steam_lan_left'), durationMs: 2800 });
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_copy', async () => {
+    const v = steamAddrInput.value.trim();
+    if (!v) return;
+    copyTextToClipboard(v);
+    showAppToast({ title: t('settings.steam_lan_copied'), durationMs: 2400 });
+  });
+
+  steamSession.appendChild(steamAddrInput);
+  steamSession.appendChild(steamBtnRow);
+  frag.appendChild(steamSession);
+  void refreshSteamLanStatus().then(async () => {
+    try {
+      const st = await window.blip?.getSteamLanStatus?.();
+      if (st?.session?.address) steamAddrInput.value = st.session.address;
+    } catch {
+
+    }
+  });
 
   const clipOpts = CLIPBOARD_SYNC_MODES.map((id) => ({
     value: id,

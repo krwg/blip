@@ -37,6 +37,10 @@ export interface BlipInvokeChannels {
   'get-network-diagnostics': readonly [];
   'get-steam-lan-status': readonly [];
   'sync-steam-lan': readonly [];
+  'steam-lan-host': readonly [mode: unknown];
+  'steam-lan-join': readonly [address: unknown];
+  'steam-lan-leave': readonly [];
+  'steam-lan-invite': readonly [];
   'get-github-releases': readonly [limit: unknown];
   'send-tcp-message': readonly [payload: unknown];
   'initiate-call': readonly [payload: unknown];

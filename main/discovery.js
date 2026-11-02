@@ -476,6 +476,30 @@ export class Discovery {
     return Array.from(this.peers.values()).sort((a, b) => a.blipId - b.blipId);
   }
 
+  /**
+   * Insert or refresh a peer reached via SteamLAN (no LAN IP required).
+   * @param {object} peer
+   */
+  upsertSteamLanPeer(peer) {
+    const id = Number(peer?.blipId);
+    if (!Number.isFinite(id)) return;
+    const existing = this.peers.get(id);
+    const next = {
+      ...(existing || {}),
+      ...peer,
+      blipId: id,
+      online: true,
+      lastSeen: Date.now(),
+      steamLan: true,
+    };
+    this.occupiedIds.add(id);
+    this.peers.set(id, next);
+    this.emitPeers({
+      reason: existing ? 'steam_lan_refresh' : 'steam_lan_new',
+      peerId: id,
+    });
+  }
+
   noteObservedPeerIp(blipId, ip) {
     const id = Number(blipId);
     if (!Number.isFinite(id)) return;

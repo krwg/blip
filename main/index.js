@@ -69,7 +69,17 @@ import { registerNetworkIpc } from './ipc/network.js';
 import { registerShellIpc } from './ipc/shell.js';
 import { registerAppMetaIpc } from './ipc/app-meta.js';
 import { registerWindowIpc } from './ipc/windows.js';
-import { syncSteamLanRuntime, shutdownSteamLan } from './steam-lan.js';
+import {
+  syncSteamLanRuntime,
+  shutdownSteamLan,
+  configureSteamLanHooks,
+  hostSteamLanSession,
+  joinSteamLanSession,
+  leaveSteamLanSession,
+  openSteamLanInviteDialog,
+  getSteamLanSocketForBlip,
+  isSteamLanPeer,
+} from './steam-lan.js';
 
 import {
   setupAutoUpdater,
@@ -920,6 +930,18 @@ async function ensurePeerSocket(blipId) {
     throw createBlipError(BlipErrorCode.PEER_OFFLINE, `Peer #${blipId} offline`);
   }
 
+  if (peer.steamLan || isSteamLanPeer(blipId)) {
+    const sock = getSteamLanSocketForBlip(blipId);
+    if (!sock || sock.destroyed) {
+      throw createBlipError(BlipErrorCode.PEER_OFFLINE, `SteamLAN peer #${blipId} offline`);
+    }
+    const socketKey = `steam:${peer.steamId64 || blipId}:${blipId}:0`;
+    wirePeerSocket(sock, socketKey, sock.remoteAddress);
+    peerSockets.set(socketKey, sock);
+    tcpServer?.registerConnection?.(blipId, sock);
+    return sock;
+  }
+
   const gate = assertMayUseUnencryptedPeer(config, peer);
   if (!gate.ok) {
     throw createBlipError(BlipErrorCode.UNENCRYPTED_DISABLED, gate.error);
@@ -1648,6 +1670,19 @@ app.whenReady().then(async () => {
   applyLaunchAtLogin(!!config.launchAtLogin);
 
   setupIpc();
+  configureSteamLanHooks({
+    getConfig: () => config,
+    onMessage: (msg, fromBlipId) => handleTcpPayload(msg, fromBlipId),
+    onPeer: (peer) => {
+      discovery?.upsertSteamLanPeer?.(peer);
+      const sock = getSteamLanSocketForBlip(peer.blipId);
+      if (!sock || sock.destroyed) return;
+      const socketKey = `steam:${peer.steamId64 || peer.blipId}:${peer.blipId}:0`;
+      wirePeerSocket(sock, socketKey, sock.remoteAddress);
+      peerSockets.set(socketKey, sock);
+      tcpServer?.registerConnection?.(peer.blipId, sock);
+    },
+  });
   syncSteamLanRuntime(config);
   createWindow();
   broadcastTrustState();

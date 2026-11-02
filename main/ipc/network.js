@@ -10,7 +10,14 @@ import { resolvePorts } from '../ports.js';
 import { pingPeer } from '../tcp-client.js';
 import { sendOnSocket } from '../tcp-client.js';
 import { blipErrorIpcPayload, createBlipError, BlipErrorCode } from '../../shared/blip-errors.js';
-import { getSteamLanStatus, syncSteamLanRuntime } from '../steam-lan.js';
+import {
+  getSteamLanStatus,
+  syncSteamLanRuntime,
+  hostSteamLanSession,
+  joinSteamLanSession,
+  leaveSteamLanSession,
+  openSteamLanInviteDialog,
+} from '../steam-lan.js';
 
 /**
  * @param {object} deps
@@ -48,6 +55,19 @@ export function registerNetworkIpc(deps) {
   ipcMain.handle('get-steam-lan-status', () => getSteamLanStatus(getConfig()));
 
   ipcMain.handle('sync-steam-lan', () => syncSteamLanRuntime(getConfig()));
+
+  ipcMain.handle('steam-lan-host', async (_, mode) => {
+    const m = mode === 'invite' ? 'invite' : 'friends';
+    return hostSteamLanSession(m, getConfig());
+  });
+
+  ipcMain.handle('steam-lan-join', async (_, address) =>
+    joinSteamLanSession(String(address || ''), getConfig())
+  );
+
+  ipcMain.handle('steam-lan-leave', () => leaveSteamLanSession(getConfig()));
+
+  ipcMain.handle('steam-lan-invite', () => openSteamLanInviteDialog());
 
   ipcMain.handle('send-tcp-message', async (_, payload) => {
     try {
