@@ -5,6 +5,7 @@ import {
   validateChatFile,
   inferAttachmentKind,
 } from './chat-attachments.js';
+import { getMaxFileBytes } from './file-transfer-limits.js';
 import { getChunkDelayMs } from './file-transfer-speed.js';
 import { recordBandwidthSample } from './bandwidth-monitor.js';
 
@@ -13,6 +14,9 @@ const CHUNK_RAW_BYTES = 1024 * 1024;
 const CHUNKS_PER_TCP_BATCH = 2;
 
 const SEND_PIPELINE_DEPTH = 12;
+
+/** Soft cap on chunkCount to stop absurd offers from allocating huge sparse arrays. */
+const MAX_CHUNK_COUNT = 100 * 1024;
 
 function resolveFileDiskPath(file) {
   if (!file) return '';
@@ -105,26 +109,65 @@ function readFileSliceAsBase64(file, start, end) {
   });
 }
 
-function base64ToBlob(base64, mime) {
+function base64ToUint8Array(base64) {
   const bin = atob(base64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mime || 'application/octet-stream' });
+  return bytes;
+}
+
+function countFilledChunks(entry) {
+  let n = 0;
+  for (let i = 0; i < entry.chunks.length; i++) {
+    if (typeof entry.chunks[i] === 'string') n += 1;
+  }
+  return n;
 }
 
 function assembleIncoming(entry) {
-  const joined = entry.chunks.join('');
-  const blob = base64ToBlob(joined, entry.meta.mime);
-  const dataUrl = `data:${entry.meta.mime || 'application/octet-stream'};base64,${joined}`;
-  const kind = inferAttachmentKind(entry.meta.mime, entry.meta.name);
-  return {
+  const { chunkCount, mime, name, size } = entry.meta;
+  if (!chunkCount || entry.chunks.length < chunkCount) {
+    throw new Error('incomplete');
+  }
+  const parts = [];
+  for (let i = 0; i < chunkCount; i++) {
+    const part = entry.chunks[i];
+    if (typeof part !== 'string') throw new Error('incomplete');
+    parts.push(base64ToUint8Array(part));
+    entry.chunks[i] = null;
+  }
+  entry.chunks.length = 0;
+
+  const blob = new Blob(parts, { type: mime || 'application/octet-stream' });
+  const kind = inferAttachmentKind(mime, name);
+  const objectUrl = URL.createObjectURL(blob);
+  const out = {
     kind,
-    name: entry.meta.name,
-    mime: entry.meta.mime,
-    size: entry.meta.size,
-    dataUrl,
+    name,
+    mime,
+    size: size || blob.size,
     blob,
+    objectUrl,
   };
+  // Keep a data URL only for tiny payloads so chat persist / legacy UI stay cheap.
+  if (blob.size > 0 && blob.size <= INLINE_FILE_BYTES) {
+    // Synchronous FileReader is unavailable; skip dataUrl for chunked path.
+    // objectUrl + blob are enough for display/download.
+  }
+  return out;
+}
+
+export function isAcceptableIncomingFileOffer(msg, config) {
+  const size = Number(msg?.size) || 0;
+  const chunkCount = Number(msg?.chunkCount) || 0;
+  if (!msg?.transferId) return false;
+  if (size <= 0 || chunkCount <= 0) return false;
+  if (chunkCount > MAX_CHUNK_COUNT) return false;
+  const maxBytes = getMaxFileBytes(config);
+  if (size > maxBytes) return false;
+  const expectedChunks = Math.ceil(size / CHUNK_RAW_BYTES);
+  if (chunkCount > expectedChunks + 1) return false;
+  return true;
 }
 
 async function sendChatFileFromDisk(api, config, peerId, file, diskPath, onProgress, opts) {
@@ -264,12 +307,19 @@ export async function fileToDataUrl(file) {
 
 function applyIncomingChunks(entry, chunks) {
   if (!Array.isArray(chunks)) return;
+  const maxIdx = Math.max(0, (entry.meta.chunkCount || 0) - 1);
   for (const part of chunks) {
     const idx = Number(part?.index);
-    if (!Number.isFinite(idx) || idx < 0) continue;
+    if (!Number.isFinite(idx) || idx < 0 || idx > maxIdx) continue;
+    if (typeof entry.chunks[idx] === 'string') continue;
     entry.chunks[idx] = String(part.data || '');
     entry.received += 1;
   }
+}
+
+function progressPct(entry) {
+  if (!entry.meta.chunkCount) return 0;
+  return Math.min(100, Math.round((entry.received / entry.meta.chunkCount) * 100));
 }
 
 export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onAbort }) {
@@ -279,17 +329,23 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
 
   if (type === 'file-offer') {
     const key = transferKey(peerId, msg.transferId);
+    if (!isAcceptableIncomingFileOffer(msg, config)) {
+      incoming.delete(key);
+      onAbort?.(peerId, msg.transferId);
+      return true;
+    }
+    const chunkCount = Number(msg.chunkCount) || 0;
     incoming.set(key, {
       meta: {
         transferId: msg.transferId,
         name: String(msg.name || 'file').slice(0, 200),
         mime: String(msg.mime || 'application/octet-stream').slice(0, 120),
         size: Number(msg.size) || 0,
-        chunkCount: Number(msg.chunkCount) || 0,
+        chunkCount,
         groupId: msg.groupId ? String(msg.groupId) : '',
         msgId: msg.msgId ? String(msg.msgId) : '',
       },
-      chunks: [],
+      chunks: new Array(chunkCount),
       received: 0,
       peerId,
     });
@@ -302,10 +358,7 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const entry = incoming.get(key);
     if (!entry) return true;
     applyIncomingChunks(entry, msg.chunks);
-    const pct = entry.meta.chunkCount
-      ? Math.min(100, Math.round((entry.received / entry.meta.chunkCount) * 100))
-      : 0;
-    onProgress?.(peerId, msg.transferId, pct);
+    onProgress?.(peerId, msg.transferId, progressPct(entry));
     return true;
   }
 
@@ -314,10 +367,7 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const entry = incoming.get(key);
     if (!entry) return true;
     applyIncomingChunks(entry, [{ index: msg.index, data: msg.data }]);
-    const pct = entry.meta.chunkCount
-      ? Math.min(100, Math.round((entry.received / entry.meta.chunkCount) * 100))
-      : 0;
-    onProgress?.(peerId, msg.transferId, pct);
+    onProgress?.(peerId, msg.transferId, progressPct(entry));
     return true;
   }
 
@@ -331,8 +381,19 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const key = transferKey(peerId, msg.transferId);
     const entry = incoming.get(key);
     if (!entry) return true;
+    if (countFilledChunks(entry) !== entry.meta.chunkCount) {
+      incoming.delete(key);
+      onAbort?.(peerId, msg.transferId);
+      return true;
+    }
     incoming.delete(key);
-    const attachment = assembleIncoming(entry);
+    let attachment;
+    try {
+      attachment = assembleIncoming(entry);
+    } catch {
+      onAbort?.(peerId, msg.transferId);
+      return true;
+    }
     onComplete?.(peerId, {
       transferId: msg.transferId,
       attachment,

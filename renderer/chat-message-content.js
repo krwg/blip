@@ -4,7 +4,12 @@ import { appendLinkifiedText } from './linkify.js';
 import { chatMarkdownToHtml, bindMarkdownInteractions } from './release-markdown.js';
 import { formatFileSize } from './file-transfer.js';
 import { formatTransferSpeed } from './file-transfer-speed.js';
-import { isImageAttachment, isVideoAttachment, isMediaPlaceholderText } from './chat-attachments.js';
+import {
+  isImageAttachment,
+  isVideoAttachment,
+  isMediaPlaceholderText,
+  attachmentDisplaySrc,
+} from './chat-attachments.js';
 import { appendYoutubeEmbed, findYoutubeInText, parseYoutubeUrl } from './link-embed.js';
 import {
   openImageAttachment,
@@ -166,7 +171,10 @@ function appendFileCard(block, attachment) {
   meta.textContent = `${sizeStr}${speedStr}`;
   card.appendChild(label);
   card.appendChild(meta);
-  if (attachment.dataUrl) {
+  const downloadSrc =
+    attachmentDisplaySrc(attachment) ||
+    (attachment.blob instanceof Blob ? URL.createObjectURL(attachment.blob) : '');
+  if (downloadSrc) {
     const dl = document.createElement('button');
     dl.type = 'button';
     dl.className = 'btn btn-lang chat-file-dl';
@@ -174,7 +182,7 @@ function appendFileCard(block, attachment) {
     dl.addEventListener('click', (e) => {
       e.stopPropagation();
       const a = document.createElement('a');
-      a.href = attachment.dataUrl;
+      a.href = downloadSrc;
       a.download = attachment.name || 'download';
       a.click();
     });
@@ -210,7 +218,9 @@ function appendImageBubble(block, attachment) {
   btn.className = 'chat-media-bubble chat-media-bubble--image';
   const img = document.createElement('img');
   img.className = 'chat-media-thumb';
-  img.src = attachment.dataUrl;
+  img.src =
+    attachmentDisplaySrc(attachment) ||
+    (attachment.blob instanceof Blob ? URL.createObjectURL(attachment.blob) : '');
   img.alt = attachment.name || 'image';
   img.loading = 'lazy';
   btn.appendChild(img);
@@ -232,8 +242,8 @@ function appendVideoBubble(block, attachment) {
   vid.className = 'chat-media-thumb';
   if (attachment.blob instanceof Blob) {
     vid.src = URL.createObjectURL(attachment.blob);
-  } else if (attachment.dataUrl) {
-    vid.src = attachment.dataUrl;
+  } else {
+    vid.src = attachmentDisplaySrc(attachment);
   }
   vid.muted = true;
   vid.playsInline = true;

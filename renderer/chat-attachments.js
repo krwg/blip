@@ -39,13 +39,25 @@ export function inferAttachmentKind(mime, name) {
   return 'file';
 }
 
+/** True when the attachment can be shown/downloaded without a base64 data URL. */
+export function hasAttachmentPayload(att) {
+  return !!(att?.dataUrl || att?.objectUrl || att?.blob instanceof Blob);
+}
+
+export function attachmentDisplaySrc(att) {
+  if (!att) return '';
+  if (typeof att.objectUrl === 'string' && att.objectUrl) return att.objectUrl;
+  if (typeof att.dataUrl === 'string' && att.dataUrl) return att.dataUrl;
+  return '';
+}
+
 export function isImageAttachment(att) {
-  return att?.kind === 'image' && !!att.dataUrl;
+  return att?.kind === 'image' && hasAttachmentPayload(att);
 }
 
 export function isVideoAttachment(att) {
-  if (att?.kind === 'video' && att.dataUrl) return true;
-  if (att?.kind === 'file' && att.dataUrl) {
+  if (att?.kind === 'video' && hasAttachmentPayload(att)) return true;
+  if (att?.kind === 'file' && hasAttachmentPayload(att)) {
     return inferAttachmentKind(att.mime, att.name) === 'video';
   }
   return false;

@@ -309,16 +309,20 @@ export function closeMediaViewer() {
 }
 
 export function openImageAttachment(attachment) {
-  if (!attachment?.dataUrl) return;
+  let src = attachment?.objectUrl || attachment?.dataUrl || '';
+  if (!src && attachment?.blob instanceof Blob) {
+    src = URL.createObjectURL(attachment.blob);
+  }
+  if (!src) return;
   openMediaViewer({
     type: 'image',
-    src: attachment.dataUrl,
+    src,
     name: attachment.name || 'image.jpg',
   });
 }
 
 export function openVideoAttachment(attachment) {
-  let src = attachment?.dataUrl || '';
+  let src = attachment?.objectUrl || attachment?.dataUrl || '';
   if (!src && attachment?.blob instanceof Blob) {
     src = URL.createObjectURL(attachment.blob);
   }
