@@ -1,0 +1,718 @@
+@import '../shared/floke-kit/theme-tokens.css';
+
+html[data-ui-skin='nest'] {
+  --blip-font: var(--floke-font-main);
+  --blip-mono: var(--floke-font-mono);
+  --floke-accent: var(--blip-accent);
+  --nest-radius-scale: 1;
+  --nest-glass-strength: 1;
+  --nest-radius-sm: calc(10px * var(--nest-radius-scale));
+  --nest-radius-md: calc(14px * var(--nest-radius-scale));
+  --nest-radius-lg: calc(18px * var(--nest-radius-scale));
+  --nest-radius-xl: calc(24px * var(--nest-radius-scale));
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --nest-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.16), 0 6px 16px rgba(0, 0, 0, 0.08);
+  --nest-blur: calc(28px * var(--nest-glass-strength));
+  --nest-blur-strong: calc(40px * var(--nest-glass-strength));
+  --nest-sat: calc(1.35 + (var(--nest-glass-strength) - 1) * 0.35);
+  --blip-bg: #f5f5f7;
+  --blip-text: var(--floke-text-primary);
+  --blip-muted: var(--floke-text-secondary);
+  --blip-danger: var(--floke-accent-red);
+  --blip-glass: rgba(255, 255, 255, 0.52);
+  --blip-chat-incoming: rgba(255, 255, 255, 0.88);
+  --blip-toast-bg: rgba(255, 255, 255, 0.92);
+  --blip-input-bg: rgba(255, 255, 255, 0.55);
+  --blip-bg-layer-opacity: 0.28;
+  --blip-on-accent: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: always;
+  text-rendering: optimizeLegibility;
+}
+
+html[data-ui-skin='nest'][data-theme='light'] {
+  --blip-bg: #f5f5f7;
+  --blip-glass: rgba(255, 255, 255, 0.5);
+  --blip-chat-incoming: rgba(255, 255, 255, 0.9);
+  --blip-toast-bg: rgba(255, 255, 255, 0.94);
+  --blip-input-bg: rgba(255, 255, 255, 0.62);
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(0, 0, 0, 0.06);
+  --nest-shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.18), 0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] {
+  --blip-bg: #000000;
+  --blip-text: #f5f5f7;
+  --blip-muted: #98989d;
+  --blip-glass: rgba(22, 22, 26, 0.5);
+  --blip-chat-incoming: rgba(44, 44, 46, 0.92);
+  --blip-toast-bg: rgba(28, 28, 30, 0.94);
+  --blip-input-bg: rgba(44, 44, 46, 0.7);
+  --nest-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --nest-shadow-md: 0 14px 36px rgba(0, 0, 0, 0.55);
+  --nest-shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.68);
+}
+
+html[data-ui-skin='nest'],
+html[data-ui-skin='nest'] body {
+  font-family: var(--floke-font-main);
+  letter-spacing: -0.015em;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+html[data-ui-skin='nest'] .btn,
+html[data-ui-skin='nest'] .input,
+html[data-ui-skin='nest'] .blip-select,
+html[data-ui-skin='nest'] .glass,
+html[data-ui-skin='nest'] .card,
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel,
+html[data-ui-skin='nest'] .settings-release-card,
+html[data-ui-skin='nest'] .peer-row,
+html[data-ui-skin='nest'] .chat-block,
+html[data-ui-skin='nest'] .nav-btn,
+html[data-ui-skin='nest'] .side-nav,
+html[data-ui-skin='nest'] .titlebar,
+html[data-ui-skin='nest'] .toast,
+html[data-ui-skin='nest'] .blip-modal,
+html[data-ui-skin='nest'] .blip-modal-backdrop .glass,
+html[data-ui-skin='nest'] .call-overlay,
+html[data-ui-skin='nest'] .id-cell,
+html[data-ui-skin='nest'] .pixel-toggle,
+html[data-ui-skin='nest'] .pixel-hint-btn,
+html[data-ui-skin='nest'] .settings-dropdown,
+html[data-ui-skin='nest'] .chat-input-row input,
+html[data-ui-skin='nest'] .chat-input-row textarea,
+html[data-ui-skin='nest'] button,
+html[data-ui-skin='nest'] input,
+html[data-ui-skin='nest'] select,
+html[data-ui-skin='nest'] textarea {
+  border-radius: var(--nest-radius-md) !important;
+  font-family: var(--floke-font-main);
+  transition:
+    background 180ms var(--floke-ease),
+    border-color 180ms var(--floke-ease),
+    color 180ms var(--floke-ease),
+    box-shadow 220ms var(--floke-ease),
+    transform 180ms var(--floke-ease),
+    opacity 180ms var(--floke-ease);
+}
+
+html[data-ui-skin='nest'] .btn,
+html[data-ui-skin='nest'] .nav-btn,
+html[data-ui-skin='nest'] .pixel-toggle,
+html[data-ui-skin='nest'] .pixel-hint-btn {
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--blip-accent) 48%, var(--floke-border-medium));
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  box-shadow: var(--nest-shadow-sm);
+}
+
+html[data-ui-skin='nest'] .btn-accent,
+html[data-ui-skin='nest'] .btn.btn-accent {
+  border-color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 16%, var(--blip-glass));
+  color: var(--blip-accent);
+}
+
+html[data-ui-skin='nest'] .btn-accent:hover,
+html[data-ui-skin='nest'] .btn.btn-accent:hover {
+  background: color-mix(in srgb, var(--blip-accent) 26%, var(--blip-glass));
+  border-color: var(--blip-accent);
+}
+
+html[data-ui-skin='nest'] .btn.active,
+html[data-ui-skin='nest'] .btn-accent.active {
+  background: color-mix(in srgb, var(--blip-accent) 32%, var(--blip-glass));
+  border-color: var(--blip-accent);
+  color: var(--blip-accent);
+}
+
+html[data-ui-skin='nest'] .btn:hover,
+html[data-ui-skin='nest'] .nav-btn:hover {
+  box-shadow: var(--nest-shadow-md);
+  transform: translateY(-0.5px);
+  border-color: color-mix(in srgb, var(--blip-accent) 62%, var(--floke-border-medium));
+}
+
+html[data-ui-skin='nest'] .btn:active,
+html[data-ui-skin='nest'] .nav-btn:active {
+  transform: scale(0.98);
+  box-shadow: var(--nest-shadow-sm);
+}
+
+html[data-ui-skin='nest'] .nav-btn.active {
+  border-radius: 999px !important;
+  box-shadow: none;
+  font-weight: 600;
+  color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--blip-accent) 55%, transparent);
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:checked + .pixel-toggle {
+  border-color: var(--blip-accent);
+  background: color-mix(in srgb, var(--blip-accent) 22%, var(--blip-glass));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blip-accent) 28%, transparent);
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:checked + .pixel-toggle::after {
+  background: var(--blip-accent);
+  border-radius: 5px;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle,
+html[data-ui-skin='nest'] .pixel-hint-btn {
+  border-radius: var(--nest-radius-sm) !important;
+}
+
+html[data-ui-skin='nest'] .pixel-toggle-input:focus-visible + .pixel-toggle {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 28%, transparent);
+}
+
+html[data-ui-skin='nest'] .glass {
+  border-width: 0.5px;
+  border-color: color-mix(in srgb, var(--floke-border-light) 55%, transparent);
+  background: color-mix(in srgb, var(--blip-glass) 88%, transparent);
+  backdrop-filter: blur(var(--nest-blur-strong, 40px)) saturate(var(--nest-sat, 1.5));
+  -webkit-backdrop-filter: blur(var(--nest-blur-strong, 40px)) saturate(var(--nest-sat, 1.5));
+  box-shadow: var(--nest-shadow-md);
+}
+
+html[data-ui-skin='nest'] .titlebar,
+html[data-ui-skin='nest'] .side-nav {
+  border-width: 0.5px;
+  border-color: color-mix(in srgb, var(--floke-border-light) 65%, transparent);
+  background: color-mix(in srgb, var(--blip-glass) 78%, transparent);
+  backdrop-filter: blur(var(--nest-blur, 28px)) saturate(var(--nest-sat, 1.4));
+  -webkit-backdrop-filter: blur(var(--nest-blur, 28px)) saturate(var(--nest-sat, 1.4));
+}
+
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel {
+  border-width: 0.5px;
+  box-shadow: var(--nest-shadow-sm);
+}
+
+html[data-ui-skin='nest'] .peer-row,
+html[data-ui-skin='nest'] .chat-block {
+  border-width: 0.5px;
+  box-shadow: none;
+}
+
+html[data-ui-skin='nest'] .chat-block {
+  border-radius: var(--nest-radius-lg) !important;
+}
+
+html[data-ui-skin='nest'] .input,
+html[data-ui-skin='nest'] .blip-select,
+html[data-ui-skin='nest'] .settings-dropdown,
+html[data-ui-skin='nest'] input,
+html[data-ui-skin='nest'] select,
+html[data-ui-skin='nest'] textarea {
+  border-width: 0.5px;
+  border-color: color-mix(in srgb, var(--floke-border-medium) 70%, transparent);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.02);
+}
+
+html[data-ui-skin='nest'] .input:focus,
+html[data-ui-skin='nest'] .blip-select:focus,
+html[data-ui-skin='nest'] input:focus,
+html[data-ui-skin='nest'] select:focus,
+html[data-ui-skin='nest'] textarea:focus {
+  border-color: color-mix(in srgb, var(--blip-accent) 70%, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--blip-accent) 22%, transparent),
+    inset 0 1px 1px rgba(0, 0, 0, 0.02);
+  outline: none;
+}
+
+html[data-ui-skin='nest'] .blip-modal {
+  border-width: 0.5px;
+  border-radius: var(--nest-radius-xl) !important;
+  box-shadow: var(--nest-shadow-lg);
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+}
+
+html[data-ui-skin='nest'] .toast {
+  border-width: 0.5px;
+  border-radius: var(--nest-radius-xl) !important;
+  box-shadow: var(--nest-shadow-lg);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+}
+
+html[data-ui-skin='nest'] .release-notes-sheet {
+  height: 100%;
+  max-height: 100%;
+  border-width: 0;
+  border-radius: 0 !important;
+  box-shadow: none;
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+}
+
+html[data-ui-skin='nest'] .section-subtitle,
+html[data-ui-skin='nest'] .settings-panel-title,
+html[data-ui-skin='nest'] .settings-field-label {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+html[data-ui-skin='nest'] .settings-panel-title {
+  font-size: calc(15px * var(--ui-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+html[data-ui-skin='nest'] .settings-nav-group-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+html[data-ui-skin='nest'] .settings-nav-btn {
+  font-size: calc(12.5px * var(--ui-font-scale, 1));
+  font-weight: 500;
+  padding: 8px 10px;
+}
+
+html[data-ui-skin='nest'] .nav-btn {
+  font-size: calc(12px * var(--ui-font-scale, 1));
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+html[data-ui-skin='nest'] .settings-nav-group-label,
+html[data-ui-skin='nest'] .settings-field-label,
+html[data-ui-skin='nest'] .section-subtitle {
+  letter-spacing: -0.01em;
+  font-size: calc(11px * var(--ui-font-scale, 1));
+}
+
+html[data-ui-skin='nest'] .hint,
+html[data-ui-skin='nest'] .settings-release-date {
+  color: var(--floke-text-tertiary);
+  letter-spacing: -0.01em;
+  font-size: calc(11px * var(--ui-font-scale, 1));
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--file,
+html[data-ui-skin='nest'] .pixel-glyph--upload,
+html[data-ui-skin='nest'] .pixel-glyph--reply,
+html[data-ui-skin='nest'] .pixel-glyph--play,
+html[data-ui-skin='nest'] .pixel-glyph--pause {
+  border: none !important;
+  box-shadow: none !important;
+  background: currentColor;
+  transform: none !important;
+  border-radius: 4px !important;
+  opacity: 0.92;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--file {
+  width: 14px;
+  height: 16px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L19.5 9H15z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L19.5 9H15z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--upload {
+  width: 14px;
+  height: 14px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 3l5 5h-3v6h-4V8H7l5-5zm-7 14h14v2H5v-2z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 3l5 5h-3v6h-4V8H7l5-5zm-7 14h14v2H5v-2z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--reply {
+  width: 14px;
+  height: 14px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--play {
+  width: 14px;
+  height: 14px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M8 5v14l11-7L8 5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M8 5v14l11-7L8 5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-ui-skin='nest'] .pixel-glyph--pause {
+  width: 14px;
+  height: 14px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M6 5h4v14H6V5zm8 0h4v14h-4V5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M6 5h4v14H6V5zm8 0h4v14h-4V5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-ui-skin='nest'] .id-cell {
+  border-radius: var(--nest-radius-xl) !important;
+  border-width: 0.5px;
+  box-shadow: var(--nest-shadow-sm);
+}
+
+html[data-ui-skin='nest'] .avatar,
+html[data-ui-skin='nest'] .peer-avatar,
+html[data-ui-skin='nest'] img.avatar {
+  border-radius: var(--floke-radius-full) !important;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--floke-border-light) 80%, transparent);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .glass,
+html[data-ui-skin='nest'][data-theme='dark'] .titlebar,
+html[data-ui-skin='nest'][data-theme='dark'] .side-nav {
+  border-color: color-mix(in srgb, #48484a 70%, transparent);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .input,
+html[data-ui-skin='nest'][data-theme='dark'] .blip-select,
+html[data-ui-skin='nest'][data-theme='dark'] input,
+html[data-ui-skin='nest'][data-theme='dark'] select,
+html[data-ui-skin='nest'][data-theme='dark'] textarea {
+  border-color: color-mix(in srgb, #48484a 80%, transparent);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+/* Achievements follow Nest soft radii (default skin stays sharp). */
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-card,
+html[data-ui-skin='nest'] .achievement-toast {
+  border-radius: var(--nest-radius-md) !important;
+  box-shadow: var(--nest-shadow-sm);
+  border-width: 1px;
+}
+
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-icon-slot,
+html[data-ui-skin='nest'] .achievement-toast__icon .ach-icon-slot {
+  border-radius: var(--nest-radius-sm) !important;
+}
+
+html[data-ui-skin='nest'] .settings-panel--achievements .ach-card__mark,
+html[data-ui-skin='nest'] .settings-panel--achievements .btn {
+  border-radius: var(--nest-radius-sm) !important;
+}
+
+/* NestUI 1.1 — accent consistency on soft controls */
+html[data-ui-skin='nest'] .chip,
+html[data-ui-skin='nest'] .badge,
+html[data-ui-skin='nest'] .tag {
+  border-color: color-mix(in srgb, var(--blip-accent) 36%, var(--floke-border-light));
+}
+
+html[data-ui-skin='nest'] .status-dot,
+html[data-ui-skin='nest'] .presence-dot,
+html[data-ui-skin='nest'] .peer-presence-dot {
+  border-radius: 999px !important;
+}
+
+html[data-ui-skin='nest'] .peer-row.is-selected,
+html[data-ui-skin='nest'] .peer-row.selected,
+html[data-ui-skin='nest'] .peer-row[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--blip-accent) 52%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blip-accent) 22%, transparent);
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn:focus-visible,
+html[data-ui-skin='nest'] .btn:focus-visible,
+html[data-ui-skin='nest'] .pixel-hint-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 26%, transparent);
+}
+
+html[data-ui-skin='nest'] .toast {
+  border-color: color-mix(in srgb, var(--blip-accent) 28%, var(--floke-border-light));
+}
+
+html[data-ui-skin='nest'] .id-cell {
+  border-color: color-mix(in srgb, var(--blip-accent) 34%, var(--floke-border-medium));
+}
+
+html[data-ui-skin='nest'] .settings-dropdown:focus,
+html[data-ui-skin='nest'] .blip-select:focus {
+  border-color: color-mix(in srgb, var(--blip-accent) 72%, transparent);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .btn-accent,
+html[data-ui-skin='nest'][data-theme='dark'] .btn.btn-accent {
+  background: color-mix(in srgb, var(--blip-accent) 18%, rgba(44, 44, 46, 0.85));
+}
+
+/* ── NestUI 1.3 — macOS Liquid Glass (Apple HIG) ───────────────────────────
+   Glass only on floating chrome; content stays solid. Soft edges over hairlines.
+   Continuous corners, SF Pro hierarchy, system-blue accents. */
+
+html[data-ui-skin='nest'] {
+  --nest-radius-sm: calc(8px * var(--nest-radius-scale));
+  --nest-radius-md: calc(12px * var(--nest-radius-scale));
+  --nest-radius-lg: calc(16px * var(--nest-radius-scale));
+  --nest-radius-xl: calc(22px * var(--nest-radius-scale));
+  --nest-radius-continuous: calc(28px * var(--nest-radius-scale));
+  --nest-hairline: color-mix(in srgb, var(--blip-text) 8%, transparent);
+  --nest-separator: color-mix(in srgb, var(--blip-text) 12%, transparent);
+  --nest-fill-primary: color-mix(in srgb, var(--blip-glass) 88%, transparent);
+  --nest-fill-secondary: color-mix(in srgb, var(--blip-glass) 72%, transparent);
+  --nest-material: saturate(var(--nest-sat)) blur(var(--nest-blur));
+  --nest-material-chrome: saturate(calc(var(--nest-sat) + 0.15)) blur(var(--nest-blur-strong));
+  --nest-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --nest-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: -0.022em;
+}
+
+html[data-ui-skin='nest'][data-theme='light'] {
+  --blip-bg: #f5f5f7;
+  --blip-glass: rgba(255, 255, 255, 0.72);
+  --nest-shadow-sm: 0 0.5px 0 rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --nest-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --nest-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] {
+  --blip-bg: #000000;
+  --blip-glass: rgba(28, 28, 30, 0.72);
+  --nest-shadow-sm: 0 0.5px 0 rgba(255, 255, 255, 0.04), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --nest-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --nest-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* Titlebar — floating toolbar chrome */
+html[data-ui-skin='nest'] .titlebar {
+  background: var(--nest-fill-primary) !important;
+  -webkit-backdrop-filter: var(--nest-material-chrome);
+  backdrop-filter: var(--nest-material-chrome);
+  border-bottom: 0.5px solid var(--nest-hairline) !important;
+  box-shadow: none !important;
+}
+
+/* Side nav — capsule rail over content */
+html[data-ui-skin='nest'] .side-nav {
+  background: var(--nest-fill-secondary) !important;
+  -webkit-backdrop-filter: var(--nest-material);
+  backdrop-filter: var(--nest-material);
+  border: 0.5px solid var(--nest-hairline) !important;
+  border-radius: var(--nest-radius-continuous) !important;
+  box-shadow: var(--nest-shadow-md) !important;
+  margin: 8px 0 8px 8px;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: var(--nest-radius-md) !important;
+  font-weight: 510;
+  letter-spacing: -0.02em;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn:hover {
+  background: color-mix(in srgb, var(--blip-text) 6%, transparent) !important;
+}
+
+html[data-ui-skin='nest'] .side-nav .nav-btn.is-active,
+html[data-ui-skin='nest'] .side-nav .nav-btn[aria-current='page'],
+html[data-ui-skin='nest'] .side-nav .nav-btn.active {
+  background: color-mix(in srgb, var(--blip-accent) 18%, transparent) !important;
+  color: var(--blip-accent) !important;
+}
+
+/* Content panels stay solid — glass is chrome only */
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel,
+html[data-ui-skin='nest'] .chat-block,
+html[data-ui-skin='nest'] .peers-panel,
+html[data-ui-skin='nest'] .main-content {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: var(--nest-separator) !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-skin='nest'] .settings-panel,
+html[data-ui-skin='nest'] .settings-list-panel,
+html[data-ui-skin='nest'] .settings-release-card {
+  background: color-mix(in srgb, var(--blip-bg) 92%, var(--blip-glass)) !important;
+  border-radius: var(--nest-radius-xl) !important;
+  border: 0.5px solid var(--nest-hairline) !important;
+}
+
+/* Soft list rows — grouped inset style */
+html[data-ui-skin='nest'] .peer-row {
+  border: none !important;
+  border-radius: var(--nest-radius-md) !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+html[data-ui-skin='nest'] .peer-row:hover {
+  background: color-mix(in srgb, var(--blip-text) 5%, transparent) !important;
+}
+
+html[data-ui-skin='nest'] .peer-row.is-selected,
+html[data-ui-skin='nest'] .peer-row.selected,
+html[data-ui-skin='nest'] .peer-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--blip-accent) 14%, transparent) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Buttons — filled / tinted, not bordered chrome */
+html[data-ui-skin='nest'] .btn {
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 590;
+  letter-spacing: -0.02em;
+  border-radius: var(--nest-radius-md) !important;
+  background: color-mix(in srgb, var(--blip-text) 6%, transparent);
+}
+
+html[data-ui-skin='nest'] .btn:hover {
+  background: color-mix(in srgb, var(--blip-text) 10%, transparent);
+}
+
+html[data-ui-skin='nest'] .btn:active {
+  transform: scale(0.98);
+  transition-timing-function: var(--nest-ease-spring);
+}
+
+html[data-ui-skin='nest'] .btn-accent,
+html[data-ui-skin='nest'] .btn.btn-accent {
+  background: var(--blip-accent) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+html[data-ui-skin='nest'] .btn-accent:hover,
+html[data-ui-skin='nest'] .btn.btn-accent:hover {
+  filter: brightness(1.06);
+}
+
+html[data-ui-skin='nest'][data-theme='dark'] .btn-accent,
+html[data-ui-skin='nest'][data-theme='dark'] .btn.btn-accent {
+  background: var(--blip-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Inputs — inset fields */
+html[data-ui-skin='nest'] .input,
+html[data-ui-skin='nest'] .blip-select,
+html[data-ui-skin='nest'] .settings-dropdown,
+html[data-ui-skin='nest'] .chat-input-row input,
+html[data-ui-skin='nest'] .chat-input-row textarea {
+  border: none !important;
+  box-shadow: inset 0 0 0 0.5px var(--nest-hairline) !important;
+  background: color-mix(in srgb, var(--blip-text) 4%, var(--blip-input-bg)) !important;
+  border-radius: var(--nest-radius-md) !important;
+}
+
+html[data-ui-skin='nest'] .input:focus,
+html[data-ui-skin='nest'] .blip-select:focus,
+html[data-ui-skin='nest'] .settings-dropdown:focus,
+html[data-ui-skin='nest'] .chat-input-row input:focus,
+html[data-ui-skin='nest'] .chat-input-row textarea:focus {
+  box-shadow:
+    inset 0 0 0 0.5px color-mix(in srgb, var(--blip-accent) 55%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--blip-accent) 22%, transparent) !important;
+}
+
+/* Modals & toasts — elevated glass sheets */
+html[data-ui-skin='nest'] .blip-modal,
+html[data-ui-skin='nest'] .toast {
+  background: var(--nest-fill-primary) !important;
+  -webkit-backdrop-filter: var(--nest-material-chrome);
+  backdrop-filter: var(--nest-material-chrome);
+  border: 0.5px solid var(--nest-hairline) !important;
+  border-radius: var(--nest-radius-xl) !important;
+  box-shadow: var(--nest-shadow-lg) !important;
+}
+
+/* Type hierarchy — SF Pro Display weights */
+html[data-ui-skin='nest'] h1,
+html[data-ui-skin='nest'] .page-title,
+html[data-ui-skin='nest'] .settings-section-title {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+html[data-ui-skin='nest'] h2,
+html[data-ui-skin='nest'] .section-title {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+html[data-ui-skin='nest'] .muted,
+html[data-ui-skin='nest'] .hint,
+html[data-ui-skin='nest'] .settings-hint {
+  color: var(--blip-muted);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Chips / badges — soft fill */
+html[data-ui-skin='nest'] .chip,
+html[data-ui-skin='nest'] .badge,
+html[data-ui-skin='nest'] .tag {
+  border: none !important;
+  background: color-mix(in srgb, var(--blip-text) 7%, transparent);
+  border-radius: var(--nest-radius-sm) !important;
+  font-weight: 510;
+}
+
+/* Focus rings — system blue halo */
+html[data-ui-skin='nest'] .side-nav .nav-btn:focus-visible,
+html[data-ui-skin='nest'] .btn:focus-visible,
+html[data-ui-skin='nest'] .pixel-hint-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blip-accent) 28%, transparent);
+}
+
+/* Scrollbars — thin macOS track */
+html[data-ui-skin='nest'] ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+html[data-ui-skin='nest'] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--blip-text) 22%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+html[data-ui-skin='nest'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Motion — deliberate, short */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui-skin='nest'] .side-nav .nav-btn,
+  html[data-ui-skin='nest'] .btn,
+  html[data-ui-skin='nest'] .peer-row {
+    transition:
+      background 160ms var(--nest-ease-out),
+      color 160ms var(--nest-ease-out),
+      transform 160ms var(--nest-ease-spring),
+      box-shadow 200ms var(--nest-ease-out),
+      opacity 160ms var(--nest-ease-out);
+  }
+}

@@ -1,0 +1,41 @@
+node_modules
+dist-electron
+dist
+dmg-background.png
+dmg-background@2x.png
+
+# TypeScript output emitted beside the transitional shared sources.
+shared/*.d.ts
+shared/*.d.ts.map
+shared/blip-errors.js
+shared/blip-id.js
+!shared/preload-api.d.ts
+
+# Local roadmap / ideas (not shipped)
+IDEAS.local.md
+SECURITY.local.md
+
+# GitHub profile repo draft (publish to github.com/krwg/krwg separately)
+github-profile/
+MESH-PLUS-PLAN.md
+scripts/.mesh-plus-private.b64
+mesh-plus-private.b64
+keysandlicense.md
+giphy-api-key.local
+build/giphy-api-key.txt
+.env.local
+.env.build
+mesh-plus-public-key.local
+build/mesh-plus-public-key.txt
+build/build-info.json
+ENTITLEMENT-MAP.local.md
+
+# Trust-anchor key material (never commit)
+keys/
+*.private.b64
+*-private.b64
+*-public.b64
+
+# Local toolchain and editor rules
+.tools/
+.cursor/

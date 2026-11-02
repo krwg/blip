@@ -1,0 +1,72 @@
+{
+  "name": "blip",
+  "version": "3.0.0",
+  "description": "P2P LAN messenger — text, voice, and video. No cloud, no servers, no accounts.",
+  "author": {
+    "name": "krwg",
+    "email": "blipteam@icloud.com"
+  },
+  "homepage": "https://krwg.github.io/blip/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/krwg/blip.git"
+  },
+  "main": "main/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "copy-fonts": "node scripts/copy-fonts.mjs",
+    "prebuild": "npm run typecheck && npm run copy-fonts && node scripts/sync-app-metadata.mjs && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs",
+    "build": "vite build",
+    "postinstall": "npm run copy-fonts && npm run typecheck",
+    "prestart": "npm run build",
+    "start": "electron .",
+    "electron:dev": "npm run typecheck && concurrently \"vite\" \"wait-on http://localhost:5173 && node scripts/electron-dev.mjs\"",
+    "electron:dev:peer2": "npm run typecheck && concurrently \"vite\" \"wait-on http://localhost:5173 && node scripts/electron-dev-peer2.mjs\"",
+    "build:icons": "node scripts/build-icons.mjs && node scripts/build-dmg-background.mjs",
+    "build:dmg-background": "node scripts/build-dmg-background.mjs",
+    "electron:build": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win nsis",
+    "electron:build:portable": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win portable",
+    "electron:build:win": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win",
+    "electron:build:all": "npm run electron:build:win",
+    "electron:build:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/publish-mac.mjs",
+    "electron:build:linux": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --linux",
+    "electron:publish:win": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --publish always",
+    "electron:publish:mac": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/publish-mac.mjs --publish",
+    "electron:publish:linux": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --linux --publish always",
+    "release:assets": "node scripts/publish-release-notes.mjs",
+    "electron:build:dir": "npm run build && node scripts/sync-giphy-key.mjs && node scripts/sync-mesh-public-key.mjs && node scripts/sync-build-info.mjs && npm run build:icons && node scripts/run-electron-builder.mjs --win --dir",
+    "mesh-plus:keygen": "node scripts/mesh-plus-keygen.mjs",
+    "setup:build-secrets": "node scripts/setup-build-secrets.mjs",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "npm run typecheck && vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@fontsource/press-start-2p": "^5.2.7",
+    "concurrently": "^9.1.2",
+    "electron": "^35.1.2",
+    "electron-builder": "^25.1.8",
+    "javascript-obfuscator": "^4.1.1",
+    "jsdom": "^29.1.1",
+    "png2icons": "^2.0.1",
+    "sharp": "^0.34.1",
+    "to-ico": "^1.1.5",
+    "typeface-minecraft": "^1.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.2.6",
+    "vitest": "^3.2.7",
+    "wait-on": "^8.0.3"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.12",
+    "electron-updater": "^6.8.3",
+    "jspdf": "^2.5.2",
+    "marked": "^18.0.7",
+    "multicast-dns": "^7.2.5",
+    "steamworks.js": "^0.4.0"
+  }
+}

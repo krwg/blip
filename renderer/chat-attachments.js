@@ -1,0 +1,183 @@
+import { getMaxFileBytes } from './file-transfer-limits.js';
+
+export const MAX_CHAT_FILE_BYTES = 100 * 1024 * 1024 * 1024;
+export const INLINE_FILE_BYTES = 768 * 1024;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_EDGE = 2048;
+const MAX_DATA_URL_CHARS = 1_800_000;
+const MAX_INLINE_DATA_URL_CHARS = 1_100_000;
+const PREFER_ORIGINAL_EDGE = 2048;
+
+function inferImageMime(file) {
+  if (file.type && file.type.startsWith('image/')) return file.type;
+  const n = (file.name || '').toLowerCase();
+  if (n.endsWith('.png')) return 'image/png';
+  if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.gif')) return 'image/gif';
+  return 'image/jpeg';
+}
+
+export function isImageFile(file) {
+  if (!file) return false;
+  if (file.type?.startsWith('image/')) return true;
+  const n = (file.name || '').toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(n);
+}
+
+export function isVideoFile(file) {
+  if (!file) return false;
+  if (file.type?.startsWith('video/')) return true;
+  const n = (file.name || '').toLowerCase();
+  return /\.(mp4|webm|ogg|mov|m4v|mkv)$/.test(n);
+}
+
+export function inferAttachmentKind(mime, name) {
+  const m = String(mime || '').toLowerCase();
+  const n = String(name || '').toLowerCase();
+  if (m.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/.test(n)) return 'image';
+  if (m.startsWith('video/') || /\.(mp4|webm|ogg|mov|m4v|mkv)$/.test(n)) return 'video';
+  return 'file';
+}
+
+/** True when the attachment can be shown/downloaded without a base64 data URL. */
+export function hasAttachmentPayload(att) {
+  return !!(att?.dataUrl || att?.objectUrl || att?.blob instanceof Blob);
+}
+
+export function attachmentDisplaySrc(att) {
+  if (!att) return '';
+  if (typeof att.objectUrl === 'string' && att.objectUrl) return att.objectUrl;
+  if (typeof att.dataUrl === 'string' && att.dataUrl) return att.dataUrl;
+  return '';
+}
+
+export function isImageAttachment(att) {
+  return att?.kind === 'image' && hasAttachmentPayload(att);
+}
+
+export function isVideoAttachment(att) {
+  if (att?.kind === 'video' && hasAttachmentPayload(att)) return true;
+  if (att?.kind === 'file' && hasAttachmentPayload(att)) {
+    return inferAttachmentKind(att.mime, att.name) === 'video';
+  }
+  return false;
+}
+
+const PLACEHOLDER_TEXTS = new Set();
+
+export function registerMediaPlaceholder(key) {
+  if (key) PLACEHOLDER_TEXTS.add(key);
+}
+
+export function isMediaPlaceholderText(text, attachment) {
+  if (!text) return !!attachment;
+  if (PLACEHOLDER_TEXTS.has(text)) return true;
+  if (text === '[IMG]' || text === '📷') return true;
+  return false;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('read'));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function encodeChatImageAttachment(file) {
+  if (!file || !file.size) throw new Error('empty');
+  if (file.size > MAX_IMAGE_BYTES) throw new Error('file_too_big');
+  const mime = inferImageMime(file);
+  if (!mime.startsWith('image/')) throw new Error('bad_mime');
+
+  const blobUrl = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('decode'));
+      img.src = blobUrl;
+    });
+
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) throw new Error('decode');
+
+    const keepOriginal =
+      Math.max(iw, ih) <= PREFER_ORIGINAL_EDGE &&
+      file.size <= MAX_IMAGE_BYTES &&
+      /^(image\/(jpeg|png|webp|gif))$/i.test(mime);
+    if (keepOriginal) {
+      const original = await readFileAsDataUrl(file);
+      if (typeof original === 'string' && original.length <= MAX_DATA_URL_CHARS) {
+        return {
+          kind: 'image',
+          name: file.name || 'image.jpg',
+          mime,
+          size: file.size,
+          dataUrl: original,
+        };
+      }
+    }
+
+    const scale = Math.min(1, MAX_EDGE / Math.max(iw, ih));
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const outMime = mime === 'image/png' ? 'image/png' : 'image/jpeg';
+    let q = 0.92;
+    let dataUrl =
+      outMime === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', q);
+    while (outMime !== 'image/png' && dataUrl.length > MAX_DATA_URL_CHARS && q > 0.62) {
+      q -= 0.05;
+      dataUrl = canvas.toDataURL('image/jpeg', q);
+    }
+    if (dataUrl.length > MAX_DATA_URL_CHARS) throw new Error('too_large');
+
+    return {
+      kind: 'image',
+      name: file.name || 'image.jpg',
+      mime: outMime,
+      size: file.size,
+      dataUrl,
+    };
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+export async function encodeInlineFileAttachment(file, config) {
+  if (!file || !file.size) throw new Error('empty');
+  if (file.size > INLINE_FILE_BYTES) throw new Error('use_chunked');
+  const maxBytes = getMaxFileBytes(config);
+  if (file.size > maxBytes) throw new Error('file_too_big');
+
+  const dataUrl = await readFileAsDataUrl(file);
+  if (typeof dataUrl !== 'string' || dataUrl.length > MAX_INLINE_DATA_URL_CHARS) {
+    throw new Error('too_large');
+  }
+
+  const mime = file.type || 'application/octet-stream';
+  const kind = inferAttachmentKind(mime, file.name);
+  return {
+    kind,
+    name: file.name || 'file',
+    mime,
+    size: file.size,
+    dataUrl,
+  };
+}
+
+export function validateChatFile(file, config) {
+  if (!file || !file.size) throw new Error('empty');
+  if (file.size > getMaxFileBytes(config)) throw new Error('file_too_big');
+}

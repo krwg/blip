@@ -1,0 +1,281 @@
+import { app } from 'electron';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import os from 'os';
+import {
+  ipv4Broadcast,
+  normalizePeerIp as normalizePeerIpPure,
+  peerDialIps,
+  isSteamLanEndpoint,
+} from './lan-ipv4.js';
+
+export { ipv4Broadcast, peerDialIps, isSteamLanEndpoint };
+
+const DEFAULT_CONFIG = {
+  blipId: null,
+  displayName: 'Anonymous',
+  language: 'en',
+  udpPort: 42069,
+  tcpPort: 42070,
+  themeId: 'dark-signal',
+
+  themeMode: 'dark',
+
+  accentId: 'mint',
+
+  accentCustomHex: '',
+  animatedBgId: 'none',
+
+  customAvatar: false,
+
+  profileGifActiveId: '',
+
+  hasProfileGif: false,
+
+  reduceMotion: false,
+
+  /** Interface motion (views, panels, chrome). Default on; OS reduce-motion wins. */
+  uiMotion: true,
+
+  reactiveBackground: false,
+
+  overlayEnabled: false,
+  /** Pass mouse clicks through HUD except interactive zones (games). */
+  overlayClickThrough: true,
+  presenceDetectEnabled: false,
+  presenceShareEnabled: false,
+  /** Prefer games over generic apps when writing status / overlay. */
+  presencePreferGames: true,
+  /** Optional process name to pin as the status focus (e.g. firefox). */
+  presencePinnedApp: '',
+
+  defaultReactionEmoji: '❤️',
+
+  closeToTray:
+    process.platform === 'win32' ||
+    process.platform === 'darwin' ||
+    process.platform === 'linux',
+
+  launchAtLogin: false,
+
+  desktopNotifications: true,
+  desktopCallNotifications: true,
+
+  doNotDisturb: false,
+  uiSoundsEnabled: true,
+  uiSoundsVolume: 1,
+
+  videoVolume: 1,
+
+  uiSoundPack: 'signal',
+
+  uiMelodyPack: 'mesh',
+
+  audioInputDeviceId: '',
+
+  audioOutputDeviceId: '',
+
+  globalShortcutsEnabled: true,
+
+  pushToTalkEnabled: false,
+  /** Hold this key in the call window for transmit (e.g. v, b, f6). */
+  pushToTalkKey: 'v',
+
+  presenceStatus: 'online',
+
+  presenceText: '',
+
+  meshPublicKey: '',
+
+  meshPrivateKey: '',
+
+  trustedPeerIds: [],
+
+  blockedPeerIds: [],
+
+  maxFileTransferGb: 10,
+
+  fileTransferSpeed: 'normal',
+
+  devMeshTrace: false,
+
+  devBeaconEnabled: false,
+
+  devProjectsEnabled: false,
+
+  projectsClipboardEnabled: false,
+
+  /** Groups/conferences are always available (legacy key ignored if present). */
+  developerMode: false,
+
+  streamQuality: 'max',
+
+  fullscreenQuality: 'max',
+
+  clipboardSyncMode: 'off',
+
+  iceEnabled: false,
+  iceServerLines: '',
+
+  knownPeerKeys: {},
+
+  /**
+   * Allow chat/calls with older BLIP builds over plaintext TCP (no mesh crypto).
+   * When both peers support meshProto ≥ 2, traffic is still encrypted automatically.
+   * Turn off for a encrypted-only LAN.
+   */
+  allowUnencryptedMesh: true,
+
+  /** Opt-in SteamLAN path (Steam desktop reachability). Off by default. */
+  steamLanEnabled: false,
+
+  receiveBetaUpdates: false,
+
+  noiseSuppression: true,
+  autoGainControl: true,
+
+  micInputGain: 100,
+
+  autoDownloadUpdates: true,
+  autoCheckUpdates: true,
+
+  meshPlusLicenseId: '',
+
+  meshPlusLicenseSig: '',
+
+  meshPlusActivatedAt: 0,
+
+  appIconVariant: 'main',
+  windowControlStyle: 'auto',
+
+  achievementsEnabled: false,
+
+  achievementsNotify: true,
+
+  toastDurationSec: 9,
+
+  beaconParallelPeers: 6,
+
+  beaconUploadCapPercent: 100,
+
+  uiDensity: 'comfortable',
+
+  uiFontScale: 1,
+
+  chatFontScale: 1,
+
+  uiSkin: 'pixel',
+
+  /** NestUI liquid-glass strength (0.6–1.4). */
+  nestGlassStrength: 1,
+
+  /** NestUI corner radius scale (0.75–1.35). */
+  nestRadiusScale: 1,
+
+  typingSoundEnabled: false,
+  chatHistoryEnabled: true,
+
+  idleAwayMinutes: 5,
+
+  idleAwayActive: false,
+};
+
+let configPath = null;
+
+export function initConfigPath() {
+  const dir = join(app.getPath('userData'));
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  configPath = join(dir, 'blip-config.json');
+}
+
+export function loadConfig() {
+  if (!configPath) initConfigPath();
+  try {
+    if (existsSync(configPath)) {
+      return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(configPath, 'utf8')) };
+    }
+  } catch {
+
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+export function saveConfig(config) {
+  if (!configPath) initConfigPath();
+  const merged = { ...loadConfig(), ...config };
+  writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf8');
+  return merged;
+}
+
+export function resetConfigToDefaults() {
+  if (!configPath) initConfigPath();
+  const fresh = { ...DEFAULT_CONFIG };
+  writeFileSync(configPath, JSON.stringify(fresh, null, 2), 'utf8');
+  return fresh;
+}
+
+export function normalizePeerIp(ip) {
+  return normalizePeerIpPure(ip);
+}
+
+export function getLocalIpv4Set() {
+  const set = new Set(['127.0.0.1']);
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const v4 = net.family === 'IPv4' || net.family === 4;
+      if (v4) set.add(normalizePeerIp(net.address));
+    }
+  }
+  return set;
+}
+
+function ifacePreference(name) {
+  const s = String(name || '').toLowerCase();
+  if (/vethernet|virtual|vmware|vbox|hyper-v|docker|wsl|tun|tap|loop|bluetooth/.test(s)) {
+    return 3;
+  }
+  if (/wi-?fi|wlan|airport|wl/.test(s)) return 1;
+  if (/ethernet|eth|en\d|lan|local area/.test(s)) return 0;
+  return 2;
+}
+
+let cachedLanIfaces = null;
+let cachedLanIfacesAt = 0;
+const LAN_IFACE_CACHE_MS = 2500;
+
+/** Non-internal IPv4 NICs with directed broadcast targets. */
+export function listLanIpv4Interfaces({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && cachedLanIfaces && now - cachedLanIfacesAt < LAN_IFACE_CACHE_MS) {
+    return cachedLanIfaces;
+  }
+  const nets = os.networkInterfaces();
+  const out = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const v4 = net.family === 'IPv4' || net.family === 4;
+      if (!v4 || net.internal) continue;
+      const address = normalizePeerIp(net.address);
+      if (!address || address.startsWith('169.254.')) continue;
+      const netmask = net.netmask || '255.255.255.0';
+      const broadcast =
+        (net.broadcast && normalizePeerIp(net.broadcast)) || ipv4Broadcast(address, netmask);
+      if (!broadcast) continue;
+      out.push({ name, address, netmask, broadcast });
+    }
+  }
+  out.sort((a, b) => ifacePreference(a.name) - ifacePreference(b.name));
+  cachedLanIfaces = out;
+  cachedLanIfacesAt = now;
+  return out;
+}
+
+export function getLocalIpv4List() {
+  return listLanIpv4Interfaces().map((i) => i.address);
+}
+
+export function getLocalIp() {
+  const list = listLanIpv4Interfaces();
+  return list[0]?.address || '127.0.0.1';
+}

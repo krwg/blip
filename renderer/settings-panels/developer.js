@@ -1,0 +1,427 @@
+import { t } from '../i18n.js';
+import {
+  buildPanelTitleRow,
+  createPixelToggle,
+  createPixelHintIcon,
+  copyTextToClipboard,
+} from '../settings-ui.js';
+import { showAppToast } from '../toasts.js';
+import { premiumTierEnabled } from '../mesh-plus.js';
+import { getNetworkLogEntries } from '../network-log.js';
+import { openConfirmDialog } from '../confirm-dialog.js';
+import { hideDeveloperMode } from '../dev-mode.js';
+import { BlipErrorCode, BLIP_ERROR_CATALOG } from '../../shared/blip-errors.js';
+
+function appendSteamLanDeveloperSection(frag) {
+  const title = document.createElement('h3');
+  title.className = 'settings-subheading';
+  title.dataset.i18n = 'settings.dev_steam_lan';
+  title.textContent = t('settings.dev_steam_lan');
+  frag.appendChild(title);
+
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.dataset.i18n = 'settings.dev_steam_lan_hint';
+  hint.textContent = t('settings.dev_steam_lan_hint');
+  frag.appendChild(hint);
+
+  const statusEl = document.createElement('p');
+  statusEl.className = 'settings-hint steam-lan-status';
+  statusEl.setAttribute('aria-live', 'polite');
+  frag.appendChild(statusEl);
+
+  const steamSession = document.createElement('div');
+  steamSession.className = 'settings-steam-lan-session';
+  const steamAddrInput = document.createElement('input');
+  steamAddrInput.type = 'text';
+  steamAddrInput.className = 'input settings-input';
+  steamAddrInput.placeholder = t('settings.steam_lan_address_ph');
+  steamAddrInput.dataset.i18nPlaceholder = 'settings.steam_lan_address_ph';
+  steamAddrInput.spellcheck = false;
+
+  const steamBtnRow = document.createElement('div');
+  steamBtnRow.className = 'settings-row-actions';
+
+  async function refreshSteamLanStatus() {
+    try {
+      const st = (await window.blip?.getSteamLanStatus?.()) || {};
+      const state = st.state || 'off';
+      if (state === 'ready') {
+        const name = st.personaName || 'Steam';
+        const session = st.session
+          ? ` · ${st.session.mode}${st.session.hosting ? ' host' : ''}`
+          : '';
+        statusEl.textContent = t('settings.steam_lan_ready').replace('{name}', name) + session;
+        if (st.session?.address) steamAddrInput.value = st.session.address;
+      } else if (state === 'unavailable') {
+        statusEl.textContent = t('settings.steam_lan_unavailable');
+      } else if (state === 'error') {
+        statusEl.textContent = t('settings.steam_lan_error');
+      } else {
+        statusEl.textContent = t('settings.steam_lan_off');
+      }
+    } catch {
+      statusEl.textContent = t('settings.steam_lan_unavailable');
+    }
+  }
+
+  function addSteamBtn(labelKey, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-lang';
+    btn.dataset.i18n = labelKey;
+    btn.textContent = t(labelKey);
+    btn.addEventListener('click', () => void onClick(btn));
+    steamBtnRow.appendChild(btn);
+    return btn;
+  }
+
+  addSteamBtn('settings.steam_lan_host_friends', async () => {
+    const res = await window.blip?.steamLanHost?.('friends');
+    if (res?.ok && res.status?.session?.address) {
+      steamAddrInput.value = res.status.session.address;
+      showAppToast({ title: t('settings.steam_lan_hosted'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_host_invite', async () => {
+    const res = await window.blip?.steamLanHost?.('invite');
+    if (res?.ok && res.status?.session?.address) {
+      steamAddrInput.value = res.status.session.address;
+      showAppToast({ title: t('settings.steam_lan_hosted'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_join', async () => {
+    const res = await window.blip?.steamLanJoin?.(steamAddrInput.value.trim());
+    if (res?.ok) {
+      showAppToast({ title: t('settings.steam_lan_joined'), durationMs: 3600 });
+    } else {
+      showAppToast({ title: t('settings.steam_lan_session_fail'), durationMs: 4200 });
+    }
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_invite_overlay', async () => {
+    await window.blip?.steamLanInvite?.();
+  });
+  addSteamBtn('settings.steam_lan_leave', async () => {
+    await window.blip?.steamLanLeave?.();
+    showAppToast({ title: t('settings.steam_lan_left'), durationMs: 2800 });
+    await refreshSteamLanStatus();
+  });
+  addSteamBtn('settings.steam_lan_copy', async () => {
+    const v = steamAddrInput.value.trim();
+    if (!v) return;
+    const ok = await copyTextToClipboard(v);
+    showAppToast({
+      title: ok ? t('settings.steam_lan_copied') : t('settings.dev_export_fail'),
+      durationMs: 2400,
+    });
+  });
+
+  steamSession.appendChild(steamAddrInput);
+  steamSession.appendChild(steamBtnRow);
+  frag.appendChild(steamSession);
+  void refreshSteamLanStatus();
+}
+
+/**
+ * @param {{
+ *   getState: () => { config: object, peers: array, view: string },
+ *   saveConfig: (patch: object) => Promise<object>,
+ *   syncAchievements: (cfg: object) => void,
+   *   refreshBeaconMesh: () => void,
+   *   onBeaconChanged: (enabled: boolean) => void,
+   *   onProjectsChanged: () => void,
+ *   onFactoryReset: () => Promise<void>,
+ *   onDeveloperHidden: (cfg: object) => void,
+ *   renderSettingsIfOpen: () => void,
+ *   renderPeersIfOpen: () => void,
+ * }} deps
+ */
+export function buildSettingsDeveloperPanel({
+  getState,
+  saveConfig,
+  syncAchievements,
+  refreshBeaconMesh,
+  onBeaconChanged,
+  onProjectsChanged,
+  onFactoryReset,
+  onDeveloperHidden,
+  renderSettingsIfOpen,
+  renderPeersIfOpen,
+}) {
+  const state = getState();
+  const frag = document.createElement('div');
+  frag.className = 'settings-panel settings-panel--developer';
+
+  frag.appendChild(buildPanelTitleRow('settings.section_developer', 'settings.dev_panel_hint'));
+
+  const projRow = document.createElement('div');
+  projRow.className = 'settings-toggle-with-hint';
+  const projToggle = createPixelToggle({
+    checked: !!state.config?.devProjectsEnabled,
+    labelKey: 'settings.dev_projects',
+    onChange: async (checked) => {
+      const next = await saveConfig({ devProjectsEnabled: checked });
+      getState().config = next;
+      onProjectsChanged?.(checked);
+      showAppToast({
+        title: checked ? t('settings.dev_projects_on') : t('settings.dev_projects_off'),
+        durationMs: 4200,
+      });
+    },
+  });
+  projRow.appendChild(projToggle.el);
+  projRow.appendChild(createPixelHintIcon('settings.dev_projects_hint'));
+  frag.appendChild(projRow);
+
+  const betaRow = document.createElement('div');
+  betaRow.className = 'settings-toggle-with-hint';
+  const betaToggle = createPixelToggle({
+    checked: !!state.config?.receiveBetaUpdates,
+    labelKey: 'settings.dev_beta_updates',
+    onChange: async (checked) => {
+      const next = await saveConfig({ receiveBetaUpdates: checked });
+      getState().config = next;
+      if (next?.achievementsEnabled) syncAchievements?.(next);
+      showAppToast({
+        title: checked ? t('settings.dev_beta_on') : t('settings.dev_beta_off'),
+        durationMs: 4000,
+      });
+    },
+  });
+  betaRow.appendChild(betaToggle.el);
+  betaRow.appendChild(createPixelHintIcon('settings.dev_hint'));
+  frag.appendChild(betaRow);
+
+  const winStyleField = document.createElement('label');
+  winStyleField.className = 'settings-field';
+  const winStyleLabel = document.createElement('span');
+  winStyleLabel.className = 'settings-field-label';
+  winStyleLabel.dataset.i18n = 'settings.dev_window_controls';
+  winStyleLabel.textContent = t('settings.dev_window_controls');
+  const winStyleSel = document.createElement('select');
+  winStyleSel.className = 'blip-select';
+  const wsAuto = document.createElement('option');
+  wsAuto.value = 'auto';
+  wsAuto.dataset.i18n = 'settings.dev_window_controls_auto';
+  wsAuto.textContent = t('settings.dev_window_controls_auto');
+  const wsWin = document.createElement('option');
+  wsWin.value = 'windows';
+  wsWin.dataset.i18n = 'settings.dev_window_controls_windows';
+  wsWin.textContent = t('settings.dev_window_controls_windows');
+  const wsMac = document.createElement('option');
+  wsMac.value = 'mac';
+  wsMac.dataset.i18n = 'settings.dev_window_controls_mac';
+  wsMac.textContent = t('settings.dev_window_controls_mac');
+  winStyleSel.append(wsAuto, wsWin, wsMac);
+  winStyleSel.value = String(state.config?.windowControlStyle || 'auto');
+  winStyleSel.addEventListener('change', async () => {
+    const value = winStyleSel.value === 'mac' || winStyleSel.value === 'windows' ? winStyleSel.value : 'auto';
+    const next = await saveConfig({ windowControlStyle: value });
+    getState().config = next;
+    showAppToast({
+      title: t('settings.dev_window_controls_applied'),
+      body: t('settings.dev_window_controls_restart'),
+      durationMs: 5200,
+    });
+    renderSettingsIfOpen?.();
+  });
+  winStyleField.append(winStyleLabel, winStyleSel);
+  frag.appendChild(winStyleField);
+
+  const traceRow = document.createElement('div');
+  traceRow.className = 'settings-toggle-with-hint';
+  const traceToggle = createPixelToggle({
+    checked: !!state.config?.devMeshTrace,
+    labelKey: 'settings.dev_mesh_trace',
+    onChange: async (checked) => {
+      const next = await saveConfig({ devMeshTrace: checked });
+      getState().config = next;
+      showAppToast({
+        title: checked ? t('settings.dev_mesh_trace_on') : t('settings.dev_mesh_trace_off'),
+        durationMs: 3200,
+      });
+    },
+  });
+  traceRow.appendChild(traceToggle.el);
+  traceRow.appendChild(createPixelHintIcon('settings.dev_mesh_trace_hint'));
+  frag.appendChild(traceRow);
+
+  appendSteamLanDeveloperSection(frag);
+
+  const errCatalogTitle = document.createElement('h3');
+  errCatalogTitle.className = 'settings-subheading';
+  errCatalogTitle.dataset.i18n = 'settings.dev_error_catalog';
+  errCatalogTitle.textContent = t('settings.dev_error_catalog');
+  frag.appendChild(errCatalogTitle);
+
+  const errCatalogHint = document.createElement('p');
+  errCatalogHint.className = 'hint';
+  errCatalogHint.dataset.i18n = 'settings.dev_error_catalog_hint';
+  errCatalogHint.textContent = t('settings.dev_error_catalog_hint');
+  frag.appendChild(errCatalogHint);
+
+  const errCatalogList = document.createElement('div');
+  errCatalogList.className = 'settings-error-catalog';
+  Object.values(BlipErrorCode)
+    .filter((n) => typeof n === 'number' && n > 0)
+    .sort((a, b) => a - b)
+    .forEach((code) => {
+      const meta = BLIP_ERROR_CATALOG[code];
+      if (!meta) return;
+      const row = document.createElement('div');
+      row.className = 'settings-error-catalog-row';
+      row.textContent = `${code} · ${meta.id} — ${meta.summary}`;
+      row.title = meta.detail || '';
+      errCatalogList.appendChild(row);
+    });
+  frag.appendChild(errCatalogList);
+
+  const beaconRow = document.createElement('div');
+  beaconRow.className = 'settings-toggle-with-hint';
+  const beaconToggle = createPixelToggle({
+    checked: !!state.config?.devBeaconEnabled,
+    labelKey: 'settings.dev_beacon',
+    onChange: async (checked) => {
+      const next = await saveConfig({ devBeaconEnabled: checked });
+      getState().config = next;
+      refreshBeaconMesh?.();
+      onBeaconChanged?.(checked);
+      showAppToast({
+        title: checked ? t('settings.dev_beacon_on') : t('settings.dev_beacon_off'),
+        durationMs: 4000,
+      });
+    },
+  });
+  beaconRow.appendChild(beaconToggle.el);
+  beaconRow.appendChild(createPixelHintIcon('settings.dev_beacon_hint'));
+  frag.appendChild(beaconRow);
+
+  const exportBtn = document.createElement('button');
+  exportBtn.type = 'button';
+  exportBtn.className = 'btn btn-lang';
+  exportBtn.dataset.i18n = 'settings.dev_export';
+  exportBtn.textContent = t('settings.dev_export');
+  exportBtn.addEventListener('click', async () => {
+    let net = null;
+    try {
+      net = await window.blip.getNetworkDiagnostics?.();
+    } catch {
+      /* ignore */
+    }
+    const st = getState();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      version: (await window.blip.getAppMetadata?.())?.version,
+      blipId: st.config.blipId,
+      network: net,
+      peers: st.peers.map((p) => ({
+        id: p.blipId,
+        online: p.online,
+        name: p.displayName,
+      })),
+      networkLog: getNetworkLogEntries(),
+    };
+    const ok = await copyTextToClipboard(JSON.stringify(payload, null, 2));
+    showAppToast({
+      title: ok ? t('settings.dev_export_done') : t('settings.dev_export_fail'),
+      durationMs: 4000,
+      variant: ok ? undefined : 'danger',
+    });
+  });
+  frag.appendChild(exportBtn);
+
+  const clearMeshBtn = document.createElement('button');
+  clearMeshBtn.type = 'button';
+  clearMeshBtn.className = 'btn btn-danger';
+  clearMeshBtn.dataset.i18n = 'settings.dev_clear_mesh_plus';
+  clearMeshBtn.textContent = t('settings.dev_clear_mesh_plus');
+  clearMeshBtn.addEventListener('click', async () => {
+    const st = getState();
+    if (!premiumTierEnabled(st.config)) {
+      showAppToast({
+        title: t('settings.dev_clear_mesh_plus_none'),
+        durationMs: 4000,
+      });
+      return;
+    }
+    try {
+      await window.blip.deactivateMeshPlus();
+      st.config = await window.blip.getConfig();
+      showAppToast({
+        title: t('settings.dev_clear_mesh_plus_ok'),
+        durationMs: 4500,
+      });
+      renderSettingsIfOpen?.();
+      renderPeersIfOpen?.();
+    } catch (e) {
+      showAppToast({
+        title: e?.message || t('settings.dev_clear_mesh_plus_fail'),
+        durationMs: 4500,
+        variant: 'danger',
+      });
+    }
+  });
+  frag.appendChild(clearMeshBtn);
+
+  const factoryRow = document.createElement('div');
+  factoryRow.className = 'settings-toggle-with-hint settings-dev-factory-row';
+  const factoryBtn = document.createElement('button');
+  factoryBtn.type = 'button';
+  factoryBtn.className = 'btn btn-danger';
+  factoryBtn.dataset.i18n = 'settings.dev_factory_reset';
+  factoryBtn.textContent = t('settings.dev_factory_reset');
+  factoryBtn.addEventListener('click', async () => {
+    const ok = await openConfirmDialog({
+      title: t('settings.dev_factory_reset'),
+      body: t('settings.dev_factory_reset_confirm'),
+      confirmLabel: t('settings.dev_factory_reset'),
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await onFactoryReset?.();
+      showAppToast({
+        title: t('settings.dev_factory_reset_ok'),
+        durationMs: 5000,
+      });
+    } catch (e) {
+      showAppToast({
+        title: e?.message || t('settings.dev_factory_reset_fail'),
+        durationMs: 4500,
+        variant: 'danger',
+      });
+    }
+  });
+  factoryRow.appendChild(factoryBtn);
+  factoryRow.appendChild(createPixelHintIcon('settings.dev_factory_reset_hint'));
+  frag.appendChild(factoryRow);
+
+  const hideRow = document.createElement('div');
+  hideRow.className = 'settings-toggle-with-hint';
+  const hideBtn = document.createElement('button');
+  hideBtn.type = 'button';
+  hideBtn.className = 'btn btn-lang';
+  hideBtn.dataset.i18n = 'settings.dev_hide';
+  hideBtn.textContent = t('settings.dev_hide');
+  hideBtn.addEventListener('click', async () => {
+    const next = await hideDeveloperMode({
+      saveConfig,
+      onChange: (cfg) => {
+        getState().config = cfg;
+      },
+    });
+    onDeveloperHidden?.(next);
+  });
+  hideRow.appendChild(hideBtn);
+  hideRow.appendChild(createPixelHintIcon('settings.dev_hide_hint'));
+  frag.appendChild(hideRow);
+
+  return frag;
+}

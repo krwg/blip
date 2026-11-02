@@ -1,0 +1,260 @@
+
+import { setLang, applyI18n, onLangChange } from './i18n.js';
+import { createCallUI } from './call.js';
+import { applyCallWindowAppearance, listenReducedMotion } from './appearance.js';
+import { setSoundPrefs } from './audio.js';
+import { setLocalTrustState } from './trust-ui.js';
+
+let callAppearanceRm = null;
+let callUI = null;
+let liveConfig = null;
+
+let remotePeerTrust = null;
+
+const api = {
+  getConfig: () => window.blip.getConfig(),
+  saveConfig: (data) => window.blip.saveConfig(data),
+  sendTcpMessage: (payload) => window.blip.sendTcpMessage(payload),
+  initiateCall: (payload) =>
+    window.blip.initiateCall({
+      to: payload.to,
+      sdp: payload.sdp,
+      video: payload.video,
+    }),
+  callAccept: (payload) =>
+    window.blip.callAccept({
+      to: payload.to,
+      sdp: payload.sdp,
+    }),
+  callReject: (payload) => window.blip.callReject(payload),
+  callCandidate: (payload) =>
+    window.blip.callCandidate({
+      to: payload.to,
+      candidate: payload.candidate?.toJSON?.() ?? payload.candidate,
+    }),
+  callHangup: (payload) => window.blip.callHangup(payload),
+  callState: (payload) => window.blip.callState(payload),
+  callRenegotiate: (payload) => window.blip.callRenegotiate(payload),
+  callRenegotiateAnswer: (payload) => window.blip.callRenegotiateAnswer(payload),
+  reportCallLocalState: (payload) => window.blip.reportCallLocalState(payload),
+};
+
+function applyCallWindowChrome(cfg) {
+  liveConfig = cfg;
+  setLang(cfg.language || localStorage.getItem('blip_lang') || 'en');
+  setSoundPrefs({
+    enabled: cfg.uiSoundsEnabled !== false && cfg.doNotDisturb !== true,
+    volume: typeof cfg.uiSoundsVolume === 'number' ? cfg.uiSoundsVolume : 1,
+    soundPack: cfg.uiSoundPack,
+    melodyPack: cfg.uiMelodyPack,
+  });
+  applyCallWindowAppearance(cfg);
+  applyI18n(document);
+  callUI?.refreshI18n?.();
+  const pref = String(cfg?.windowControlStyle || 'auto');
+  const isMacStyle = pref === 'mac' || (pref === 'auto' && window.blip?.platform === 'darwin');
+  const bar = document.querySelector('.call-window-titlebar');
+  const controls = bar?.querySelector('.win-controls');
+  const min = document.getElementById('call-win-min');
+  const max = document.getElementById('call-win-max');
+  const close = document.getElementById('call-win-close');
+  bar?.classList.toggle('call-window-titlebar--mac', isMacStyle);
+  bar?.classList.toggle('call-window-titlebar--win', !isMacStyle);
+  if (min) min.textContent = isMacStyle ? '−' : '—';
+  if (max) max.textContent = isMacStyle ? '◦' : '□';
+  if (close) close.textContent = isMacStyle ? '•' : '×';
+  if (controls && min && max && close) {
+    controls.replaceChildren();
+    if (isMacStyle) controls.append(close, min, max);
+    else controls.append(min, max, close);
+  }
+}
+
+async function boot() {
+  if (!window.blip) {
+    document.getElementById('call-root').innerHTML =
+      '<p style="color:#ff3366;padding:24px;">No preload bridge</p>';
+    return;
+  }
+
+  const config = await window.blip.getConfig();
+  if (window.blip?.getTrustState) {
+    setLocalTrustState(await window.blip.getTrustState());
+  }
+  window.blip?.onTrustState?.((trust) => setLocalTrustState(trust));
+  setSoundPrefs({
+    enabled: config.uiSoundsEnabled !== false && config.doNotDisturb !== true,
+    volume: typeof config.uiSoundsVolume === 'number' ? config.uiSoundsVolume : 1,
+    soundPack: config.uiSoundPack,
+    melodyPack: config.uiMelodyPack,
+  });
+  applyCallWindowChrome(config);
+  callAppearanceRm?.();
+  callAppearanceRm = listenReducedMotion(() => {});
+
+  const root = document.getElementById('call-root');
+
+  callUI = createCallUI(config, api, {
+    onClosed: () => {
+      window.blip.closeCallWindow?.();
+    },
+    getRemotePeer: () => remotePeerTrust,
+    onMissedCall: (peerId, meta) => {
+      void window.blip.reportMissedCall?.({
+        peerId,
+        reason: meta?.reason || 'missed',
+        video: !!meta?.video,
+      });
+    },
+  });
+  root.appendChild(callUI.el);
+
+  document.getElementById('call-win-min')?.addEventListener('click', () => {
+    window.blip.callWindowMinimize?.();
+  });
+  document.getElementById('call-win-max')?.addEventListener('click', () => {
+    window.blip.callWindowMaximize?.();
+  });
+  document.getElementById('call-win-close')?.addEventListener('click', () => {
+    callUI?.hangupCall?.();
+  });
+
+  onLangChange(() => applyI18n(document));
+  window.blip.onConfigUpdated?.((cfg) => applyCallWindowChrome(cfg));
+
+  async function cacheRemotePeer(peerId) {
+    try {
+      const { peers } = await window.blip.getPeers();
+      remotePeerTrust =
+        peers.find((p) => Number(p.blipId) === Number(peerId)) || {
+          blipId: peerId,
+          buildTrust: 'unverified_build',
+        };
+      callUI?.refreshCallAvatar?.();
+    } catch {
+      remotePeerTrust = { blipId: peerId, buildTrust: 'unverified_build' };
+    }
+  }
+
+  window.blip.onCallOutgoing?.((payload) => {
+    const peerId = payload?.peerId;
+    const video = !!payload?.video;
+    if (peerId) {
+      void cacheRemotePeer(peerId);
+      callUI.startOutgoing(peerId, video);
+    }
+  });
+
+  window.blip.onIncomingCall((data) => {
+    if (data?.from) void cacheRemotePeer(data.from);
+    callUI.handleIncoming(data);
+  });
+  window.blip.onCallAnswer((data) => {
+    callUI.handleAnswer(data);
+  });
+  window.blip.onCallCandidate((data) => {
+    callUI.handleCandidate(data);
+  });
+  window.blip.onCallRejected((data) => {
+    callUI.handleRejected(data);
+  });
+  window.blip.onCallEnded((data) => {
+    callUI.handleEnded(data);
+  });
+  window.blip.onCallState((data) => {
+    callUI.handleCallState(data);
+  });
+  window.blip.onCallRenegotiate((data) => {
+    callUI.handleRenegotiateOffer(data);
+  });
+  window.blip.onCallRenegotiateAnswer((data) => {
+    callUI.handleRenegotiateAnswer(data);
+  });
+  window.blip.onGlobalHangup?.(() => {
+    callUI?.hangupCall?.();
+  });
+  window.blip.onOverlayToggleMute?.(() => {
+    callUI?.toggleMute?.();
+  });
+  window.blip.onCallPttHeld?.((data) => {
+    callUI?.setPttHeld?.(!!data?.held);
+  });
+
+  function pttKeyFromConfig(cfg) {
+    return String(cfg?.pushToTalkKey || 'v').trim().toLowerCase() || 'v';
+  }
+
+  function isPttKey(e, key) {
+    if (!key) return false;
+    if (key.length === 1) return e.key.toLowerCase() === key;
+    return e.code.toLowerCase() === key.toLowerCase() || e.key.toLowerCase() === key.toLowerCase();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!liveConfig?.pushToTalkEnabled || e.repeat) return;
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (isPttKey(e, pttKeyFromConfig(liveConfig))) {
+      callUI?.setPttHeld?.(true);
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (!liveConfig?.pushToTalkEnabled) return;
+    if (isPttKey(e, pttKeyFromConfig(liveConfig))) {
+      callUI?.setPttHeld?.(false);
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    const key = e.key;
+    if (key === 'm' || key === 'M') {
+      callUI.toggleMute();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'd' || key === 'D') {
+      callUI.toggleDeafen();
+      e.preventDefault();
+      return;
+    }
+    if (key === 's' || key === 'S') {
+      callUI.toggleScreenShare();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'f' || key === 'F') {
+      callUI.toggleVideoFullscreen();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'Escape') {
+      if (callUI.isVideoFullscreen?.()) {
+        callUI.toggleVideoFullscreen();
+        e.preventDefault();
+        return;
+      }
+      callUI.hangupCall();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'Enter' && callUI.isIncomingRinging()) {
+      callUI.acceptIncoming();
+      e.preventDefault();
+    }
+  });
+
+  window.__blipCallReady = true;
+  window.blip.reportCallWindowReady?.();
+}
+
+boot().catch((e) => {
+  console.error(e);
+  window.__blipCallReady = true;
+  window.blip?.reportCallWindowReady?.();
+});

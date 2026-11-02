@@ -1,0 +1,280 @@
+
+.meshplus-official,
+.meshplus-unverified {
+  background: transparent;
+  box-shadow: none;
+}
+
+.mesh-plus-badge--trust-official .mesh-plus-badge__text {
+  animation: mesh-plus-badge-gradient 3.2s ease-in-out infinite;
+}
+
+.mesh-plus-badge--trust-unverified {
+  background: linear-gradient(
+    180deg,
+    #f5e8e8 0%,
+    #d4a8a8 38%,
+    #b08080 52%,
+    #e8d0d0 100%
+  );
+  border-color: #9a4a4a;
+}
+
+.mesh-plus-badge--trust-unverified .mesh-plus-badge__text {
+  background: linear-gradient(
+    105deg,
+    #ffffff 0%,
+    #ffe4e4 12%,
+    #fca5a5 26%,
+    #ef4444 42%,
+    #dc2626 52%,
+    #f87171 68%,
+    #fecaca 84%,
+    #ffffff 100%
+  );
+  background-size: 240% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+
+  filter: none;
+  paint-order: stroke fill;
+  text-shadow:
+    0 1px 0 #450a0a,
+    0 0 2px rgba(0, 0, 0, 0.9),
+    1px 0 0 #450a0a,
+    -1px 0 0 #450a0a;
+  animation: mesh-plus-badge-gradient-red 3.2s ease-in-out infinite;
+}
+
+.mesh-plus-pixel-banner__label--unverified {
+  background: linear-gradient(
+    105deg,
+    #ffffff 0%,
+    #ffe4e4 12%,
+    #fca5a5 26%,
+    #ef4444 42%,
+    #dc2626 52%,
+    #f87171 68%,
+    #fecaca 84%,
+    #ffffff 100%
+  );
+  background-size: 240% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: none;
+  text-shadow:
+    0 1px 0 #450a0a,
+    0 0 2px rgba(0, 0, 0, 0.9);
+  animation: mesh-plus-badge-gradient-red 3.4s ease-in-out infinite;
+}
+
+@keyframes mesh-plus-badge-gradient-red {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.mesh-plus-hero {
+  position: relative;
+  margin: 0 0 12px;
+  border: 2px solid var(--blip-glass-border);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+
+.mesh-plus-pixel-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(28, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 3px;
+  padding: 10px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.mesh-plus-pixel-grid--strip {
+  position: relative;
+  inset: auto;
+  padding: 6px 8px;
+  gap: 2px;
+}
+
+.mesh-plus-pixel-grid__cell {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.mesh-plus-hero--free .mesh-plus-pixel-grid__cell {
+  background: hsl(225 9% calc(var(--cell-lit, 24) * 1%));
+  animation: mesh-plus-pixel-twinkle 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--cell-delay, 0) * 0.09s);
+}
+
+.mesh-plus-hero--active .mesh-plus-pixel-grid__cell {
+  background: rgb(var(--cell-r, 124), var(--cell-g, 58), var(--cell-b, 237));
+  animation: mesh-plus-pixel-twinkle 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--cell-delay, 0) * 0.07s);
+}
+
+.mesh-plus-hero__inner {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  background: color-mix(in srgb, var(--blip-bg) 78%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.mesh-plus-hero__inner .mesh-plus-status-card {
+  border: none;
+  box-shadow: none;
+  margin: 0;
+  background: transparent;
+}
+
+.mesh-plus-status-card--trust-unverified {
+  box-shadow: inset 0 0 0 1px rgba(255, 60, 60, 0.45);
+}
+
+.mesh-plus-pixel-strip {
+  position: relative;
+  margin: 0 0 10px;
+  min-height: 52px;
+  border: 2px solid var(--blip-glass-border);
+  overflow: hidden;
+  image-rendering: pixelated;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.mesh-plus-pixel-banner__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  font-family: var(--blip-font, 'Minecraft', monospace);
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+  background: linear-gradient(
+    105deg,
+    #f5f0ff 0%,
+    #ddd6fe 14%,
+    #c084fc 28%,
+    #7c3aed 42%,
+    #5b21b6 52%,
+    #22d3ee 62%,
+    #a78bfa 72%,
+    #6ee7b7 86%,
+    #f5f0ff 100%
+  );
+  background-size: 240% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.75));
+  animation: mesh-plus-badge-gradient 3.4s ease-in-out infinite;
+}
+
+.mesh-plus-hero .mesh-plus-pixel-banner__label {
+  font-size: 13px;
+  letter-spacing: 0.16em;
+}
+
+.mesh-plus-pixel-grid--strip {
+  grid-template-columns: repeat(28, 1fr) !important;
+  grid-template-rows: repeat(4, 1fr) !important;
+  min-height: 52px;
+}
+
+.mesh-plus-pixel-strip--free .mesh-plus-pixel-grid__cell {
+  background: hsl(225 9% calc(var(--cell-lit, 24) * 1%));
+  animation: mesh-plus-pixel-twinkle 3.8s ease-in-out infinite;
+  animation-delay: calc(var(--cell-delay, 0) * 0.1s);
+}
+
+.mesh-plus-pixel-strip--active .mesh-plus-pixel-grid__cell {
+  background: rgb(var(--cell-r, 124), var(--cell-g, 58), var(--cell-b, 237));
+  animation: mesh-plus-pixel-twinkle 2.8s ease-in-out infinite;
+  animation-delay: calc(var(--cell-delay, 0) * 0.08s);
+}
+
+@keyframes mesh-plus-pixel-twinkle {
+  0%,
+  100% {
+    opacity: 0.42;
+    filter: brightness(0.78) saturate(0.85);
+    transform: scale(0.9);
+  }
+  45% {
+    opacity: 1;
+    filter: brightness(1.12) saturate(1.15);
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0.65;
+    filter: brightness(0.95) saturate(1);
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesh-plus-pixel-grid__cell,
+  .mesh-plus-pixel-banner__label,
+  .mesh-plus-badge--trust-unverified .mesh-plus-badge__text {
+    animation: none !important;
+    opacity: 0.85;
+    transform: none;
+  }
+  .mesh-plus-pixel-banner__label {
+    transform: translate(-50%, -50%);
+    background-size: 100% 100%;
+    background-position: 50% 50%;
+  }
+}
+
+.settings-about-trust-notice {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 16px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  text-align: center;
+  border: 2px solid var(--blip-glass-border);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.settings-about-trust-notice--official {
+  border-color: rgba(124, 58, 237, 0.55);
+  color: #c4b5fd;
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.settings-about-trust-notice--unofficial {
+  border-color: rgba(255, 60, 60, 0.55);
+  color: #fca5a5;
+  background: rgba(255, 60, 60, 0.1);
+}

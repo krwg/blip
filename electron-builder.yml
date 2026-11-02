@@ -1,0 +1,160 @@
+appId: com.blip.messenger
+productName: BLIP
+copyright: Copyright © 2026 krwg
+extraMetadata:
+  CompanyName: krwg
+  FileDescription: BLIP — P2P LAN Messenger
+  ProductName: BLIP
+  LegalCopyright: Copyright © 2026 krwg
+publish:
+  - provider: github
+    owner: krwg
+    repo: blip
+    releaseType: release
+directories:
+  output: dist-electron
+  buildResources: build
+afterPack: scripts/obfuscate-after-pack.cjs
+files:
+  - main/**/*
+  - shared/**/*
+  - preload.cjs
+  - dist/**/*
+  - package.json
+  - app-metadata.json
+  - steam_appid.txt
+asarUnpack:
+  - '**/node_modules/steamworks.js/**'
+extraResources:
+  - from: steam_appid.txt
+    to: steam_appid.txt
+  - from: build/giphy-api-key.txt
+    to: giphy-api-key.txt
+  - from: build/mesh-plus-public-key.txt
+    to: mesh-plus-public-key.txt
+  - from: build/build-info.json
+    to: build-info.json
+  - from: build/icon.png
+    to: icons/icon.png
+  - from: build/tray-16.png
+    to: icons/tray-16.png
+  - from: build/icons
+    to: icons
+    filter:
+      - '**/*'
+win:
+  icon: icon.ico
+  publisherName: krwg
+  legalTrademarks: BLIP
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  perMachine: false
+  selectPerMachineByDefault: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  packElevateHelper: true
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico
+  installerHeaderIcon: icon.ico
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: BLIP
+  runAfterFinish: false
+  uninstallDisplayName: BLIP
+  artifactName: ${productName}-Setup-${version}.${ext}
+  displayLanguageSelector: true
+  multiLanguageInstaller: true
+  menuCategory: Chat
+  installerLanguages:
+    - en_US
+    - ru_RU
+  include: build/installer.nsh
+  license: LICENSE
+  removeDefaultUninstallWelcomePage: true
+portable:
+  artifactName: ${productName}-${version}-Portable.${ext}
+
+mac:
+  category: public.app-category.social-networking
+  icon: icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  minimumSystemVersion: '12.0'
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  extendInfo:
+    NSMicrophoneUsageDescription: BLIP needs the microphone for voice and video calls on the LAN mesh.
+    NSCameraUsageDescription: BLIP needs the camera for video calls on the LAN mesh.
+    NSLocalNetworkUsageDescription: BLIP discovers peers and transfers files on your local network only.
+
+dmg:
+  # No spaces in the volume name — hdiutil detach flakes on "/Volumes/BLIP 2.0.0" in CI.
+  title: BLIP-${version}
+  background: dmg-background.png
+  icon: icon.icns
+  format: ULFO
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 142
+      y: 200
+      type: file
+    - x: 392
+      y: 200
+      type: link
+      path: /Applications
+
+linux:
+  icon: icons
+  category: Network;Chat;
+  synopsis: P2P LAN messenger — text, voice, video, mesh files
+  description: BLIP is a peer-to-peer LAN messenger with chat, voice/video calls, and a local mesh file library. No cloud accounts.
+  desktop:
+    StartupWMClass: blip
+  target:
+    - AppImage
+    - deb
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+appImage:
+  artifactName: ${productName}-${version}-linux-${arch}.AppImage
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+  artifactName: ${productName}_${version}_linux_${arch}.${ext}
+
+fileAssociations:
+  - ext: blip
+    name: BLIPSeed
+    description: BLIP Mesh Seed
+    mimeType: application/vnd.blip.seed+json
+    role: Editor
+    icon: icon.ico
+
+protocols:
+  - name: BLIP
+    schemes:
+      - blip
