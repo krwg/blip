@@ -141,7 +141,7 @@ function assembleIncoming(entry) {
   const blob = new Blob(parts, { type: mime || 'application/octet-stream' });
   const kind = inferAttachmentKind(mime, name);
   const objectUrl = URL.createObjectURL(blob);
-  const out = {
+  return {
     kind,
     name,
     mime,
@@ -149,12 +149,77 @@ function assembleIncoming(entry) {
     blob,
     objectUrl,
   };
-  // Keep a data URL only for tiny payloads so chat persist / legacy UI stay cheap.
-  if (blob.size > 0 && blob.size <= INLINE_FILE_BYTES) {
-    // Synchronous FileReader is unavailable; skip dataUrl for chunked path.
-    // objectUrl + blob are enough for display/download.
+}
+
+function useDiskReceive(size) {
+  return (
+    Number(size) > INLINE_FILE_BYTES &&
+    typeof window !== 'undefined' &&
+    !!window.blip?.receiveFileBegin
+  );
+}
+
+async function ensureDiskSink(entry) {
+  if (entry.diskReady || entry.diskFailed) return;
+  if (entry.diskPromise) {
+    await entry.diskPromise;
+    return;
   }
-  return out;
+  entry.diskPromise = (async () => {
+    const res = await window.blip.receiveFileBegin({
+      transferId: entry.meta.transferId,
+      name: entry.meta.name,
+      mime: entry.meta.mime,
+      size: entry.meta.size,
+      chunkCount: entry.meta.chunkCount,
+      chunkBytes: CHUNK_RAW_BYTES,
+    });
+    if (!res?.ok) {
+      entry.diskFailed = true;
+      throw new Error(res?.error || 'receive_begin_failed');
+    }
+    entry.diskReady = true;
+    const pending = entry.pendingDiskChunks || [];
+    entry.pendingDiskChunks = [];
+    if (pending.length) {
+      await window.blip.receiveFileChunksBatch({
+        transferId: entry.meta.transferId,
+        chunks: pending,
+      });
+    }
+  })();
+  try {
+    await entry.diskPromise;
+  } finally {
+    entry.diskPromise = null;
+  }
+}
+
+async function writeDiskChunks(entry, chunks) {
+  if (!Array.isArray(chunks) || !chunks.length) return;
+  await ensureDiskSink(entry);
+  if (entry.diskFailed) throw new Error('disk_failed');
+  if (!entry.diskReady) {
+    entry.pendingDiskChunks = entry.pendingDiskChunks || [];
+    entry.pendingDiskChunks.push(...chunks);
+    return;
+  }
+  const fresh = [];
+  for (const part of chunks) {
+    const idx = Number(part?.index);
+    if (!Number.isFinite(idx) || idx < 0) continue;
+    if (entry.seenDisk?.has(idx)) continue;
+    if (!entry.seenDisk) entry.seenDisk = new Set();
+    entry.seenDisk.add(idx);
+    entry.received += 1;
+    fresh.push({ index: idx, data: String(part.data || '') });
+  }
+  if (fresh.length) {
+    await window.blip.receiveFileChunksBatch({
+      transferId: entry.meta.transferId,
+      chunks: fresh,
+    });
+  }
 }
 
 export function isAcceptableIncomingFileOffer(msg, config) {
@@ -335,20 +400,27 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
       return true;
     }
     const chunkCount = Number(msg.chunkCount) || 0;
-    incoming.set(key, {
+    const size = Number(msg.size) || 0;
+    const disk = useDiskReceive(size);
+    const entry = {
       meta: {
         transferId: msg.transferId,
         name: String(msg.name || 'file').slice(0, 200),
         mime: String(msg.mime || 'application/octet-stream').slice(0, 120),
-        size: Number(msg.size) || 0,
+        size,
         chunkCount,
         groupId: msg.groupId ? String(msg.groupId) : '',
         msgId: msg.msgId ? String(msg.msgId) : '',
       },
-      chunks: new Array(chunkCount),
+      chunks: disk ? null : new Array(chunkCount),
       received: 0,
       peerId,
-    });
+      disk,
+      seenDisk: disk ? new Set() : null,
+      pendingDiskChunks: [],
+    };
+    incoming.set(key, entry);
+    if (disk) void ensureDiskSink(entry).catch(() => {});
     onProgress?.(peerId, msg.transferId, 0);
     return true;
   }
@@ -357,6 +429,12 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const key = transferKey(peerId, msg.transferId);
     const entry = incoming.get(key);
     if (!entry) return true;
+    if (entry.disk) {
+      void writeDiskChunks(entry, msg.chunks)
+        .then(() => onProgress?.(peerId, msg.transferId, progressPct(entry)))
+        .catch(() => {});
+      return true;
+    }
     applyIncomingChunks(entry, msg.chunks);
     onProgress?.(peerId, msg.transferId, progressPct(entry));
     return true;
@@ -366,13 +444,22 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const key = transferKey(peerId, msg.transferId);
     const entry = incoming.get(key);
     if (!entry) return true;
+    if (entry.disk) {
+      void writeDiskChunks(entry, [{ index: msg.index, data: msg.data }])
+        .then(() => onProgress?.(peerId, msg.transferId, progressPct(entry)))
+        .catch(() => {});
+      return true;
+    }
     applyIncomingChunks(entry, [{ index: msg.index, data: msg.data }]);
     onProgress?.(peerId, msg.transferId, progressPct(entry));
     return true;
   }
 
   if (type === 'file-abort') {
-    incoming.delete(transferKey(peerId, msg.transferId));
+    const key = transferKey(peerId, msg.transferId);
+    const entry = incoming.get(key);
+    incoming.delete(key);
+    if (entry?.disk) void window.blip?.receiveFileAbort?.({ transferId: msg.transferId });
     onAbort?.(peerId, msg.transferId);
     return true;
   }
@@ -381,6 +468,41 @@ export function handleFileTransferTcp(msg, { config, onComplete, onProgress, onA
     const key = transferKey(peerId, msg.transferId);
     const entry = incoming.get(key);
     if (!entry) return true;
+    if (entry.disk) {
+      void (async () => {
+        try {
+          await ensureDiskSink(entry);
+          if (entry.received !== entry.meta.chunkCount) {
+            throw new Error('incomplete');
+          }
+          const res = await window.blip.receiveFileFinish({ transferId: msg.transferId });
+          incoming.delete(key);
+          if (!res?.ok || !res.filePath) throw new Error(res?.error || 'finish_failed');
+          const attachment = {
+            kind: inferAttachmentKind(entry.meta.mime, entry.meta.name),
+            name: entry.meta.name,
+            mime: entry.meta.mime,
+            size: entry.meta.size,
+            filePath: res.filePath,
+            chunked: true,
+            transferId: msg.transferId,
+          };
+          onComplete?.(peerId, {
+            transferId: msg.transferId,
+            attachment,
+            name: attachment.name,
+            groupId: entry.meta.groupId || '',
+            msgId: entry.meta.msgId || '',
+          });
+          onProgress?.(peerId, msg.transferId, 100);
+        } catch {
+          incoming.delete(key);
+          void window.blip?.receiveFileAbort?.({ transferId: msg.transferId });
+          onAbort?.(peerId, msg.transferId);
+        }
+      })();
+      return true;
+    }
     if (countFilledChunks(entry) !== entry.meta.chunkCount) {
       incoming.delete(key);
       onAbort?.(peerId, msg.transferId);

@@ -174,13 +174,18 @@ function appendFileCard(block, attachment) {
   const downloadSrc =
     attachmentDisplaySrc(attachment) ||
     (attachment.blob instanceof Blob ? URL.createObjectURL(attachment.blob) : '');
-  if (downloadSrc) {
+  if (downloadSrc || attachment.filePath) {
     const dl = document.createElement('button');
     dl.type = 'button';
     dl.className = 'btn btn-lang chat-file-dl';
     dl.textContent = t('chat.file_download');
     dl.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (attachment.filePath && window.blip?.showItemInFolder) {
+        void window.blip.showItemInFolder(attachment.filePath);
+        return;
+      }
+      if (!downloadSrc) return;
       const a = document.createElement('a');
       a.href = downloadSrc;
       a.download = attachment.name || 'download';

@@ -596,7 +596,7 @@ function refreshLiveChat(peerId) {
   const chat = state.chatViews.get(id);
   if (!chat?.el?.isConnected) return;
   if (state.view !== 'chat' || state.activePeer !== id) return;
-  chat.renderMessages?.();
+  // Incoming DMs already append via handleIncoming; avoid full DOM rebuild here.
   chat.scrollToBottom?.();
 }
 

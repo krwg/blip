@@ -139,6 +139,11 @@ const blipApi = {
   beaconPublishFromPath: (payload) => ipcRenderer.invoke('beacon-publish-from-path', payload),
   beaconServeChunksTcp: (payload) => ipcRenderer.invoke('beacon-serve-chunks-tcp', payload),
   sendFileFromPath: (payload) => ipcRenderer.invoke('send-file-from-path', payload),
+  receiveFileBegin: (payload) => ipcRenderer.invoke('receive-file-begin', payload),
+  receiveFileChunk: (payload) => ipcRenderer.invoke('receive-file-chunk', payload),
+  receiveFileChunksBatch: (payload) => ipcRenderer.invoke('receive-file-chunks-batch', payload),
+  receiveFileFinish: (payload) => ipcRenderer.invoke('receive-file-finish', payload),
+  receiveFileAbort: (payload) => ipcRenderer.invoke('receive-file-abort', payload),
   onFileSendProgress: (cb) => {
     const handler = (_, data) => cb(data);
     ipcRenderer.on('file-send-progress', handler);

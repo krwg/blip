@@ -3,8 +3,15 @@
  * @see https://github.com/krwg/blip/issues/60
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, app } from 'electron';
+import path from 'path';
+import { join } from 'path';
 import { sendFileFromPathOnSocket } from '../file-tcp-send.js';
+import { createFileReceiveStore } from '../file-receive-store.js';
+
+const receiveStore = createFileReceiveStore({
+  getIncomingDir: () => join(app.getPath('userData'), 'incoming'),
+});
 
 /**
  * @param {object} deps
@@ -20,6 +27,16 @@ export function registerFileIpc(deps) {
     return { ok: true };
   });
 
+  ipcMain.handle('receive-file-begin', async (_, payload) => receiveStore.beginFileReceive(payload));
+  ipcMain.handle('receive-file-chunk', async (_, payload) => receiveStore.writeFileReceiveChunk(payload));
+  ipcMain.handle('receive-file-chunks-batch', async (_, payload) =>
+    receiveStore.writeFileReceiveChunksBatch(payload)
+  );
+  ipcMain.handle('receive-file-finish', async (_, payload) => receiveStore.finishFileReceive(payload));
+  ipcMain.handle('receive-file-abort', async (_, payload) =>
+    receiveStore.abortFileReceive(payload?.transferId)
+  );
+
   ipcMain.handle('send-file-from-path', async (event, payload) => {
     const wc = event.sender;
     const config = getConfig();
@@ -27,12 +44,14 @@ export function registerFileIpc(deps) {
       const to = Number(payload?.to);
       const filePath = String(payload?.filePath || '').trim();
       const transferId = String(payload?.transferId || '');
-      if (!Number.isFinite(to) || !filePath || !transferId) {
+      if (!Number.isFinite(to) || !filePath || !transferId || filePath.includes('\0')) {
         return { ok: false, error: 'invalid' };
       }
+      const resolved = path.resolve(filePath);
+      if (!path.isAbsolute(resolved)) return { ok: false, error: 'invalid' };
       const socket = await ensurePeerSocket(to);
       await sendFileFromPathOnSocket(socket, config.blipId, {
-        filePath,
+        filePath: resolved,
         to,
         transferId,
         name: payload.name,

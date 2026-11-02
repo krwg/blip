@@ -69,6 +69,7 @@ function normalizeStoredMessage(m) {
       mime: a.mime,
       size: Number(a.size) || 0,
       dataUrl: typeof a.dataUrl === 'string' ? a.dataUrl : undefined,
+      filePath: typeof a.filePath === 'string' ? a.filePath : undefined,
       pending: !!a.pending,
       cancelled: !!a.cancelled,
       progress: Number.isFinite(Number(a.progress)) ? Number(a.progress) : undefined,
@@ -1095,6 +1096,84 @@ export function createChatView(
     return row;
   }
 
+  function buildMessageBlock(m) {
+    const block = document.createElement('div');
+    block.className = `chat-block ${m.outgoing ? 'outgoing' : 'incoming'}`;
+    if (m.kind === 'missed-call') block.classList.add('chat-block--missed-call');
+    block.dataset.messageId = m.id || '';
+
+    appendChatMessageBody(block, m, {
+      onQuoteClick: (id) => scrollToMessageId(id),
+      isSeedAvailable: (seedId) => {
+        if (isSeedLocalComplete(seedId)) return true;
+        return getBeaconCatalog().some(
+          (e) => e.seedId === seedId && (e.seederCount > 0 || e.mine)
+        );
+      },
+      onRequestSeed: (seedId) => {
+        window.dispatchEvent(
+          new CustomEvent('blip-open-beacon-seed', { detail: { seedId } })
+        );
+      },
+      onShareSeedLink: (seedId, forwardFrom) => {
+        const att = buildBeaconAttachment({
+          seedId,
+          filename: forwardFrom?.attachmentName || 'file',
+          size: 0,
+        });
+        void sendPayload({
+          text: buildBeaconSeedLink(seedId),
+          attachment: att || undefined,
+        });
+      },
+    });
+
+    if (m.editedAt) {
+      const edited = document.createElement('span');
+      edited.className = 'chat-edited';
+      edited.dataset.i18n = 'chat.edited';
+      edited.textContent = t('chat.edited');
+      block.appendChild(edited);
+    }
+
+    block.addEventListener('contextmenu', (e) => openMessageMenu(e, m));
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'chat-meta-row';
+    if (m.timestamp) {
+      const time = document.createElement('span');
+      time.className = 'chat-time';
+      time.textContent = formatChatTime(m.timestamp);
+      time.title = new Date(m.timestamp).toLocaleString();
+      metaRow.appendChild(time);
+    }
+    block.appendChild(metaRow);
+
+    if (m.id) {
+      const reactionRow = buildReactionRow(m);
+      if (reactionRow) block.appendChild(reactionRow);
+    }
+    return block;
+  }
+
+  function appendMessageDom(m) {
+    if (searchQuery) {
+      renderMessages();
+      return;
+    }
+    const empty = messagesEl.querySelector('.chat-empty');
+    if (empty) empty.remove();
+    if (m.id && messagesEl.querySelector(`[data-message-id="${CSS.escape(m.id)}"]`)) {
+      return;
+    }
+    messagesEl.appendChild(buildMessageBlock(m));
+    if (stickToBottom) {
+      requestAnimationFrame(() => {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+    }
+  }
+
   function renderMessages() {
     const msgs = getMessages(peerId).filter((m) => {
       if (!searchQuery) return true;
@@ -1123,64 +1202,7 @@ export function createChatView(
     }
 
     msgs.forEach((m) => {
-      const block = document.createElement('div');
-      block.className = `chat-block ${m.outgoing ? 'outgoing' : 'incoming'}`;
-      if (m.kind === 'missed-call') block.classList.add('chat-block--missed-call');
-      block.dataset.messageId = m.id || '';
-
-      appendChatMessageBody(block, m, {
-        onQuoteClick: (id) => scrollToMessageId(id),
-        isSeedAvailable: (seedId) => {
-          if (isSeedLocalComplete(seedId)) return true;
-          return getBeaconCatalog().some(
-            (e) => e.seedId === seedId && (e.seederCount > 0 || e.mine)
-          );
-        },
-        onRequestSeed: (seedId) => {
-          window.dispatchEvent(
-            new CustomEvent('blip-open-beacon-seed', { detail: { seedId } })
-          );
-        },
-        onShareSeedLink: (seedId, forwardFrom) => {
-          const att = buildBeaconAttachment({
-            seedId,
-            filename: forwardFrom?.attachmentName || 'file',
-            size: 0,
-          });
-          void sendPayload({
-            text: buildBeaconSeedLink(seedId),
-            attachment: att || undefined,
-          });
-        },
-      });
-
-      if (m.editedAt) {
-        const edited = document.createElement('span');
-        edited.className = 'chat-edited';
-        edited.dataset.i18n = 'chat.edited';
-        edited.textContent = t('chat.edited');
-        block.appendChild(edited);
-      }
-
-      block.addEventListener('contextmenu', (e) => openMessageMenu(e, m));
-
-      const metaRow = document.createElement('div');
-      metaRow.className = 'chat-meta-row';
-      if (m.timestamp) {
-        const time = document.createElement('span');
-        time.className = 'chat-time';
-        time.textContent = formatChatTime(m.timestamp);
-        time.title = new Date(m.timestamp).toLocaleString();
-        metaRow.appendChild(time);
-      }
-      block.appendChild(metaRow);
-
-      if (m.id) {
-        const reactionRow = buildReactionRow(m);
-        if (reactionRow) block.appendChild(reactionRow);
-      }
-
-      messagesEl.appendChild(block);
+      messagesEl.appendChild(buildMessageBlock(m));
     });
 
     if (hasFocus) {
@@ -1240,9 +1262,11 @@ export function createChatView(
         forwardFrom: msg.forwardFrom,
         editedAt: msg.editedAt,
       };
+      const before = getMessages(peerId).length;
       addMessage(peerId, incoming);
+      const after = getMessages(peerId).length;
       stickToBottom = true;
-      renderMessages();
+      if (after > before) appendMessageDom(incoming);
       scrollToBottom();
       flashNew();
       sounds.messageReceived();
