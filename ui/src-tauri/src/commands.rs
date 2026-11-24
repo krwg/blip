@@ -179,7 +179,9 @@ pub async fn get_network_diagnostics(state: State<'_, AppState>) -> Result<Value
         "tcpPort": cfg.tcp_port,
         "localIps": crate::net::discovery::Discovery::local_ipv4s(),
         "peerCount": peers.len(),
+        "peers": peers,
         "blipId": cfg.blip_id,
+        "peerTtlSecs": crate::net::discovery::PEER_TTL.as_secs(),
     }))
 }
 

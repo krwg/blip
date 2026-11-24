@@ -37,12 +37,13 @@ pub fn run() {
             let discovery = state.discovery.clone();
             let mesh = state.mesh.clone();
             let mut inbound = mesh.subscribe();
-            let handle = app.handle().clone();
+            let mut peers_rx = discovery.subscribe();
             let handle_mesh = app.handle().clone();
+            let handle_peers = app.handle().clone();
             app.manage(state);
 
             tauri::async_runtime::spawn(async move {
-                discovery.run(handle).await;
+                discovery.run().await;
             });
             tauri::async_runtime::spawn(async move {
                 mesh.run_listener().await;
@@ -50,6 +51,11 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 while let Ok(msg) = inbound.recv().await {
                     let _ = handle_mesh.emit("tcp-message", msg);
+                }
+            });
+            tauri::async_runtime::spawn(async move {
+                while let Ok(peers) = peers_rx.recv().await {
+                    let _ = handle_peers.emit("peers-updated", peers);
                 }
             });
             Ok(())
