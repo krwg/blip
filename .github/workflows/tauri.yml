@@ -1,0 +1,27 @@
+﻿name: tauri
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  check:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install frontend
+        run: npm ci
+      - name: Typecheck frontend
+        run: npx tsc --noEmit
+      - name: Cargo check
+        working-directory: ui/src-tauri
+        run: cargo check
