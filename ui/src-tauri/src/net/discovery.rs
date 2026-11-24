@@ -34,6 +34,14 @@ impl Discovery {
         self.updates.subscribe()
     }
 
+    pub async fn cfg_for_mdns(&self) -> BlipConfig {
+        self.cfg.read().await.clone()
+    }
+
+    pub async fn publish_now(&self) {
+        self.publish(self.list_peers().await);
+    }
+
     pub fn peers_handle(&self) -> Arc<RwLock<HashMap<u8, PeerRuntime>>> {
         self.peers.clone()
     }

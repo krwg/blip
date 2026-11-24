@@ -42,8 +42,12 @@ pub fn run() {
             let handle_peers = app.handle().clone();
             app.manage(state);
 
+            let discovery_mdns = discovery.clone();
             tauri::async_runtime::spawn(async move {
                 discovery.run().await;
+            });
+            tauri::async_runtime::spawn(async move {
+                crate::net::mdns::run_mdns(discovery_mdns).await;
             });
             tauri::async_runtime::spawn(async move {
                 mesh.run_listener().await;

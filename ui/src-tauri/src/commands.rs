@@ -182,6 +182,8 @@ pub async fn get_network_diagnostics(state: State<'_, AppState>) -> Result<Value
         "peers": peers,
         "blipId": cfg.blip_id,
         "peerTtlSecs": crate::net::discovery::PEER_TTL.as_secs(),
+        "mdnsActive": crate::net::mdns::is_active(),
+        "mdnsServiceType": crate::net::mdns::SERVICE_TYPE,
     }))
 }
 
