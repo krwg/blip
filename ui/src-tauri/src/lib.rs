@@ -7,7 +7,7 @@ mod peer;
 mod state;
 
 use state::AppState;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,15 +36,21 @@ pub fn run() {
             let state = AppState::boot(app_data);
             let discovery = state.discovery.clone();
             let mesh = state.mesh.clone();
+            let mut inbound = mesh.subscribe();
             let handle = app.handle().clone();
-            let handle2 = app.handle().clone();
+            let handle_mesh = app.handle().clone();
             app.manage(state);
 
             tauri::async_runtime::spawn(async move {
                 discovery.run(handle).await;
             });
             tauri::async_runtime::spawn(async move {
-                mesh.run(handle2).await;
+                mesh.run_listener().await;
+            });
+            tauri::async_runtime::spawn(async move {
+                while let Ok(msg) = inbound.recv().await {
+                    let _ = handle_mesh.emit("tcp-message", msg);
+                }
             });
             Ok(())
         })

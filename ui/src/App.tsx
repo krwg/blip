@@ -47,6 +47,7 @@ export default function App() {
     null,
   );
   const [diag, setDiag] = useState<Record<string, unknown> | null>(null);
+  const [netStatus, setNetStatus] = useState<string>("");
 
   const lang: Lang = config?.language === "ru" ? "ru" : "en";
 
@@ -273,13 +274,35 @@ export default function App() {
                       <div className="actions">
                         <button
                           type="button"
-                          onClick={() => void blip.dialPeer(activePeer)}
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                const r = await blip.dialPeer(activePeer);
+                                setNetStatus(
+                                  `dial #${r.blipId} ok · ${r.readyMs}ms · session=${r.hasSession}`,
+                                );
+                              } catch (e) {
+                                setNetStatus(`dial failed: ${String(e)}`);
+                              }
+                            })();
+                          }}
                         >
                           {t(lang, "dial")}
                         </button>
                         <button
                           type="button"
-                          onClick={() => void blip.pingPeer(activePeer)}
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                const r = await blip.pingPeer(activePeer);
+                                setNetStatus(
+                                  `ping #${r.blipId} ok · ${r.dialMs}ms · id=${r.id.slice(0, 8)}`,
+                                );
+                              } catch (e) {
+                                setNetStatus(`ping failed: ${String(e)}`);
+                              }
+                            })();
+                          }}
                         >
                           {t(lang, "ping")}
                         </button>
@@ -287,6 +310,11 @@ export default function App() {
                           {t(lang, "call")}
                         </button>
                       </div>
+                      {netStatus && (
+                        <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                          {netStatus}
+                        </div>
+                      )}
                     </div>
                     <div className="chat-log">
                       {thread.map((m) => (
@@ -363,6 +391,29 @@ export default function App() {
                         })
                       }
                     />
+                    <button
+                      type="button"
+                      style={{ marginTop: 8 }}
+                      onClick={() => {
+                        void (async () => {
+                          const r = await blip.checkIdConflict(config.blipId);
+                          setNetStatus(
+                            r.conflict
+                              ? `ID #${r.blipId} conflict (${r.reason})${
+                                  r.displayName ? ` · ${r.displayName}` : ""
+                                }`
+                              : `ID #${r.blipId} free (${r.reason})`,
+                          );
+                        })();
+                      }}
+                    >
+                      Check ID conflict
+                    </button>
+                    {netStatus && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {netStatus}
+                      </div>
+                    )}
                   </div>
                   <div className="field">
                     <label>{t(lang, "language")}</label>

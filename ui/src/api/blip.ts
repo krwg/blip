@@ -58,12 +58,25 @@ export const blip = {
   factoryReset: () => invoke<BlipConfig>("factory_reset_cmd"),
   getPeers: () => invoke<PeerInfo[]>("get_peers"),
   getAppMetadata: () => invoke<AppMetadata>("get_app_metadata"),
-  dialPeer: (blipId: number) => invoke("dial_peer", { blipId }),
-  pingPeer: (blipId: number) => invoke("ping_peer", { blipId }),
+  dialPeer: (blipId: number) =>
+    invoke<{ ok: boolean; blipId: number; readyMs: number; hasSession: boolean }>(
+      "dial_peer",
+      { blipId },
+    ),
+  pingPeer: (blipId: number) =>
+    invoke<{ ok: boolean; id: string; blipId: number; dialMs: number }>("ping_peer", {
+      blipId,
+    }),
   checkIdConflict: (blipId: number) =>
-    invoke<{ conflict: boolean }>("check_id_conflict", { blipId }),
+    invoke<{
+      conflict: boolean;
+      reason: string;
+      blipId: number;
+      displayName?: string;
+      ips?: string[];
+    }>("check_id_conflict", { blipId }),
   sendTcpMessage: (payload: Record<string, unknown>) =>
-    invoke("send_tcp_message", { payload }),
+    invoke<{ ok: boolean; to: number }>("send_tcp_message", { payload }),
   getNetworkDiagnostics: () => invoke<Record<string, unknown>>("get_network_diagnostics"),
   newId: () => invoke<string>("new_id"),
   windowMinimize: () => invoke("window_minimize"),

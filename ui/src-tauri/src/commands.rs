@@ -1,11 +1,14 @@
-use crate::config::{factory_reset, save_config, BlipConfig, BLIP_ID_MAX, BLIP_ID_MIN};
+use crate::config::{
+    factory_reset, save_config, BlipConfig, BLIP_ID_MAX, BLIP_ID_MIN,
+};
 use crate::files::{new_transfer_id, read_file_chunk, ReceiveBegin};
 use crate::net::tcp_mesh::is_allowed_type;
 use crate::peer::PeerInfo;
 use crate::state::AppState;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use tauri::{AppHandle, State, Window};
+use std::time::Instant;
+use tauri::{State, Window};
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<BlipConfig, String> {
@@ -49,56 +52,94 @@ pub async fn get_app_metadata() -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn dial_peer(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    blip_id: u8,
-) -> Result<Value, String> {
+pub async fn dial_peer(state: State<'_, AppState>, blip_id: u8) -> Result<Value, String> {
+    if !(BLIP_ID_MIN..=BLIP_ID_MAX).contains(&blip_id) {
+        return Err("invalid blip id".into());
+    }
     let peer = state
         .discovery
         .get_peer(blip_id)
         .await
-        .ok_or_else(|| "peer not found".to_string())?;
-    state.mesh.clone().dial_peer(peer, app).await?;
-    Ok(json!({ "ok": true }))
+        .ok_or_else(|| format!("peer {blip_id} not found"))?;
+    let t0 = Instant::now();
+    state.mesh.clone().ensure_session(peer).await?;
+    Ok(json!({
+        "ok": true,
+        "blipId": blip_id,
+        "readyMs": t0.elapsed().as_millis() as u64,
+        "hasSession": state.mesh.has_session(blip_id).await,
+    }))
 }
 
 #[tauri::command]
-pub async fn ping_peer(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    blip_id: u8,
-) -> Result<Value, String> {
+pub async fn ping_peer(state: State<'_, AppState>, blip_id: u8) -> Result<Value, String> {
+    if !(BLIP_ID_MIN..=BLIP_ID_MAX).contains(&blip_id) {
+        return Err("invalid blip id".into());
+    }
     let peer = state
         .discovery
         .get_peer(blip_id)
         .await
-        .ok_or_else(|| "peer not found".to_string())?;
-    let _ = state.mesh.clone().dial_peer(peer, app).await;
+        .ok_or_else(|| format!("peer {blip_id} not found"))?;
     let from = state.config.read().await.blip_id;
+    let id = new_transfer_id();
+    let t0 = Instant::now();
     state
         .mesh
-        .send_to_peer(
-            blip_id,
+        .clone()
+        .ensure_and_send(
+            peer,
             json!({
                 "type": "ping",
                 "from": from,
-                "id": new_transfer_id(),
+                "to": blip_id,
+                "id": id,
             }),
         )
         .await?;
-    Ok(json!({ "ok": true }))
+    Ok(json!({
+        "ok": true,
+        "id": id,
+        "blipId": blip_id,
+        "dialMs": t0.elapsed().as_millis() as u64,
+    }))
 }
 
 #[tauri::command]
 pub async fn check_id_conflict(state: State<'_, AppState>, blip_id: u8) -> Result<Value, String> {
-    let conflict = state.discovery.get_peer(blip_id).await.is_some();
-    Ok(json!({ "conflict": conflict }))
+    if !(BLIP_ID_MIN..=BLIP_ID_MAX).contains(&blip_id) {
+        return Ok(json!({
+            "conflict": true,
+            "reason": "out_of_range",
+            "blipId": blip_id,
+        }));
+    }
+    let local = state.config.read().await.blip_id;
+    if blip_id == local {
+        return Ok(json!({
+            "conflict": false,
+            "reason": "local",
+            "blipId": blip_id,
+        }));
+    }
+    match state.discovery.get_peer(blip_id).await {
+        Some(peer) => Ok(json!({
+            "conflict": true,
+            "reason": "peer_seen",
+            "blipId": blip_id,
+            "displayName": peer.info.display_name,
+            "ips": peer.info.ips,
+        })),
+        None => Ok(json!({
+            "conflict": false,
+            "reason": "free",
+            "blipId": blip_id,
+        })),
+    }
 }
 
 #[tauri::command]
 pub async fn send_tcp_message(
-    app: AppHandle,
     state: State<'_, AppState>,
     payload: Value,
 ) -> Result<Value, String> {
@@ -115,16 +156,18 @@ pub async fn send_tcp_message(
         .map(|n| n as u8)
         .ok_or_else(|| "missing to".to_string())?;
 
-    if let Some(peer) = state.discovery.get_peer(to).await {
-        let _ = state.mesh.clone().dial_peer(peer, app).await;
-    }
+    let peer = state
+        .discovery
+        .get_peer(to)
+        .await
+        .ok_or_else(|| format!("peer {to} not found"))?;
 
     let mut body = payload.clone();
     if let Some(obj) = body.as_object_mut() {
         obj.insert("from".into(), json!(state.config.read().await.blip_id));
     }
-    state.mesh.send_to_peer(to, body).await?;
-    Ok(json!({ "ok": true }))
+    state.mesh.clone().ensure_and_send(peer, body).await?;
+    Ok(json!({ "ok": true, "to": to }))
 }
 
 #[tauri::command]
